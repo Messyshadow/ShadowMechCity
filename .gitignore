@@ -1,8 +1,23 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+.nomedia
 
 # 截图/录制工具产出 (godot-capture)
 /screenshots/
 /_shot.png
 /_shot_*.png
+
+# Godot-specific ignores
+.import/
+export.cfg
+export_credentials.cfg
+*.tmp
+
+# Imported translations (automatically generated from CSV files)
+*.translation
+
+# Mono-specific ignores
+.mono/
+data_*/
+mono_crash.*.json
