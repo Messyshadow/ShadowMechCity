@@ -171,7 +171,7 @@ func equip_bonus(stat: String) -> float:
 
 # ---- 能力(银河城: 找到才解锁, 用于能力门) ----
 var abilities: Dictionary = {}     # ability_id -> true
-const ABILITY_NAME := {"dash": "冲刺", "bomb": "炸弹", "double_jump": "二段跳", "glider": "滑翔翼"}
+const ABILITY_NAME := {"dash": "冲刺", "bomb": "炸弹", "wall_climb": "攀墙", "glide": "滑翔翼", "double_jump": "二段跳"}
 
 func has_ability(id: String) -> bool:
 	return abilities.has(id)

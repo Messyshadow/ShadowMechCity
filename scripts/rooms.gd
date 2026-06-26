@@ -65,17 +65,19 @@ const ROOMS := {
 		"enemies": [[900, 560, "beast"], [1150, 560, "slime"], [760, 320, "mage"]],
 		"items": [[1250, 520, "coin", ""]],
 		"gates": [[300, -40, 44, 600]],
+		"abilities": [[600, 360, "wall_climb"]],
 		"doors": [{"side": "left", "p": 430, "to": "depths"}, {"side": "right", "p": 430, "to": "cavern"}],
 	},
 	"cavern": {
 		"name": "熔岩腔穴", "theme": "mine", "map": Vector2i(3, 1),
 		"bounds": [0, 0, 1500, 560],
-		"platforms": [[260, 410, 170, 22], [620, 330, 160, 22], [980, 400, 170, 22], [1240, 320, 160, 22]],
+		"platforms": [[260, 410, 170, 22], [620, 330, 160, 22], [980, 400, 170, 22], [1240, 320, 160, 22],
+			[40, 150, 180, 22]],   # 左上高台(需攀墙到达)
 		"oneways": [[460, 460, 150], [1120, 470, 150]],
 		"enemies": [[400, 560, "slime"], [700, 560, "bat"], [1100, 560, "beast"],
 			[1350, 560, "mushroom"], [620, 290, "mage"], [1240, 280, "jelly"]],
-		"items": [[1380, 520, "chest", ""]],
-		"abilities": [[700, 300, "bomb"]],
+		"items": [[1380, 520, "chest", ""], [110, 128, "chest", ""]],
+		"abilities": [[700, 300, "bomb"], [400, 300, "glide"]],
 		"doors": [{"side": "left", "p": 430, "to": "tunnel"}, {"side": "right", "p": 430, "to": "mine_boss"}],
 	},
 	"mine_boss": {

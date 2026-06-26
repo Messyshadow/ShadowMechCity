@@ -27,6 +27,8 @@ const MAX_AIR_JUMPS := 1           # 二段跳次数
 const AIR_JUMP_MULT := 1.08        # 二段跳比一段更高(更容易够到空中敌)
 
 const WALL_SLIDE_SPEED := 80.0     # 墙滑更慢, 留出反应时间
+const CLIMB_SPEED := 150.0         # 攀墙速度(需能力)
+const GLIDE_FALL_SPEED := 95.0     # 滑翔下落速度(需能力)
 const WALL_JUMP_PUSH := 340.0
 const WALL_JUMP_UP := -620.0       # 蹬墙跳更高, 便于爬出深坑
 const WALL_JUMP_LOCK := 0.10       # 蹬墙跳后水平控制锁定(更短, 便于回身上平台)
@@ -245,22 +247,34 @@ func _do_normal(delta: float) -> void:
 	else:
 		jump_buffer = max(0.0, jump_buffer - delta)
 
-	# 墙滑
+	# 墙滑 / 攀墙(需能力)
 	var on_wall := is_on_wall_only() and not on_floor
 	var wall_n := get_wall_normal()
-	var sliding := on_wall and velocity.y > 0.0 and input_dir != 0.0 and signf(input_dir) == -signf(wall_n.x)
-	if sliding:
+	var toward_wall := on_wall and input_dir != 0.0 and signf(input_dir) == -signf(wall_n.x)
+	var climbing := toward_wall and Game.has_ability("wall_climb")
+	if climbing:
+		velocity.y = Input.get_axis("move_up", "move_down") * CLIMB_SPEED
+		velocity.x = -wall_n.x * 50.0
+		air_jumps = _max_air_jumps()
+		if absf(velocity.y) > 12.0 and randf() < 0.2:
+			Fx.dust(get_parent(), global_position + Vector2(wall_n.x * -16, 16), wall_n.x)
+	elif toward_wall and velocity.y > 0.0:
 		velocity.y = min(velocity.y, WALL_SLIDE_SPEED)
 		air_jumps = _max_air_jumps()
 		if randf() < 0.25:
 			Fx.dust(get_parent(), global_position + Vector2(wall_n.x * -16, 30), wall_n.x)
 
-	# 重力
-	if not on_floor:
+	# 重力(攀墙时不施加)
+	if not on_floor and not climbing:
 		var g := GRAVITY
 		if velocity.y > 0.0:
 			g *= FALL_GRAVITY_MULT
 		velocity.y = min(velocity.y + g * delta, MAX_FALL)
+		# 滑翔(需能力): 下落时按住跳键减速下落
+		if velocity.y > 0.0 and Game.has_ability("glide") and Input.is_action_pressed("jump"):
+			velocity.y = minf(velocity.y, GLIDE_FALL_SPEED)
+			if randf() < 0.25:
+				Fx.dust(get_parent(), global_position + Vector2(0, 14), 0.0)
 
 	# 跳跃判定
 	if jump_buffer > 0.0:
