@@ -756,6 +756,23 @@ func _auto_screenshot() -> void:
 	var rid := OS.get_environment("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	# 动作连拍(打击感验收): 在角色面前放假人, 自动打一套, 连存若干帧
+	if OS.get_environment("SHOT_MOTION") == "1":
+		await _motion_burst()
+		return
+	# 镜头取景: SHOT_AT="x,y" 把镜头钉在指定点(脱离跟随), 用于看房间任意区域
+	var cam_at := OS.get_environment("SHOT_AT")
+	if cam_at != "" and is_instance_valid(camera):
+		var parts := cam_at.split(",")
+		if parts.size() == 2:
+			camera.target = null
+			camera.global_position = Vector2(parts[0].to_float(), parts[1].to_float())
+	# SHOT_ZOOM<1 看更广, >1 拉近(默认1)
+	var cam_zoom := OS.get_environment("SHOT_ZOOM")
+	if cam_zoom != "" and is_instance_valid(camera):
+		var z := cam_zoom.to_float()
+		if z > 0.0:
+			camera.zoom = Vector2(z, z)
 	if OS.get_environment("SHOT_INV") == "1":
 		Game.add_item(ItemsData.generate(3))
 		Game.add_item(ItemsData.generate(2))
@@ -768,5 +785,28 @@ func _auto_screenshot() -> void:
 	await get_tree().create_timer(1.6).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("res://_shot.png"))
+	await get_tree().create_timer(0.1).timeout
+	get_tree().quit()
+
+# 动作连拍: 角色面前放站桩假人, 触发一次攻击, 连存若干帧供打击感验收
+# 用法: SHOT_MOTION=1 (可选 SHOT_ROOM=<房间> / SHOT_ENEMY=<敌人type>) ... --shot
+func _motion_burst() -> void:
+	var dummy_type := OS.get_environment("SHOT_ENEMY")
+	if dummy_type == "" or not ENEMY_DEFS.has(dummy_type):
+		dummy_type = "slime"
+	# 假人放在角色右前方, 让攻击/刀光打在它身上
+	_spawn_enemy(player.position.x + 90.0, player.position.y, dummy_type)
+	await get_tree().create_timer(0.5).timeout   # 等镜头/场景稳定
+	var out_dir := ProjectSettings.globalize_path("res://screenshots/motion")
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	# 触发一次攻击(按一帧再松开, 让 just_pressed 生效)
+	Input.action_press("attack")
+	await get_tree().process_frame
+	Input.action_release("attack")
+	# 连拍 5 帧, 每帧间隔约 0.12s, 覆盖整段挥砍
+	for i in range(5):
+		await get_tree().create_timer(0.12).timeout
+		await RenderingServer.frame_post_draw
+		get_viewport().get_texture().get_image().save_png("%s/frame_%d.png" % [out_dir, i])
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
