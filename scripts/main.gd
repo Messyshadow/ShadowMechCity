@@ -33,6 +33,7 @@ var _door_hint: Node = null
 var boss_bar: CanvasLayer
 var _boss: Node = null
 var inv_panel: CanvasLayer
+var _bounds: Array = [0, 0, 1400, 560]   # 当前房间边界(用于攀墙越界保护)
 
 # 钥匙信息: 名称 + 获取地点提示
 const KEY_INFO := {
@@ -141,6 +142,10 @@ func _on_boss_defeated(id: String) -> void:
 func _process(delta: float) -> void:
 	if door_cd > 0.0:
 		door_cd -= delta
+	# 攀墙越界保护: 禁止玩家爬出房间顶部边界(上行门在 T+16, 仍可触发)
+	if is_instance_valid(player) and player.global_position.y < _bounds[1] - 50:
+		player.global_position.y = _bounds[1] - 50
+		player.velocity.y = maxf(player.velocity.y, 0.0)
 	if Input.is_action_just_pressed("restart"):
 		get_tree().reload_current_scene()
 
@@ -192,6 +197,7 @@ func _enter_room(id: String, from_room: String) -> void:
 	player.iframes = 0.5
 	# 相机
 	var b = room["bounds"]
+	_bounds = b
 	camera.limit_left = int(b[0] - 80); camera.limit_top = int(b[1] - 120)
 	camera.limit_right = int(b[2] + 80); camera.limit_bottom = int(b[3] + 120)
 	camera.reset_smoothing()
