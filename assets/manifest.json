@@ -1,0 +1,63 @@
+{
+  "player": {
+    "poses": [
+      "action1",
+      "action2",
+      "back",
+      "cheer1",
+      "cheer2",
+      "climb1",
+      "climb2",
+      "duck",
+      "fall",
+      "hang",
+      "hold1",
+      "hold2",
+      "hurt",
+      "idle",
+      "jump",
+      "kick",
+      "skid",
+      "slide",
+      "stand",
+      "swim1",
+      "swim2",
+      "talk",
+      "walk1",
+      "walk2"
+    ],
+    "size": [
+      80,
+      110
+    ]
+  },
+  "enemies": {
+    "mushroom": {
+      "frames": 8,
+      "fps": 6.7,
+      "size": [
+        183,
+        190
+      ]
+    },
+    "furry": {
+      "frames": 8,
+      "fps": 4.2,
+      "size": [
+        141,
+        162
+      ]
+    }
+  },
+  "effects": {
+    "slash": {
+      "frames": 7,
+      "fps": 8.6,
+      "size": [
+        298,
+        160
+      ],
+      "blend": "add"
+    }
+  }
+}

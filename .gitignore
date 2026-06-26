@@ -1,0 +1,8 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# 截图/录制工具产出 (godot-capture)
+/screenshots/
+/_shot.png
+/_shot_*.png
