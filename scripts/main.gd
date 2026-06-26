@@ -174,6 +174,10 @@ func _enter_room(id: String, from_room: String) -> void:
 	# 能力拾取物 [x, y, ability_id]
 	for ab in room.get("abilities", []):
 		Pickup.spawn_ability(world, Vector2(ab[0], ab[1]), ab[2])
+	# 隐藏收集物(生命碎片等) [x, y, kind, secret_id]: 已收集则不再刷出
+	for sc in room.get("secrets", []):
+		if not Game.is_collected(sc[3]):
+			Pickup.spawn(world, Vector2(sc[0], sc[1]), sc[2], 1, false, sc[3])
 	# 冲刺门 [x, top, w, h]  (冲刺相位穿越)
 	for g in room.get("gates", []):
 		_make_dash_gate(g[0], g[1], g[2], g[3])

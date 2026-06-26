@@ -25,6 +25,13 @@ func _draw() -> void:
 		draw_rect(Rect2(Vector2.ZERO, vp), Color(0, 0, 0.02, 0.85), true)
 		var font := ThemeDB.fallback_font
 		draw_string(font, Vector2(vp.x * 0.5 - 80, 70), "世界地图  (M关闭)", HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color(0.7, 0.95, 1.0))
+		# 收集度统计
+		var rooms_done := Game.visited.size()
+		var hearts := "生命碎片  %d / %d" % [Game.heart_pieces, Game.HEART_TOTAL]
+		var hcol := Color(1.0, 0.55, 0.6) if Game.heart_pieces < Game.HEART_TOTAL else Color(1.0, 0.85, 0.4)
+		draw_string(font, Vector2(vp.x * 0.5 - 80, 104), "已探索区域  %d / %d" % [rooms_done, Rooms.ROOMS.size()],
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 19, Color(0.6, 0.85, 1.0))
+		draw_string(font, Vector2(vp.x * 0.5 - 80, 130), hearts, HORIZONTAL_ALIGNMENT_LEFT, -1, 19, hcol)
 		_draw_map(vp * 0.5, 64.0, true)
 
 func _draw_map(center: Vector2, cell: float, full: bool) -> void:

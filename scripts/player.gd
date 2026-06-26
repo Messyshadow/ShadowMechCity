@@ -115,7 +115,7 @@ func _ready() -> void:
 
 # ---- 技能加成 ----
 func max_hp() -> int:
-	return MAX_HEALTH + Game.skill_lv("hp") + int(round(Game.equip_bonus("hp")))
+	return MAX_HEALTH + Game.skill_lv("hp") + int(round(Game.equip_bonus("hp"))) + Game.heart_pieces
 func _max_air_jumps() -> int:
 	return MAX_AIR_JUMPS + Game.skill_lv("triple")
 func _run_speed() -> float:

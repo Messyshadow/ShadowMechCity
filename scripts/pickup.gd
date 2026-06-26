@@ -19,6 +19,7 @@ const TEX := {
 	"key": "res://assets/items/key.png",
 	"gear": "res://assets/items/shard.png",
 	"ability": "res://assets/items/orb.png",
+	"heart": "res://assets/items/shard.png",
 }
 
 static func spawn_ability(parent: Node, pos: Vector2, ability_id: String) -> void:
@@ -64,6 +65,9 @@ func _ready() -> void:
 	elif kind == "ability":
 		sprite.modulate = Color(0.5, 0.95, 1.0)
 		sprite.scale = Vector2(1.8, 1.8)
+	elif kind == "heart":
+		sprite.modulate = Color(1.0, 0.85, 0.35)   # 金色生命碎片
+		sprite.scale = Vector2(1.7, 1.7)
 	add_child(sprite)
 	var cs := CollisionShape2D.new()
 	var sh := CircleShape2D.new()
@@ -124,6 +128,17 @@ func _on_body(body: Node) -> void:
 			Fx.screen_flash(get_tree(), Color(0.5, 0.9, 1.0, 0.35))
 			Fx.hit_spark(get_parent(), global_position)
 			Game.shake(6.0)
+			queue_free()
+			return
+		"heart":
+			Game.collect_secret(item_id, "heart")
+			if body.has_method("heal"):
+				body.heal(99)
+			Fx.popup(get_parent(), global_position + Vector2(0, -30),
+				"生命碎片!  最大生命 +1   (%d/%d)" % [Game.heart_pieces, Game.HEART_TOTAL], Color(1, 0.5, 0.6))
+			Fx.screen_flash(get_tree(), Color(1.0, 0.6, 0.5, 0.32))
+			Fx.hit_spark(get_parent(), global_position)
+			Game.shake(7.0)
 			queue_free()
 			return
 		"chest":

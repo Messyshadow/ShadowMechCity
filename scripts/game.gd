@@ -25,6 +25,23 @@ var visited: Dictionary = {}        # room_id -> true
 var items: Dictionary = {}          # 钥匙/能力 id -> true
 var unlocked_doors: Dictionary = {} # "roomA>roomB" -> true (已解锁的门)
 
+# ---- 收集系统(隐藏宝藏/生命碎片, 回溯解锁) ----
+var collected: Dictionary = {}      # secret_id -> true (已收集, 不再刷出)
+var heart_pieces: int = 0           # 生命碎片数 → 永久 +最大生命
+const HEART_TOTAL := 3              # 全图生命碎片总数(收集度统计)
+
+func is_collected(id: String) -> bool:
+	return collected.has(id)
+
+func collect_secret(id: String, kind: String) -> void:
+	if id == "" or collected.has(id):
+		return
+	collected[id] = true
+	if kind == "heart":
+		heart_pieces += 1
+	gear_changed.emit()      # 刷新玩家最大生命
+	map_changed.emit()       # 刷新地图收集度
+
 func visit_room(id: String) -> void:
 	current_room = id
 	if not visited.has(id):
@@ -58,6 +75,7 @@ func save_game() -> void:
 		"skills": skills, "items": items, "unlocked_doors": unlocked_doors,
 		"visited": visited, "current_room": current_room,
 		"inventory": inventory, "equipped": equipped, "abilities": abilities,
+		"collected": collected, "heart_pieces": heart_pieces,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
@@ -83,6 +101,7 @@ func load_save() -> bool:
 	current_room = data.get("current_room", "")
 	inventory = data.get("inventory", []); equipped = data.get("equipped", {})
 	abilities = data.get("abilities", {})
+	collected = data.get("collected", {}); heart_pieces = int(data.get("heart_pieces", 0))
 	return true
 
 func reset() -> void:
@@ -90,6 +109,7 @@ func reset() -> void:
 	weapon_index = 0; player_hp = 5
 	skills = {}; items = {}; unlocked_doors = {}; visited = {}; current_room = ""
 	inventory = []; equipped = {}; abilities = {}
+	collected = {}; heart_pieces = 0
 
 func xp_needed() -> int:
 	return 4 + level * 3
