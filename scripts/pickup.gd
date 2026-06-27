@@ -30,7 +30,7 @@ static func spawn_ability(parent: Node, pos: Vector2, ability_id: String) -> voi
 	p.kind = "ability"
 	p.item_id = ability_id
 	p.position = pos
-	parent.add_child(p)
+	parent.add_child.call_deferred(p)   # 延迟添加: 死亡掉落常发生在物理flush期(飞弹击杀), 避免 "Can't change this state while flushing queries"
 
 static func spawn_gear(parent: Node, pos: Vector2, item: Dictionary) -> void:
 	if parent == null or not is_instance_valid(parent):
@@ -40,7 +40,7 @@ static func spawn_gear(parent: Node, pos: Vector2, item: Dictionary) -> void:
 	p.kind = "gear"
 	p.item_data = item
 	p.position = pos + Vector2(randf_range(-18, 18), -randf_range(10, 30))
-	parent.add_child(p)
+	parent.add_child.call_deferred(p)   # 延迟添加: 死亡掉落常发生在物理flush期(飞弹击杀), 避免 "Can't change this state while flushing queries"
 
 static func spawn(parent: Node, pos: Vector2, kind: String, value: int = 1, scatter: bool = false, item_id: String = "") -> void:
 	if parent == null or not is_instance_valid(parent):
@@ -51,7 +51,7 @@ static func spawn(parent: Node, pos: Vector2, kind: String, value: int = 1, scat
 	p.value = value
 	p.item_id = item_id
 	p.position = pos + (Vector2(randf_range(-18, 18), -randf_range(10, 30)) if scatter else Vector2.ZERO)
-	parent.add_child(p)
+	parent.add_child.call_deferred(p)   # 延迟添加: 死亡掉落常发生在物理flush期(飞弹击杀), 避免 "Can't change this state while flushing queries"
 
 func _ready() -> void:
 	collision_layer = 0
