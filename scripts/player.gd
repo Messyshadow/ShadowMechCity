@@ -71,7 +71,8 @@ var rage := 0.0
 var _skill_cds := {}           # archetype_id -> 剩余冷却
 var _tap_dir := 0              # 搓招: 上次方向键
 var _tap_t := 0.0             # 搓招: 上次按下时刻(s)
-var _dash_ready := 0.0         # >0 表示最近双击了前进方向(突进技窗口)
+var _dash_ready := 0.0         # >0 表示最近双击了某方向(突进技窗口)
+var _dash_dir := 0             # 双击的方向(-1/1); 突进须仍按住同向才触发
 
 var coyote := 0.0
 var jump_buffer := 0.0
@@ -335,6 +336,7 @@ func _do_normal(delta: float) -> void:
 		if Input.is_action_just_pressed(act):
 			if _tap_dir == d and (now - _tap_t) < 0.28:
 				_dash_ready = 0.32
+				_dash_dir = d
 			_tap_dir = d
 			_tap_t = now
 
@@ -461,11 +463,15 @@ func _skill_dmg(mult: float) -> int:
 	return int(round(float(base) * mult))
 
 func _try_skill() -> void:
+	# 优先级: ↑上挑 > (双击同向且仍按住)突进 > 地面波
+	# 仅"单按住方向跑"时按K → 一律地面波, 不会误触方向技
+	var hx := Input.get_axis("move_left", "move_right")
 	var arch := "ground"
-	if Input.is_action_pressed("move_up"):
+	if Input.is_action_pressed("move_up") and not Input.is_action_pressed("move_down"):
 		arch = "upper"
-	elif _dash_ready > 0.0:
+	elif _dash_ready > 0.0 and hx != 0.0 and signf(hx) == float(_dash_dir):
 		arch = "dash_atk"
+		_dash_ready = 0.0   # 消费掉, 防一次双击连放
 	_cast(arch)
 
 func _cast(arch: String) -> void:
