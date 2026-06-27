@@ -28,7 +28,7 @@ var unlocked_doors: Dictionary = {} # "roomA>roomB" -> true (已解锁的门)
 # ---- 收集系统(隐藏宝藏/生命碎片, 回溯解锁) ----
 var collected: Dictionary = {}      # secret_id -> true (已收集, 不再刷出)
 var heart_pieces: int = 0           # 生命碎片数 → 永久 +最大生命
-const HEART_TOTAL := 4              # 全图生命碎片总数(收集度统计)
+const HEART_TOTAL := 5              # 全图生命碎片总数(收集度统计)
 
 func is_collected(id: String) -> bool:
 	return collected.has(id)
@@ -191,7 +191,7 @@ func equip_bonus(stat: String) -> float:
 
 # ---- 能力(银河城: 找到才解锁, 用于能力门) ----
 var abilities: Dictionary = {}     # ability_id -> true
-const ABILITY_NAME := {"dash": "冲刺", "bomb": "炸弹", "wall_climb": "攀墙", "glide": "滑翔翼", "double_jump": "二段跳"}
+const ABILITY_NAME := {"dash": "冲刺", "bomb": "炸弹", "wall_climb": "攀墙", "glide": "滑翔翼", "aqua": "水下推进器", "double_jump": "二段跳"}
 
 func has_ability(id: String) -> bool:
 	return abilities.has(id)

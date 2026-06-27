@@ -42,15 +42,17 @@ func _build_visual() -> void:
 	var add := CanvasItemMaterial.new()
 	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	match kind:
-		"lava":
+		"lava", "poison":
+			var main_col := Color(1.0, 0.45, 0.12) if kind == "lava" else Color(0.45, 0.85, 0.25)
+			var core_col := Color(1.0, 0.85, 0.4) if kind == "lava" else Color(0.7, 1.0, 0.5)
 			_vis = Polygon2D.new()
 			(_vis as Polygon2D).polygon = _rect_poly(hz_w, hz_h)
-			(_vis as Polygon2D).color = Color(1.0, 0.45, 0.12)
+			(_vis as Polygon2D).color = main_col
 			_vis.material = add
 			add_child(_vis)
 			var core := Polygon2D.new()
 			core.polygon = _rect_poly(hz_w, hz_h * 0.5)
-			core.color = Color(1.0, 0.85, 0.4)
+			core.color = core_col
 			core.position = Vector2(0, hz_h * 0.2)
 			core.material = add
 			add_child(core)

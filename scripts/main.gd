@@ -20,6 +20,11 @@ const ENEMY_DEFS := {
 	"ghost_spider": {"sprite": "bat", "frames": 4, "fps": 8.5, "scale": 0.7, "hp": 7, "speed": 74.0, "size": Vector2(52, 52), "tint": Color(0.8, 0.7, 1.0), "behavior": "flyer", "dmg": 1, "kbr": 0.0},
 	"drone": {"sprite": "jelly", "frames": 6, "fps": 7.5, "scale": 0.6, "hp": 6, "speed": 92.0, "size": Vector2(54, 44), "tint": Color(0.6, 1.0, 1.0), "behavior": "flyer", "dmg": 1, "kbr": 0.1},
 	"steam_brute": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.05, "hp": 44, "speed": 48.0, "size": Vector2(100, 112), "tint": Color(1.0, 0.7, 0.45), "behavior": "charger", "dmg": 3, "kbr": 0.75},
+	# 腐化水道专属敌种(阶段10.2)
+	"fishman": {"sprite": "beast", "frames": 6, "fps": 5.5, "scale": 0.66, "hp": 10, "speed": 60.0, "size": Vector2(54, 64), "tint": Color(0.5, 0.85, 0.8), "behavior": "charger", "dmg": 2, "kbr": 0.3},
+	"frog": {"sprite": "mushroom", "frames": 8, "fps": 6.5, "scale": 0.62, "hp": 7, "speed": 50.0, "size": Vector2(56, 52), "tint": Color(0.6, 0.95, 0.5), "behavior": "shooter", "dmg": 1, "kbr": 0.1},
+	"snake": {"sprite": "jelly", "frames": 6, "fps": 8.0, "scale": 0.6, "hp": 6, "speed": 96.0, "size": Vector2(54, 44), "tint": Color(0.7, 0.95, 1.0), "behavior": "flyer", "dmg": 1, "kbr": 0.1},
+	"deep_brute": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.05, "hp": 46, "speed": 50.0, "size": Vector2(100, 112), "tint": Color(0.45, 0.8, 0.85), "behavior": "charger", "dmg": 3, "kbr": 0.7},
 }
 
 const WALL := 40
@@ -188,6 +193,9 @@ func _enter_room(id: String, from_room: String) -> void:
 	# 热气流 [cx, cy, w, h, force]
 	for ud in room.get("updrafts", []):
 		_make_updraft(ud[0], ud[1], ud[2], ud[3], ud[4])
+	# 水域 [cx, cy, w, h, (flowx=0), (flowy=0)]
+	for wt in room.get("water", []):
+		_make_water(wt)
 	for e in room.get("enemies", []):
 		_spawn_enemy(e[0], e[1], e[2])
 	for it in room.get("items", []):
@@ -434,6 +442,17 @@ func _make_belt(cx: float, cy: float, w: float, h: float, push: float, tint: Col
 	if be.has_method("setup"):
 		be.setup(w, h, push, tint)
 	world.add_child(be)
+
+func _make_water(wt: Array) -> void:
+	# [cx, cy, w, h, (flowx), (flowy)]
+	var wa := Area2D.new()
+	wa.set_script(load("res://scripts/water.gd"))
+	wa.position = Vector2(wt[0], wt[1])
+	if wa.has_method("setup"):
+		var fx: float = wt[4] if wt.size() > 4 else 0.0
+		var fy: float = wt[5] if wt.size() > 5 else 0.0
+		wa.setup(wt[2], wt[3], fx, fy)
+	world.add_child(wa)
 
 func _make_updraft(cx: float, cy: float, w: float, h: float, force: float) -> void:
 	var ud := Area2D.new()

@@ -30,6 +30,13 @@ const AIR_JUMP_MULT := 1.08        # 二段跳比一段更高(更容易够到空
 const WALL_SLIDE_SPEED := 80.0     # 墙滑更慢, 留出反应时间
 const CLIMB_SPEED := 150.0         # 攀墙速度(需能力)
 const GLIDE_FALL_SPEED := 95.0     # 滑翔下落速度(需能力)
+# 水域(10.2): 基础游泳人人可用; 水下推进器(aqua)= 快速全向游动, 可顶住水流闸门
+const BASE_SWIM := 120.0           # 无推进器: 划水慢
+const AQUA_SWIM := 300.0           # 有推进器: 快速全向
+const WATER_ACCEL := 1000.0
+const BUOY_SINK := 70.0            # 无推进器中性时缓沉
+var _water_t := 0.0                # >0 表示在水中(水域每帧刷新)
+var water_flow := Vector2.ZERO     # 当前所在水流速度(水流闸门用)
 const WALL_JUMP_PUSH := 340.0
 const WALL_JUMP_UP := -620.0       # 蹬墙跳更高, 便于爬出深坑
 const WALL_JUMP_LOCK := 0.10       # 蹬墙跳后水平控制锁定(更短, 便于回身上平台)
@@ -243,7 +250,17 @@ func _update_timers(delta: float) -> void:
 		_dash_ready -= delta
 	if _down_ready > 0.0:
 		_down_ready -= delta
+	if _water_t > 0.0:
+		_water_t -= delta
 	resource_changed.emit(mp, mmax, rage, MAX_RAGE)
+
+func is_in_water() -> bool:
+	return _water_t > 0.0
+
+# 由 water.gd 每帧调用: 标记在水中并传入该处水流
+func enter_water(flow: Vector2) -> void:
+	_water_t = 0.12
+	water_flow = flow
 
 # ------------------------------------------------------------- 普通状态
 func _do_normal(delta: float) -> void:
@@ -296,8 +313,30 @@ func _do_normal(delta: float) -> void:
 		if randf() < 0.25:
 			Fx.dust(get_parent(), global_position + Vector2(wall_n.x * -16, 30), wall_n.x)
 
-	# 重力(攀墙时不施加)
-	if not on_floor and not climbing:
+	var in_water := is_in_water()
+	if in_water:
+		# 水域: 游泳(替代重力/跳跃)。基础人人可用; 水下推进器=快速全向, 可顶住水流
+		var aqua := Game.has_ability("aqua")
+		var swim := AQUA_SWIM if aqua else BASE_SWIM
+		var vy_in := Input.get_axis("move_up", "move_down")
+		var target := Vector2(input_dir * swim, 0.0)
+		if aqua:
+			target.y = vy_in * swim
+		else:
+			if Input.is_action_pressed("jump"):
+				target.y = -BASE_SWIM
+			elif vy_in != 0.0:
+				target.y = vy_in * BASE_SWIM
+			else:
+				target.y = BUOY_SINK
+		target += water_flow          # 水流闸门: 基础划水顶不住, 推进器能过
+		velocity = velocity.move_toward(target, WATER_ACCEL * delta)
+		air_jumps = _max_air_jumps()  # 出水即可跳
+		can_dash = true
+		if randf() < 0.12:
+			Fx.dust(get_parent(), global_position + Vector2(randf_range(-10, 10), 8), 0.0)
+	elif not on_floor and not climbing:
+		# 重力(攀墙时不施加)
 		var g := GRAVITY
 		if velocity.y > 0.0:
 			g *= FALL_GRAVITY_MULT
@@ -308,8 +347,8 @@ func _do_normal(delta: float) -> void:
 			if randf() < 0.25:
 				Fx.dust(get_parent(), global_position + Vector2(0, 14), 0.0)
 
-	# 跳跃判定
-	if jump_buffer > 0.0:
+	# 跳跃判定(水中用跳键划水, 不触发跳)
+	if jump_buffer > 0.0 and not in_water:
 		if coyote > 0.0:
 			_jump()
 		elif on_wall:
