@@ -176,6 +176,15 @@ func _enter_room(id: String, from_room: String) -> void:
 	# 环境陷阱 [x, top, w, h, dmg, kind]
 	for hz in room.get("hazards", []):
 		_make_hazard(hz[0], hz[1], hz[2], hz[3], hz[4], hz[5])
+	# 移动平台/升降机 [cx, cy, w, axis, dist, period, phase]
+	for mv in room.get("movers", []):
+		_make_mover(mv, tint)
+	# 传送带 [cx, cy, w, h, push]
+	for be in room.get("belts", []):
+		_make_belt(be[0], be[1], be[2], be[3], be[4], tint)
+	# 热气流 [cx, cy, w, h, force]
+	for ud in room.get("updrafts", []):
+		_make_updraft(ud[0], ud[1], ud[2], ud[3], ud[4])
 	for e in room.get("enemies", []):
 		_spawn_enemy(e[0], e[1], e[2])
 	for it in room.get("items", []):
@@ -250,13 +259,37 @@ func _build_geometry(room: Dictionary, tint: Color) -> void:
 			"up": up_xs.append(d["p"])
 			"left": left_door = d
 			"right": right_door = d
-	# 地面(底), 留下行门缺口
-	_build_run(L - WALL, R + WALL, B, 200, down_xs, true, tint)
+	# 地面(底), 留下行门缺口 + 坑(pit/熔铁河)缺口
+	var ground_ranges: Array = []
+	for gx in down_xs:
+		ground_ranges.append([gx - 60.0, gx + 60.0])
+	for p in room.get("pits", []):
+		ground_ranges.append([p[0] - p[1] * 0.5, p[0] + p[1] * 0.5])
+	_build_ground_gaps(L - WALL, R + WALL, B, 200, ground_ranges, tint)
+	# 坑底: 接住玩家的实体 + 熔铁危害(掉坑=危害但可跳出, 跨坑走平台=必经动线)
+	for p in room.get("pits", []):
+		var px: float = p[0]; var pw: float = p[1]
+		var depth: float = p[2] if p.size() > 2 else 140.0
+		var pdmg: int = p[3] if p.size() > 3 else 2
+		_make_solid(px - pw * 0.5, B + depth, pw, 90, true, tint)
+		_make_hazard(px - pw * 0.5 + 12, B + depth - 22, pw - 24, 22, pdmg, "lava")
 	# 天花板(顶), 留上行门缺口
 	_build_run(L - WALL, R + WALL, T - 40, 40, up_xs, false, tint)
 	# 左右墙(门处留缺口)
 	_build_wall(L - WALL, T, B, left_door, tint)
 	_build_wall(R, T, B, right_door, tint)
+
+func _build_ground_gaps(x0: float, x1: float, y: float, h: float, ranges: Array, tint: Color) -> void:
+	# 按显式缺口区间铺地面
+	var gs := ranges.duplicate()
+	gs.sort_custom(func(a, b): return a[0] < b[0])
+	var start := x0
+	for g in gs:
+		if g[0] > start:
+			_make_solid(start, y, g[0] - start, h, true, tint)
+		start = maxf(start, g[1])
+	if x1 > start:
+		_make_solid(start, y, x1 - start, h, true, tint)
 
 func _build_run(x0: float, x1: float, y: float, h: float, gaps: Array, is_ground: bool, tint: Color) -> void:
 	# 横向铺设, 在 gaps(中心x) 处留 120 宽缺口
@@ -377,6 +410,35 @@ func _make_dash_gate(x: float, top: float, w: float, h: float) -> void:
 	tw.tween_property(rect, "color:a", 0.18, 0.8)
 	tw.tween_property(rect, "color:a", 0.4, 0.8)
 	world.add_child(body)
+
+func _make_mover(mv: Array, tint: Color) -> void:
+	# [cx, cy, w, axis, dist, period, phase]
+	var m := AnimatableBody2D.new()
+	m.set_script(load("res://scripts/mover.gd"))
+	m.position = Vector2(mv[0], mv[1])
+	if m.has_method("setup"):
+		var ax: String = mv[3] if mv.size() > 3 else "h"
+		var dist: float = mv[4] if mv.size() > 4 else 200.0
+		var per: float = mv[5] if mv.size() > 5 else 3.0
+		var ph: float = mv[6] if mv.size() > 6 else 0.0
+		m.setup(mv[2], ax, dist, per, ph, tint)
+	world.add_child(m)
+
+func _make_belt(cx: float, cy: float, w: float, h: float, push: float, tint: Color) -> void:
+	var be := Area2D.new()
+	be.set_script(load("res://scripts/belt.gd"))
+	be.position = Vector2(cx, cy)
+	if be.has_method("setup"):
+		be.setup(w, h, push, tint)
+	world.add_child(be)
+
+func _make_updraft(cx: float, cy: float, w: float, h: float, force: float) -> void:
+	var ud := Area2D.new()
+	ud.set_script(load("res://scripts/updraft.gd"))
+	ud.position = Vector2(cx, cy)
+	if ud.has_method("setup"):
+		ud.setup(w, h, force)
+	world.add_child(ud)
 
 func _make_hazard(x: float, top: float, w: float, h: float, dmg: int, kind: String) -> void:
 	var hz := Area2D.new()

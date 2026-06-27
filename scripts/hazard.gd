@@ -10,6 +10,11 @@ var _cd := 0.0
 var _t := 0.0
 var _vis: Node2D
 var _gear: Node2D
+# 蒸汽阀周期喷发(P4): 预警→喷发→收
+const STEAM_PERIOD := 2.6
+const STEAM_ERUPT := 1.0       # 喷发(有伤害)持续
+const STEAM_WARN := 0.5        # 喷发前预警时长
+var _erupting := false
 
 func setup(w: float, h: float, d: int, k: String) -> void:
 	hz_w = w; hz_h = h; dmg = d; kind = k
@@ -20,7 +25,12 @@ func _ready() -> void:
 	z_index = 6
 	var cs := CollisionShape2D.new()
 	var sh := RectangleShape2D.new()
-	sh.size = Vector2(hz_w, hz_h)
+	if kind == "steam":
+		# 蒸汽=向上的气柱, 危害区在喷口上方
+		sh.size = Vector2(hz_w, hz_h * 5.0)
+		cs.position = Vector2(0, -hz_h * 2.5)
+	else:
+		sh.size = Vector2(hz_w, hz_h)
 	cs.shape = sh
 	add_child(cs)
 	_build_visual()
@@ -61,25 +71,44 @@ func _build_visual() -> void:
 			hub.polygon = _rect_poly(r * 0.5, r * 0.5)
 			hub.color = Color(0.35, 0.37, 0.42)
 			_gear.add_child(hub)
-		_:   # steam
+		_:   # steam: 锚定喷口、向上的气柱(scale.y 增长即喷起)
 			_vis = Polygon2D.new()
-			(_vis as Polygon2D).polygon = _rect_poly(hz_w, hz_h)
-			(_vis as Polygon2D).color = Color(0.8, 0.95, 1.0, 0.4)
+			(_vis as Polygon2D).polygon = PackedVector2Array([
+				Vector2(-hz_w * 0.5, -hz_h), Vector2(hz_w * 0.5, -hz_h),
+				Vector2(hz_w * 0.5, 0), Vector2(-hz_w * 0.5, 0)])
+			(_vis as Polygon2D).color = Color(0.85, 0.95, 1.0, 0.5)
 			_vis.material = add
+			_vis.scale.y = 0.25
 			add_child(_vis)
 
 func _physics_process(delta: float) -> void:
 	_t += delta
 	_cd = maxf(0.0, _cd - delta)
-	# 视觉脉动
-	if _vis:
-		_vis.modulate.a = 0.55 + 0.45 * sin(_t * 5.0)
 	if _gear:
 		_gear.rotation += delta * 3.0
-	if kind == "steam" and randf() < 0.06:
-		Fx.dust(get_parent(), global_position + Vector2(randf_range(-hz_w, hz_w) * 0.4, -hz_h * 0.5), 0.0)
-	# 接触伤害(轮询, 玩家自身 iframes + 本地冷却双重节流)
-	if _cd <= 0.0:
+	# 蒸汽阀: 周期喷发(预警→喷发), 只有喷发期才有伤害+高柱; 其余时间安全可踩
+	var active := true
+	if kind == "steam":
+		var ph := fmod(_t, STEAM_PERIOD)
+		_erupting = ph < STEAM_ERUPT
+		active = _erupting
+		var warn := ph >= (STEAM_PERIOD - STEAM_WARN)
+		if _vis:
+			if _erupting:
+				_vis.scale.y = 1.0 + 5.0 * (1.0 - ph / STEAM_ERUPT)   # 喷起的高柱, 渐收
+				_vis.modulate.a = 0.85
+			elif warn:
+				_vis.scale.y = 0.4
+				_vis.modulate.a = 0.3 + 0.4 * sin(_t * 22.0)          # 预警闪烁
+			else:
+				_vis.scale.y = 0.25
+				_vis.modulate.a = 0.18
+		if _erupting and randf() < 0.5:
+			Fx.dust(get_parent(), global_position + Vector2(randf_range(-hz_w, hz_w) * 0.4, -hz_h * 0.5), 0.0)
+	elif _vis:
+		_vis.modulate.a = 0.55 + 0.45 * sin(_t * 5.0)
+	# 接触伤害(轮询; 玩家 iframes + 本地冷却双重节流; 蒸汽仅喷发期)
+	if active and _cd <= 0.0:
 		for b in get_overlapping_bodies():
 			if b.is_in_group("player") and b.has_method("take_damage"):
 				b.take_damage(dmg, global_position)
