@@ -688,6 +688,7 @@ func _setup_hud() -> void:
 	hud.set_script(load("res://scripts/hud.gd"))
 	add_child(hud)
 	player.health_changed.connect(hud.set_health)
+	player.resource_changed.connect(hud.set_resources)
 	player.weapon_changed.connect(hud.set_weapon)
 	Game.enemy_killed.connect(hud.set_kills)
 	Game.progression_changed.connect(hud.set_progress)

@@ -8,6 +8,8 @@ var area_label: Label
 var level_label: Label
 var sp_label: Label
 var xp_bar: ProgressBar
+var mp_bar: ProgressBar
+var rage_bar: ProgressBar
 var hint: Label
 
 func _ready() -> void:
@@ -31,8 +33,12 @@ func _ready() -> void:
 	xp_bar.value = 0
 	xp_bar.show_percentage = false
 	add_child(xp_bar)
-	sp_label = _make_label(Vector2(24, 172), 18, Color(1.0, 0.85, 0.3))
+	sp_label = _make_label(Vector2(24, 196), 18, Color(1.0, 0.85, 0.3))
 	sp_label.text = ""
+	# 技力(蓝) / 怒气(橙) 资源条
+	mp_bar = _make_bar(174, Color(0.35, 0.7, 1.0), Color(0.05, 0.1, 0.2, 0.7))
+	rage_bar = _make_bar(186, Color(1.0, 0.55, 0.2), Color(0.18, 0.08, 0.04, 0.7))
+	rage_bar.value = 0
 
 	# 区域名(右上)
 	area_label = Label.new()
@@ -66,14 +72,15 @@ func _build_control_chips() -> void:
 	var skill_box := HBoxContainer.new()
 	skill_box.add_theme_constant_override("separation", 6)
 	skill_box.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	skill_box.offset_right = -20; skill_box.offset_left = -470
+	skill_box.offset_right = -20; skill_box.offset_left = -560
 	skill_box.offset_top = -64; skill_box.offset_bottom = -16
 	skill_box.alignment = BoxContainer.ALIGNMENT_END
 	add_child(skill_box)
 	_chip(skill_box, "J", "普攻", Color(0.7, 0.95, 1.0))
-	_chip(skill_box, "K", "重攻", Color(1.0, 0.7, 0.4))
+	_chip(skill_box, "K", "技能 上/→→变招", Color(1.0, 0.7, 0.4))
+	_chip(skill_box, "V", "大招", Color(1.0, 0.6, 0.3))
 	_chip(skill_box, "Q", "换武器", Color(0.9, 0.8, 1.0))
-	_chip(skill_box, "T", "技能", Color(1.0, 0.85, 0.4))
+	_chip(skill_box, "T", "加点", Color(1.0, 0.85, 0.4))
 	_chip(skill_box, "U", "背包", Color(0.7, 0.9, 0.7))
 	skill_box.modulate.a = 0.6
 
@@ -104,6 +111,35 @@ func _chip(parent: Node, key: String, action: String, color: Color) -> void:
 	al.add_theme_color_override("font_color", Color(0.85, 0.9, 1.0))
 	vb.add_child(al)
 	parent.add_child(pc)
+
+func _make_bar(y: float, fill_col: Color, bg_col: Color) -> ProgressBar:
+	var b := ProgressBar.new()
+	b.position = Vector2(24, y)
+	b.custom_minimum_size = Vector2(230, 10)
+	b.size = Vector2(230, 10)
+	b.min_value = 0
+	b.max_value = 100
+	b.value = 100
+	b.show_percentage = false
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = bg_col
+	bg.set_corner_radius_all(4)
+	var fg := StyleBoxFlat.new()
+	fg.bg_color = fill_col
+	fg.set_corner_radius_all(4)
+	b.add_theme_stylebox_override("background", bg)
+	b.add_theme_stylebox_override("fill", fg)
+	add_child(b)
+	return b
+
+func set_resources(cur_mp: float, max_mp: float, cur_rage: float, max_rage: float) -> void:
+	mp_bar.max_value = max_mp
+	mp_bar.value = cur_mp
+	rage_bar.max_value = max_rage
+	rage_bar.value = cur_rage
+	# 怒气满: 高亮提示可放大招
+	var ready: bool = cur_rage >= max_rage
+	rage_bar.modulate = Color(1.4, 1.2, 0.6) if ready else Color(1, 1, 1)
 
 func _make_label(pos: Vector2, size: int, color: Color) -> Label:
 	var l := Label.new()

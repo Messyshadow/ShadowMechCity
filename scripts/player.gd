@@ -6,6 +6,7 @@ signal health_changed(cur: int, maxv: int)
 signal weapon_changed(name: String, color: Color)
 signal attacked
 signal died
+signal resource_changed(mp: float, max_mp: float, rage: float, max_rage: float)
 
 # ---- 移动手感参数 ----
 const RUN_SPEED := 270.0
@@ -57,6 +58,20 @@ var facing := 1
 var health := MAX_HEALTH
 var skill_cd := 0.0
 var bomb_cd := 0.0
+
+# ---- 主动技能资源(v2): 技力(MP) + 怒气 ----
+const MAX_MP := 100.0
+const MAX_RAGE := 100.0
+const MP_REGEN := 7.0          # 每秒自然回复
+const MP_ON_HIT := 8.0         # 命中敌人回蓝
+const RAGE_ON_HIT := 7.0
+const RAGE_ON_HURT := 12.0
+var mp := MAX_MP
+var rage := 0.0
+var _skill_cds := {}           # archetype_id -> 剩余冷却
+var _tap_dir := 0              # 搓招: 上次方向键
+var _tap_t := 0.0             # 搓招: 上次按下时刻(s)
+var _dash_ready := 0.0         # >0 表示最近双击了前进方向(突进技窗口)
 
 var coyote := 0.0
 var jump_buffer := 0.0
@@ -212,6 +227,15 @@ func _update_timers(delta: float) -> void:
 			attack_index = 0
 	if wall_lock > 0.0:
 		wall_lock -= delta
+	# 主动技能资源: 技力回复 / 各招冷却 / 突进窗口
+	if mp < MAX_MP:
+		mp = minf(mp + MP_REGEN * delta, MAX_MP)
+	for k in _skill_cds:
+		if _skill_cds[k] > 0.0:
+			_skill_cds[k] -= delta
+	if _dash_ready > 0.0:
+		_dash_ready -= delta
+	resource_changed.emit(mp, MAX_MP, rage, MAX_RAGE)
 
 # ------------------------------------------------------------- 普通状态
 func _do_normal(delta: float) -> void:
@@ -304,14 +328,29 @@ func _do_normal(delta: float) -> void:
 	if Input.is_action_just_pressed("switch"):
 		_switch_weapon()
 
+	# 搓招: 双击前进方向 -> 突进技窗口
+	var now := float(Time.get_ticks_msec()) * 0.001
+	for d in [-1, 1]:
+		var act := "move_left" if d == -1 else "move_right"
+		if Input.is_action_just_pressed(act):
+			if _tap_dir == d and (now - _tap_t) < 0.28:
+				_dash_ready = 0.32
+			_tap_dir = d
+			_tap_t = now
+
 	# 冲刺(初始技能)
 	if Input.is_action_just_pressed("dash") and can_dash and dash_cd <= 0.0:
 		_start_dash()
 		return
 
-	# 斩击波 (远程技能)
-	if Input.is_action_just_pressed("skill") and skill_cd <= 0.0:
-		_fire_skill()
+	# 主动技能 (K + 方向搓招): ↑K=上挑 / 双击前进+K=突进斩 / 否则=地面波
+	if Input.is_action_just_pressed("skill"):
+		_try_skill()
+		return
+
+	# 大招 (V, 满怒气)
+	if Input.is_action_just_pressed("ult"):
+		_cast_ult()
 		return
 
 	# 投掷炸弹 (需解锁能力)
@@ -409,6 +448,115 @@ func _fire_skill() -> void:
 		"hammer": _heavy_hammer()
 		"cannon": _heavy_cannon()
 		_:        _heavy_sword()
+
+# ---- 主动技能分派(v2): K + 方向搓招 ----
+func gain_mp(n: float) -> void:
+	mp = minf(mp + n, MAX_MP)
+
+func gain_rage(n: float) -> void:
+	rage = minf(rage + n, MAX_RAGE)
+
+func _skill_dmg(mult: float) -> int:
+	var base: int = int(weapon["damage"]) + Game.skill_lv("atk") + Game.skill_lv("power") + int(round(Game.equip_bonus("atk")))
+	return int(round(float(base) * mult))
+
+func _try_skill() -> void:
+	var arch := "ground"
+	if Input.is_action_pressed("move_up"):
+		arch = "upper"
+	elif _dash_ready > 0.0:
+		arch = "dash_atk"
+	_cast(arch)
+
+func _cast(arch: String) -> void:
+	var d: Dictionary = SkillsActive.ARCHETYPES[arch]
+	if float(_skill_cds.get(arch, 0.0)) > 0.0:
+		return
+	if mp < float(d["mp"]):
+		Fx.popup(get_parent(), global_position + Vector2(0, -92), "技力不足", Color(0.6, 0.8, 1.0))
+		return
+	_aim_facing()
+	mp -= float(d["mp"])
+	_skill_cds[arch] = d["cd"]
+	gain_rage(4.0)
+	match arch:
+		"ground":   _fire_skill()
+		"upper":    _skill_upper()
+		"dash_atk": _skill_dash_atk()
+	resource_changed.emit(mp, MAX_MP, rage, MAX_RAGE)
+
+# 上挑(↑+K): 小跳 + 前上方挑飞敌人(接空连)
+func _skill_upper() -> void:
+	if is_on_floor():
+		velocity.y = -300.0
+	var col: Color = weapon["color"]
+	var center := global_position + Vector2(facing * 34, -46)
+	Fx.play_slash(get_parent(), center, facing, slash_frames, 1.25, col)
+	Fx.shockwave(get_parent(), center, col)
+	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.14))
+	var dmg := _skill_dmg(1.5)
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(e) and e.global_position.distance_to(center) < 115.0 and e.has_method("take_damage"):
+			e.take_damage(dmg, Vector2(facing * 130.0, -560.0))
+			Fx.hit_spark(get_parent(), e.global_position)
+	Game.shake(7.0)
+	Game.hitstop(0.06, 0.05)
+	_play_sfx("attack", -2.0)
+	_squash(Vector2(0.8, 1.3))
+
+# 突进斩(双击前进+K): 快速突进 + 沿途多段斩
+func _skill_dash_atk() -> void:
+	velocity = Vector2(facing * 640.0, 0.0)
+	iframes = maxf(iframes, 0.2)
+	var col: Color = weapon["color"]
+	var center := global_position + Vector2(facing * 50, -30)
+	for i in range(3):
+		_spawn_ghost()
+	Fx.play_slash(get_parent(), center, facing, slash_frames, 1.3, col)
+	Fx.play_slash(get_parent(), center + Vector2(facing * 30, -10), facing, slash_frames, 1.0, col)
+	var dmg := _skill_dmg(1.3)
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(e) or not e.has_method("take_damage"):
+			continue
+		var off: Vector2 = (e as Node2D).global_position - global_position
+		if absf(off.y) < 90.0 and off.x * facing > -30.0 and off.x * facing < 260.0:
+			e.take_damage(dmg, Vector2(facing * 260.0, -160.0))
+			Fx.hit_spark(get_parent(), e.global_position)
+	Game.shake(8.0)
+	Game.hitstop(0.06, 0.05)
+	_play_sfx("dash", -2.0)
+	_squash(Vector2(1.4, 0.7))
+
+# 大招(V, 满怒气): 当前武器终结技
+func _cast_ult() -> void:
+	if rage < MAX_RAGE:
+		Fx.popup(get_parent(), global_position + Vector2(0, -92), "怒气不足", Color(1.0, 0.6, 0.3))
+		return
+	rage = 0.0
+	_aim_facing()
+	var col: Color = weapon["color"]
+	Game.hitstop(0.14, 0.05)
+	Game.shake(18.0)
+	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.3))
+	match weapon["id"]:
+		"hammer", "cannon":
+			for i in range(3):
+				_fire_skill()
+		_:
+			for i in range(3):
+				_spawn_projectile(slash_frames, 1.8 + i * 0.3, col, _skill_dmg(1.2), 720.0, 1.4, 99, -34.0 - i * 14.0)
+				Fx.play_slash(get_parent(), global_position + Vector2(facing * 44, -34 - i * 12), facing, slash_frames, 1.4, col)
+	var dmg := _skill_dmg(2.5)
+	for e in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(e) and e.global_position.distance_to(global_position) < 240.0 and e.has_method("take_damage"):
+			var kd := signf(e.global_position.x - global_position.x)
+			if kd == 0.0:
+				kd = float(facing)
+			e.take_damage(dmg, Vector2(kd * 420.0, -300.0))
+			Fx.hit_spark(get_parent(), e.global_position)
+	Fx.popup(get_parent(), global_position + Vector2(0, -96), "▶ " + weapon["name"] + " 终结技!", col)
+	_play_sfx("slam", -1.0)
+	resource_changed.emit(mp, MAX_MP, rage, MAX_RAGE)
 
 func _spawn_projectile(frames: SpriteFrames, scale: float, tint: Color, dmg: int,
 		spd: float, life: float, pierce: int, yoff: float = -34.0) -> void:
@@ -671,6 +819,9 @@ func _land_hit(enemy: Node2D) -> void:
 		Game.hitstop(0.05, 0.05)
 		Game.shake(shake)
 	_play_sfx("hit", -8.0)
+	# 命中回技力 + 攒怒气
+	gain_mp(MP_ON_HIT)
+	gain_rage(RAGE_ON_HIT)
 
 # ------------------------------------------------------------- 受伤/死亡
 func take_damage(amount: int, from_pos: Vector2) -> void:
@@ -681,6 +832,7 @@ func take_damage(amount: int, from_pos: Vector2) -> void:
 	amount = maxi(1, amount - int(floor(defense / 3.0)))
 	health -= amount
 	health_changed.emit(health, max_hp())
+	gain_rage(RAGE_ON_HURT)
 	Fx.popup(get_parent(), global_position + Vector2(0, -70), "-%d" % amount, Color(1, 0.4, 0.4))
 	Game.shake(7.0)
 	Game.hitstop(0.08, 0.05)

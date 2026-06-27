@@ -214,6 +214,7 @@ const ACTIONS := {
 	"map_menu":   [KEY_M],
 	"inv_menu":   [KEY_U, KEY_I],
 	"bomb":       [KEY_F],
+	"ult":        [KEY_V],
 	"restart":    [KEY_R],
 }
 
