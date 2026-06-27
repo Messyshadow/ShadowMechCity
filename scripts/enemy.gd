@@ -313,8 +313,10 @@ func _die() -> void:
 		Pickup.spawn(get_parent(), drop_pos, "shard", 1, true)
 	if randf() < 0.22:
 		Pickup.spawn_gear(get_parent(), drop_pos, ItemsData.generate())
-	collision_layer = 0
-	touch.monitoring = false
+	# 死亡可能发生在物理碰撞信号派发期(突进/大招冲过多敌), 用 set_deferred 避免
+	# "Function blocked during in/out signal" 阻塞导致接触碰撞没及时关、死亡敌仍擦伤玩家
+	set_deferred("collision_layer", 0)
+	touch.set_deferred("monitoring", false)
 	velocity = Vector2(dir * -120.0, -260.0)
 	var tw := create_tween()
 	tw.tween_interval(0.25)

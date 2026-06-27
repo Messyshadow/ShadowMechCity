@@ -256,8 +256,9 @@ func _enrage() -> void:
 
 func _die() -> void:
 	state = "dead"
-	collision_layer = 0
-	touch.monitoring = false
+	# set_deferred: 死亡可能在碰撞信号派发期被技能触发, 避免 monitoring 阻塞
+	set_deferred("collision_layer", 0)
+	touch.set_deferred("monitoring", false)
 	defeated.emit()
 	Game.hitstop(0.18, 0.04)
 	Game.shake(16.0)

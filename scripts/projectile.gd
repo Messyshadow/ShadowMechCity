@@ -56,7 +56,8 @@ func _on_body(body: Node) -> void:
 
 func _fade() -> void:
 	set_physics_process(false)
-	monitoring = false
+	# _fade 可能由 _on_body(碰撞信号)调用(pierce 耗尽), 必须 set_deferred 避免阻塞
+	set_deferred("monitoring", false)
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 0.0, 0.12)
 	tw.tween_callback(queue_free)
