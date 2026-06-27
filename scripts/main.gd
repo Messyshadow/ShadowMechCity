@@ -816,6 +816,7 @@ func _motion_burst() -> void:
 				player.weapon_index = i
 				player.weapon = Weapons.get_weapon(i)
 				player._apply_weapon()
+				player.weapon_changed.emit(player.weapon["name"], player.weapon["color"])  # 刷新HUD武器名
 				break
 	await get_tree().create_timer(0.5).timeout   # 等镜头/场景稳定
 	var out_dir := ProjectSettings.globalize_path("res://screenshots/motion")

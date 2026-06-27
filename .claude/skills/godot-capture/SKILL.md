@@ -45,6 +45,14 @@ SHOT_ROOM=cavern SHOT_MOTION=1 timeout 60 "$GODOT" --path . res://main.tscn --sh
 
 > 运行时常见 `ERROR: 1 resources still in use at exit` 是 Godot 退出噪音，不影响截图。
 
+## 错误检测（必读·别再漏）
+
+跑连拍/截图时**必须扫描所有 `ERROR:` 行**，不要只 grep 某一句固定错误串。Godot 物理类报错至少有两种不同措辞：
+- `Function blocked during in/out signal`（在碰撞信号回调里改 monitoring）
+- `Can't change this state while flushing queries`（在物理 flush 期加/配碰撞 shape）
+
+二者都要 `set_deferred`/`call_deferred` 修。**只匹配其中一句会漏报另一句**（9.3 就因此漏过一个 bug）。推荐：`... 2>&1 | grep -iE "ERROR|SCRIPT ERROR" | grep -v "resources still in use\|ObjectDB instances"`（后两句是退出噪音，可忽略）。
+
 ## 验收纪律
 
 - **代码与画面不一致时，以画面为准。** 任务是找出还坏在哪，不是论证它大概没问题。
