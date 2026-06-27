@@ -179,6 +179,54 @@ static func shockwave(parent: Node, pos: Vector2, color: Color = Color(0.6, 0.85
 	tw.tween_property(ring, "modulate:a", 0.0, 0.35)
 	tw.chain().tween_callback(ring.queue_free)
 
+## 技能起手: 能量核闪 + 扩散环 + 火花 (让"放技能"那一下更有仪式感)
+static func cast_ring(parent: Node, pos: Vector2, color: Color) -> void:
+	if parent == null or not is_instance_valid(parent):
+		return
+	var add_mat := CanvasItemMaterial.new()
+	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	# 中心核闪
+	var core := Polygon2D.new()
+	var pts := PackedVector2Array()
+	for i in range(16):
+		var a := TAU * i / 16.0
+		pts.append(Vector2(cos(a), sin(a)) * 18.0)
+	core.polygon = pts
+	core.color = color
+	core.position = pos
+	core.scale = Vector2(0.2, 0.2)
+	core.z_index = 23
+	core.material = add_mat
+	parent.add_child(core)
+	var tw := core.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(core, "scale", Vector2(1.4, 1.4), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(core, "modulate:a", 0.0, 0.2)
+	tw.chain().tween_callback(core.queue_free)
+	hit_ring(parent, pos, color)
+	_burst(parent, pos, 12, color, 240.0, 180.0, Vector2(0, -1), 0.35, 2.0, 4.0, 60.0)
+
+## 冲刺速度线 (横向能量条纹, 强调位移冲击)
+static func speed_lines(parent: Node, pos: Vector2, dir_x: float, color: Color) -> void:
+	if parent == null or not is_instance_valid(parent):
+		return
+	var add_mat := CanvasItemMaterial.new()
+	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	for i in range(5):
+		var off := Vector2(randf_range(-20, 20), randf_range(-55, 5))
+		var ln := Line2D.new()
+		ln.width = randf_range(2.0, 4.0)
+		ln.default_color = color
+		ln.points = PackedVector2Array([pos + off, pos + off - Vector2(dir_x * randf_range(50, 90), 0)])
+		ln.z_index = 19
+		ln.material = add_mat
+		parent.add_child(ln)
+		var tw := ln.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(ln, "position:x", -dir_x * 60.0, 0.22)
+		tw.tween_property(ln, "modulate:a", 0.0, 0.22)
+		tw.chain().tween_callback(ln.queue_free)
+
 ## 一次性播放的特效动画 (如斩击), additive 发光
 static func play_slash(parent: Node, pos: Vector2, facing: float, frames: SpriteFrames,
 		scale: float = 0.9, tint: Color = Color(1, 1, 1)) -> void:

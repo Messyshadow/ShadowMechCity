@@ -501,6 +501,7 @@ func _cast(arch: String) -> void:
 	mp -= float(d["mp"])
 	_skill_cds[arch] = float(d["cd"]) * (1.0 - 0.15 * Game.skill_lv("skill_cd"))   # 机械超频:招式精通
 	gain_rage(4.0)
+	Fx.cast_ring(get_parent(), global_position + Vector2(0, -30), weapon["color"])
 	match arch:
 		"ground":   _fire_skill()
 		"upper":    _skill_upper()
@@ -521,6 +522,7 @@ func _aoe_hit(center: Vector2, radius: float, dmg: int, kb_scale: float, kb_up: 
 				kd = float(facing)
 			e.take_damage(dmg, Vector2(kd * kb_scale, kb_up))
 			Fx.hit_spark(get_parent(), ep)
+			Fx.hit_ring(get_parent(), ep, weapon["color"])
 
 # 任意角度飞弹(全向弹幕/防空齐射用)
 func _spawn_proj_vel(scale: float, tint: Color, dmg: int, v: Vector2, life: float, pierce: int = 2) -> void:
@@ -581,6 +583,7 @@ func _skill_dash_atk() -> void:
 			iframes = maxf(iframes, 0.3)   # 霸体
 			for i in range(3):
 				_spawn_ghost()
+			Fx.speed_lines(get_parent(), global_position + Vector2(0, -30), facing, col)
 			Fx.shockwave(get_parent(), global_position + Vector2(facing * 40, 6), col)
 			_aoe_hit(global_position + Vector2(facing * 60, -30), 150.0, _skill_dmg(1.8), 420.0, -200.0)
 			Game.shake(10.0)
@@ -591,6 +594,7 @@ func _skill_dash_atk() -> void:
 			iframes = maxf(iframes, 0.2)
 			for i in range(3):
 				_spawn_ghost()
+			Fx.speed_lines(get_parent(), global_position + Vector2(0, -30), facing, col)
 			Fx.play_slash(get_parent(), global_position + Vector2(facing * 50, -30), facing, slash_frames, 1.3, col)
 			Fx.play_slash(get_parent(), global_position + Vector2(facing * 80, -40), facing, slash_frames, 1.0, col)
 			_aoe_hit(global_position + Vector2(facing * 115, -30), 145.0, _skill_dmg(1.3), 260.0, -160.0)
@@ -642,6 +646,8 @@ func _cast_ult() -> void:
 	Game.hitstop(0.16, 0.05)
 	Game.shake(18.0)
 	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.32))
+	Fx.cast_ring(get_parent(), global_position + Vector2(0, -30), col)
+	Fx.cast_ring(get_parent(), global_position + Vector2(0, -48), Color(1, 1, 1))
 	match weapon["id"]:
 		"hammer":   # 陨星重击: 巨型砸地, 超大范围
 			velocity.y = -120.0
@@ -678,9 +684,12 @@ func _spawn_projectile(frames: SpriteFrames, scale: float, tint: Color, dmg: int
 		proj.pierce = pierce
 
 # 铁剑重攻击: 青色剑气波
+func _oc(n: int) -> int:   # 机械超频:过载输出, 统一作用于地面波(与其它主动技一致)
+	return int(round(float(n) * (1.0 + 0.15 * Game.skill_lv("skill_dmg"))))
+
 func _heavy_sword() -> void:
 	_spawn_projectile(slash_frames, 1.5, Color(0.7, 0.97, 1.0),
-		3 + Game.skill_lv("power"), 660.0, 1.5, 2 + Game.skill_lv("wave"))
+		_oc(3 + Game.skill_lv("power")), 660.0, 1.5, 2 + Game.skill_lv("wave"))
 	Fx.play_slash(get_parent(), global_position + Vector2(facing * 42, -34), facing, slash_frames, 1.1, Color(0.7, 0.97, 1.0))
 	Fx.screen_flash(get_tree(), Color(0.5, 0.85, 1.0, 0.14))
 	Game.shake(4.0)
@@ -692,7 +701,7 @@ func _heavy_sword() -> void:
 # 蒸汽炮重攻击: 蓄力远程重炮(飞很远)
 func _heavy_cannon() -> void:
 	_spawn_projectile(fx_frames["bolt2"], 1.6, Color(0.9, 0.97, 1.0),
-		5 + Game.skill_lv("power"), 1000.0, 2.8, 3 + Game.skill_lv("wave"))
+		_oc(5 + Game.skill_lv("power")), 1000.0, 2.8, 3 + Game.skill_lv("wave"))
 	Fx.shockwave(get_parent(), global_position + Vector2(facing * 56, -34), Color(0.8, 0.9, 1.0))
 	Fx.hit_spark(get_parent(), global_position + Vector2(facing * 60, -34))
 	Fx.screen_flash(get_tree(), Color(0.8, 0.9, 1.0, 0.2))
@@ -705,7 +714,7 @@ func _heavy_cannon() -> void:
 # 重锤重攻击: 沿地面推进的震地冲击波
 func _heavy_hammer() -> void:
 	_spawn_projectile(fx_frames["bolt"], 1.7, Color(1.0, 0.6, 0.25),
-		5 + Game.skill_lv("power"), 460.0, 1.3, 99, -16.0)
+		_oc(5 + Game.skill_lv("power")), 460.0, 1.3, 99, -16.0)
 	Fx.shockwave(get_parent(), global_position + Vector2(0, 8), Color(1.0, 0.55, 0.2))
 	Fx.shockwave(get_parent(), global_position + Vector2(facing * 90, 8), Color(1.0, 0.55, 0.2))
 	Fx.screen_flash(get_tree(), Color(1.0, 0.6, 0.2, 0.18))
