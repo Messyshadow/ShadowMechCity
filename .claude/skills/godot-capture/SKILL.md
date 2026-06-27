@@ -36,9 +36,12 @@ SHOT_ROOM=cavern SHOT_AT=110,150 SHOT_ZOOM=0.7 timeout 60 "$GODOT" --path . res:
 SHOT_ROOM=cavern SHOT_MOTION=1 timeout 60 "$GODOT" --path . res://main.tscn --shot
 ```
 
-- 在角色右前方放一个站桩假人，自动触发一次攻击，连拍 5 帧。
+- 在角色前方放一排假人(3个)，自动触发并连拍，覆盖整段动作。
 - 可选 `SHOT_ENEMY=<type>` 指定假人（默认 slime，type 见 main.gd `ENEMY_DEFS`）。
-- 产物：`screenshots/motion/frame_0.png` … `frame_4.png`，覆盖一次挥砍全过程。
+- 可选 `SHOT_SKILL=<招式>` 触发主动技能(9.2)而非普攻：
+  - `ground` ↓K地面波 / `upper` ↑K上挑 / `dash` →→K突进斩 / `ult` V大招(自动给满怒气)
+  - 突进/大招为拍效果直接预置状态(arm 搓招窗口/满怒气)，不验输入容错(那靠代码审查+试玩)。
+- 产物：`screenshots/motion/frame_0.png` … （普攻5帧/技能7-9帧）。
 
 > 运行时常见 `ERROR: 1 resources still in use at exit` 是 Godot 退出噪音，不影响截图。
 
