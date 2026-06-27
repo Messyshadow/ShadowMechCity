@@ -15,6 +15,11 @@ const ENEMY_DEFS := {
 	"bat": {"frames": 4, "fps": 7.7, "scale": 0.68, "hp": 4, "speed": 78.0, "size": Vector2(50, 52), "tint": Color(1, 1, 1), "behavior": "charger", "dmg": 1, "kbr": 0.0},
 	"golem": {"frames": 6, "fps": 10.0, "scale": 1.0, "hp": 30, "speed": 40.0, "size": Vector2(96, 108), "tint": Color(1, 1, 1), "behavior": "charger", "dmg": 3, "kbr": 0.8},
 	"mage": {"sprite": "bird", "frames": 7, "fps": 8.3, "scale": 0.6, "hp": 6, "speed": 36.0, "size": Vector2(56, 56), "tint": Color(0.7, 1.0, 0.7), "behavior": "shooter", "dmg": 1, "kbr": 0.1},
+	# 蒸汽铸造厂专属敌种(阶段10.1)
+	"mech_soldier": {"sprite": "beast", "frames": 6, "fps": 5.0, "scale": 0.66, "hp": 11, "speed": 66.0, "size": Vector2(54, 64), "tint": Color(0.62, 0.72, 0.85), "behavior": "charger", "dmg": 2, "kbr": 0.25},
+	"ghost_spider": {"sprite": "bat", "frames": 4, "fps": 8.5, "scale": 0.7, "hp": 7, "speed": 74.0, "size": Vector2(52, 52), "tint": Color(0.8, 0.7, 1.0), "behavior": "flyer", "dmg": 1, "kbr": 0.0},
+	"drone": {"sprite": "jelly", "frames": 6, "fps": 7.5, "scale": 0.6, "hp": 6, "speed": 92.0, "size": Vector2(54, 44), "tint": Color(0.6, 1.0, 1.0), "behavior": "flyer", "dmg": 1, "kbr": 0.1},
+	"steam_brute": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.05, "hp": 44, "speed": 48.0, "size": Vector2(100, 112), "tint": Color(1.0, 0.7, 0.45), "behavior": "charger", "dmg": 3, "kbr": 0.75},
 }
 
 const WALL := 40
@@ -163,8 +168,14 @@ func _enter_room(id: String, from_room: String) -> void:
 	_build_geometry(room, tint)
 	for p in room.get("platforms", []):
 		_make_solid(p[0], p[1], p[2], p[3], true, tint)
+	# 内部迷宫墙 [x, top, w, h] (竖墙/隔墙, 非地面)
+	for wseg in room.get("walls", []):
+		_make_solid(wseg[0], wseg[1], wseg[2], wseg[3], false, tint)
 	for o in room.get("oneways", []):
 		_make_oneway(o[0], o[1], o[2], tint)
+	# 环境陷阱 [x, top, w, h, dmg, kind]
+	for hz in room.get("hazards", []):
+		_make_hazard(hz[0], hz[1], hz[2], hz[3], hz[4], hz[5])
 	for e in room.get("enemies", []):
 		_spawn_enemy(e[0], e[1], e[2])
 	for it in room.get("items", []):
@@ -367,6 +378,14 @@ func _make_dash_gate(x: float, top: float, w: float, h: float) -> void:
 	tw.tween_property(rect, "color:a", 0.4, 0.8)
 	world.add_child(body)
 
+func _make_hazard(x: float, top: float, w: float, h: float, dmg: int, kind: String) -> void:
+	var hz := Area2D.new()
+	hz.set_script(load("res://scripts/hazard.gd"))
+	hz.position = Vector2(x + w * 0.5, top + h * 0.5)
+	if hz.has_method("setup"):
+		hz.setup(w, h, dmg, kind)
+	world.add_child(hz)
+
 func _make_oneway(x: float, y: float, w: float, tint: Color = Color.WHITE) -> void:
 	var body := StaticBody2D.new()
 	body.collision_layer = 0b00001
@@ -527,7 +546,10 @@ func _on_door(body: Node, d: Dictionary, tag: String, locked: String) -> void:
 		return
 	play_sfx("ui", -3.0)
 	Fx.screen_flash(get_tree(), Color(0.6, 0.85, 1.0, 0.4))
-	_enter_room(d["to"], room_id)
+	# 门触发在碰撞信号期: 换房(重建几何/oneway)必须延迟到 flush 之后,
+	# 否则 "Can't change this state while flushing queries"。先锁 door_cd 防重入。
+	door_cd = 0.6
+	_enter_room.call_deferred(d["to"], room_id)
 
 # ============================================================ 存档点
 func _make_save_point(pos: Vector2) -> void:

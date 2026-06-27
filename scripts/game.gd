@@ -28,7 +28,7 @@ var unlocked_doors: Dictionary = {} # "roomA>roomB" -> true (已解锁的门)
 # ---- 收集系统(隐藏宝藏/生命碎片, 回溯解锁) ----
 var collected: Dictionary = {}      # secret_id -> true (已收集, 不再刷出)
 var heart_pieces: int = 0           # 生命碎片数 → 永久 +最大生命
-const HEART_TOTAL := 3              # 全图生命碎片总数(收集度统计)
+const HEART_TOTAL := 4              # 全图生命碎片总数(收集度统计)
 
 func is_collected(id: String) -> bool:
 	return collected.has(id)
