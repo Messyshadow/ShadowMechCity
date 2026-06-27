@@ -166,6 +166,9 @@ func _enter_room(id: String, from_room: String) -> void:
 	_build_parallax(room["theme"])
 	var tint: Color = Rooms.THEME_TINT.get(room["theme"], Color.WHITE)
 	_build_geometry(room, tint)
+	# 装饰物(非碰撞中景, decor): [x, y, "theme/sprite", scale]
+	for dc in room.get("decor", []):
+		_make_decor(dc[0], dc[1], dc[2], dc[3] if dc.size() > 3 else 1.0)
 	for p in room.get("platforms", []):
 		_make_solid(p[0], p[1], p[2], p[3], true, tint)
 	# 内部迷宫墙 [x, top, w, h] (竖墙/隔墙, 非地面)
@@ -447,6 +450,19 @@ func _make_hazard(x: float, top: float, w: float, h: float, dmg: int, kind: Stri
 	if hz.has_method("setup"):
 		hz.setup(w, h, dmg, kind)
 	world.add_child(hz)
+
+func _make_decor(x: float, y: float, path: String, scale: float) -> void:
+	# 非碰撞中景装饰: 中心定位, z_index 低(平台/玩家之后, 视差背景之前)
+	var tex := load("res://assets/decor/%s.png" % path)
+	if tex == null:
+		return
+	var s := Sprite2D.new()
+	s.texture = tex
+	s.position = Vector2(x, y)
+	s.scale = Vector2(scale, scale)
+	s.z_index = -2
+	s.modulate = Color(1.0, 0.98, 1.0)   # 中景, 保持可辨识
+	world.add_child(s)
 
 func _make_oneway(x: float, y: float, w: float, tint: Color = Color.WHITE) -> void:
 	var body := StaticBody2D.new()
