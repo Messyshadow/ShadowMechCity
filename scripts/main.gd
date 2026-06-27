@@ -805,18 +805,45 @@ func _motion_burst() -> void:
 	var dummy_type := OS.get_environment("SHOT_ENEMY")
 	if dummy_type == "" or not ENEMY_DEFS.has(dummy_type):
 		dummy_type = "slime"
-	# 假人放在角色右前方, 让攻击/刀光打在它身上
-	_spawn_enemy(player.position.x + 90.0, player.position.y, dummy_type)
+	# 一排假人, 让位移/弹道技能也有命中目标
+	for dx in [70.0, 150.0, 230.0]:
+		_spawn_enemy(player.position.x + dx, player.position.y, dummy_type)
 	await get_tree().create_timer(0.5).timeout   # 等镜头/场景稳定
 	var out_dir := ProjectSettings.globalize_path("res://screenshots/motion")
 	DirAccess.make_dir_recursive_absolute(out_dir)
-	# 触发一次攻击(按一帧再松开, 让 just_pressed 生效)
-	Input.action_press("attack")
+	# SHOT_SKILL: ""=普攻J / ground=地面波 / upper=上挑 / dash=突进斩 / ult=大招
+	var skill := OS.get_environment("SHOT_SKILL")
+	var frames := 5
+	# 预置状态(专为拍效果: 突进直接 arm 搓招窗口, 大招直接给满怒气)
+	match skill:
+		"upper":
+			Input.action_press("move_up")
+		"dash":
+			player._dash_ready = 0.4
+			player._dash_dir = 1
+			Input.action_press("move_right")
+		"ult":
+			player.rage = player.MAX_RAGE
 	await get_tree().process_frame
-	Input.action_release("attack")
-	# 连拍 5 帧, 每帧间隔约 0.12s, 覆盖整段挥砍
-	for i in range(5):
-		await get_tree().create_timer(0.12).timeout
+	var trigger := "attack"
+	if skill == "ground" or skill == "upper" or skill == "dash":
+		trigger = "skill"
+		frames = 8
+	elif skill == "ult":
+		trigger = "ult"
+		frames = 9
+	# 触发(跨一个物理帧, 让 just_pressed 生效)
+	Input.action_press(trigger)
+	await get_tree().process_frame
+	await get_tree().physics_frame
+	Input.action_release(trigger)
+	if skill == "upper":
+		Input.action_release("move_up")
+	if skill == "dash":
+		Input.action_release("move_right")
+	# 连拍, 每帧约 0.1s, 覆盖整段技能
+	for i in range(frames):
+		await get_tree().create_timer(0.1).timeout
 		await RenderingServer.frame_post_draw
 		get_viewport().get_texture().get_image().save_png("%s/frame_%d.png" % [out_dir, i])
 	await get_tree().create_timer(0.1).timeout
