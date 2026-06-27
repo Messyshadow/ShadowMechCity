@@ -73,6 +73,8 @@ var _tap_dir := 0              # 搓招: 上次方向键
 var _tap_t := 0.0             # 搓招: 上次按下时刻(s)
 var _dash_ready := 0.0         # >0 表示最近双击了某方向(突进技窗口)
 var _dash_dir := 0             # 双击的方向(-1/1); 突进须仍按住同向才触发
+var _down_ready := 0.0         # >0 表示最近双击了↓(环身爆发窗口)
+var _downtap_t := 0.0
 
 var coyote := 0.0
 var jump_buffer := 0.0
@@ -132,6 +134,8 @@ func _ready() -> void:
 # ---- 技能加成 ----
 func max_hp() -> int:
 	return MAX_HEALTH + Game.skill_lv("hp") + int(round(Game.equip_bonus("hp"))) + Game.heart_pieces
+func max_mp() -> float:
+	return MAX_MP + 20.0 * Game.skill_lv("mp_max")   # 机械超频:技力强化
 func _max_air_jumps() -> int:
 	return MAX_AIR_JUMPS + Game.skill_lv("triple")
 func _run_speed() -> float:
@@ -228,15 +232,18 @@ func _update_timers(delta: float) -> void:
 			attack_index = 0
 	if wall_lock > 0.0:
 		wall_lock -= delta
-	# 主动技能资源: 技力回复 / 各招冷却 / 突进窗口
-	if mp < MAX_MP:
-		mp = minf(mp + MP_REGEN * delta, MAX_MP)
+	# 主动技能资源: 技力回复 / 各招冷却 / 搓招窗口
+	var mmax := max_mp()
+	if mp < mmax:
+		mp = minf(mp + (MP_REGEN + 3.0 * Game.skill_lv("mp_regen")) * delta, mmax)
 	for k in _skill_cds:
 		if _skill_cds[k] > 0.0:
 			_skill_cds[k] -= delta
 	if _dash_ready > 0.0:
 		_dash_ready -= delta
-	resource_changed.emit(mp, MAX_MP, rage, MAX_RAGE)
+	if _down_ready > 0.0:
+		_down_ready -= delta
+	resource_changed.emit(mp, mmax, rage, MAX_RAGE)
 
 # ------------------------------------------------------------- 普通状态
 func _do_normal(delta: float) -> void:
@@ -339,6 +346,11 @@ func _do_normal(delta: float) -> void:
 				_dash_dir = d
 			_tap_dir = d
 			_tap_t = now
+	# 搓招: 双击↓ -> 环身爆发窗口
+	if Input.is_action_just_pressed("move_down"):
+		if (now - _downtap_t) < 0.28:
+			_down_ready = 0.32
+		_downtap_t = now
 
 	# 冲刺(初始技能)
 	if Input.is_action_just_pressed("dash") and can_dash and dash_cd <= 0.0:
@@ -453,22 +465,26 @@ func _fire_skill() -> void:
 
 # ---- 主动技能分派(v2): K + 方向搓招 ----
 func gain_mp(n: float) -> void:
-	mp = minf(mp + n, MAX_MP)
+	mp = minf(mp + n, max_mp())
 
 func gain_rage(n: float) -> void:
 	rage = minf(rage + n, MAX_RAGE)
 
 func _skill_dmg(mult: float) -> int:
 	var base: int = int(weapon["damage"]) + Game.skill_lv("atk") + Game.skill_lv("power") + int(round(Game.equip_bonus("atk")))
-	return int(round(float(base) * mult))
+	var oc := 1.0 + 0.15 * Game.skill_lv("skill_dmg")   # 机械超频:过载输出
+	return int(round(float(base) * mult * oc))
 
 func _try_skill() -> void:
-	# 优先级: ↑上挑 > (双击同向且仍按住)突进 > 地面波
+	# 优先级: ↑上挑 > 双击↓环身爆发 > (双击同向且仍按住)突进 > 地面波
 	# 仅"单按住方向跑"时按K → 一律地面波, 不会误触方向技
 	var hx := Input.get_axis("move_left", "move_right")
 	var arch := "ground"
 	if Input.is_action_pressed("move_up") and not Input.is_action_pressed("move_down"):
 		arch = "upper"
+	elif _down_ready > 0.0 and Input.is_action_pressed("move_down"):
+		arch = "burst"
+		_down_ready = 0.0
 	elif _dash_ready > 0.0 and hx != 0.0 and signf(hx) == float(_dash_dir):
 		arch = "dash_atk"
 		_dash_ready = 0.0   # 消费掉, 防一次双击连放
@@ -483,57 +499,139 @@ func _cast(arch: String) -> void:
 		return
 	_aim_facing()
 	mp -= float(d["mp"])
-	_skill_cds[arch] = d["cd"]
+	_skill_cds[arch] = float(d["cd"]) * (1.0 - 0.15 * Game.skill_lv("skill_cd"))   # 机械超频:招式精通
 	gain_rage(4.0)
 	match arch:
 		"ground":   _fire_skill()
 		"upper":    _skill_upper()
 		"dash_atk": _skill_dash_atk()
-	resource_changed.emit(mp, MAX_MP, rage, MAX_RAGE)
+		"burst":    _skill_burst()
+	resource_changed.emit(mp, max_mp(), rage, MAX_RAGE)
 
-# 上挑(↑+K): 小跳 + 前上方挑飞敌人(接空连)
-func _skill_upper() -> void:
-	if is_on_floor():
-		velocity.y = -300.0
-	var col: Color = weapon["color"]
-	var center := global_position + Vector2(facing * 34, -46)
-	Fx.play_slash(get_parent(), center, facing, slash_frames, 1.25, col)
-	Fx.shockwave(get_parent(), center, col)
-	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.14))
-	var dmg := _skill_dmg(1.5)
-	for e in get_tree().get_nodes_in_group("enemy"):
-		if is_instance_valid(e) and e.global_position.distance_to(center) < 115.0 and e.has_method("take_damage"):
-			e.take_damage(dmg, Vector2(facing * 130.0, -560.0))
-			Fx.hit_spark(get_parent(), e.global_position)
-	Game.shake(7.0)
-	Game.hitstop(0.06, 0.05)
-	_play_sfx("attack", -2.0)
-	_squash(Vector2(0.8, 1.3))
-
-# 突进斩(双击前进+K): 快速突进 + 沿途多段斩
-func _skill_dash_atk() -> void:
-	velocity = Vector2(facing * 640.0, 0.0)
-	iframes = maxf(iframes, 0.2)
-	var col: Color = weapon["color"]
-	var center := global_position + Vector2(facing * 50, -30)
-	for i in range(3):
-		_spawn_ghost()
-	Fx.play_slash(get_parent(), center, facing, slash_frames, 1.3, col)
-	Fx.play_slash(get_parent(), center + Vector2(facing * 30, -10), facing, slash_frames, 1.0, col)
-	var dmg := _skill_dmg(1.3)
+# ---- 技能辅助 ----
+# 范围伤害(圆形, 向外击退)
+func _aoe_hit(center: Vector2, radius: float, dmg: int, kb_scale: float, kb_up: float) -> void:
 	for e in get_tree().get_nodes_in_group("enemy"):
 		if not is_instance_valid(e) or not e.has_method("take_damage"):
 			continue
-		var off: Vector2 = (e as Node2D).global_position - global_position
-		if absf(off.y) < 90.0 and off.x * facing > -30.0 and off.x * facing < 260.0:
-			e.take_damage(dmg, Vector2(facing * 260.0, -160.0))
-			Fx.hit_spark(get_parent(), e.global_position)
-	Game.shake(8.0)
-	Game.hitstop(0.06, 0.05)
-	_play_sfx("dash", -2.0)
-	_squash(Vector2(1.4, 0.7))
+		var ep: Vector2 = (e as Node2D).global_position
+		if ep.distance_to(center) < radius:
+			var kd := signf(ep.x - center.x)
+			if kd == 0.0:
+				kd = float(facing)
+			e.take_damage(dmg, Vector2(kd * kb_scale, kb_up))
+			Fx.hit_spark(get_parent(), ep)
 
-# 大招(V, 满怒气): 当前武器终结技
+# 任意角度飞弹(全向弹幕/防空齐射用)
+func _spawn_proj_vel(scale: float, tint: Color, dmg: int, v: Vector2, life: float, pierce: int = 2) -> void:
+	var proj := Area2D.new()
+	proj.set_script(PROJECTILE_SCRIPT)
+	proj.position = global_position + Vector2(0, -34)
+	get_parent().add_child(proj)
+	if proj.has_method("setup"):
+		proj.setup(fx_frames["bolt2"], 1.0, dmg, scale, tint)
+		proj.vel = v
+		proj.life = life
+		proj.pierce = pierce
+
+# ============================================================ 上挑(↑+K) · 各武器变形
+func _skill_upper() -> void:
+	var col: Color = weapon["color"]
+	var center := global_position + Vector2(facing * 34, -46)
+	match weapon["id"]:
+		"cannon":   # 防空齐射: 不跳, 向上扇形 3 弹
+			for a in [-1.75, -1.57, -1.39]:   # 朝上 ±扇形(弧度)
+				_spawn_proj_vel(1.3, col, _skill_dmg(1.0), Vector2(cos(a), sin(a)) * 760.0, 1.0)
+			Fx.shockwave(get_parent(), center + Vector2(0, -10), col)
+			_play_sfx("atk_cannon", -2.0)
+		"hammer":   # 上勾锤: 大跳 + 强力击飞 + 橙冲击
+			if is_on_floor():
+				velocity.y = -260.0
+			Fx.play_slash(get_parent(), center, facing, fx_frames.get("bolt", slash_frames), 1.5, col)
+			Fx.shockwave(get_parent(), center, col)
+			Fx.shockwave(get_parent(), center + Vector2(0, -20), Color(1, 0.8, 0.4))
+			_aoe_hit(center, 130.0, _skill_dmg(2.0), 150.0, -640.0)
+			Game.shake(11.0)
+			_play_sfx("atk_hammer", -2.0)
+		_:          # 铁剑 上挑斩: 小跳 + 青色挑飞(接空连)
+			if is_on_floor():
+				velocity.y = -300.0
+			Fx.play_slash(get_parent(), center, facing, slash_frames, 1.25, col)
+			Fx.shockwave(get_parent(), center, col)
+			_aoe_hit(center, 115.0, _skill_dmg(1.5), 130.0, -560.0)
+			Game.shake(7.0)
+			_play_sfx("attack", -2.0)
+	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.14))
+	Game.hitstop(0.06, 0.05)
+	_squash(Vector2(0.85, 1.25))
+
+# ============================================================ 突进(双击前进+K) · 各武器变形
+func _skill_dash_atk() -> void:
+	var col: Color = weapon["color"]
+	match weapon["id"]:
+		"cannon":   # 后跃齐射: 向后跃 + 向前扇形 3 弹(拉开距离)
+			velocity = Vector2(-facing * 520.0, -200.0)
+			for i in range(3):
+				_spawn_proj_vel(1.4, col, _skill_dmg(1.0), Vector2(facing, -0.15 + i * 0.15) * 900.0, 1.6, 3)
+			Fx.shockwave(get_parent(), global_position + Vector2(facing * 30, -30), col)
+			_play_sfx("atk_cannon", -2.0)
+			_squash(Vector2(0.8, 1.3))
+		"hammer":   # 蛮牛冲撞: 霸体推进 + 强击退
+			velocity = Vector2(facing * 520.0, 0.0)
+			iframes = maxf(iframes, 0.3)   # 霸体
+			for i in range(3):
+				_spawn_ghost()
+			Fx.shockwave(get_parent(), global_position + Vector2(facing * 40, 6), col)
+			_aoe_hit(global_position + Vector2(facing * 60, -30), 150.0, _skill_dmg(1.8), 420.0, -200.0)
+			Game.shake(10.0)
+			_play_sfx("atk_hammer", -2.0)
+			_squash(Vector2(1.5, 0.6))
+		_:          # 铁剑 瞬步连斩: 快速突进 + 沿途多段
+			velocity = Vector2(facing * 640.0, 0.0)
+			iframes = maxf(iframes, 0.2)
+			for i in range(3):
+				_spawn_ghost()
+			Fx.play_slash(get_parent(), global_position + Vector2(facing * 50, -30), facing, slash_frames, 1.3, col)
+			Fx.play_slash(get_parent(), global_position + Vector2(facing * 80, -40), facing, slash_frames, 1.0, col)
+			_aoe_hit(global_position + Vector2(facing * 115, -30), 145.0, _skill_dmg(1.3), 260.0, -160.0)
+			Game.shake(8.0)
+			_play_sfx("dash", -2.0)
+			_squash(Vector2(1.4, 0.7))
+	Game.hitstop(0.06, 0.05)
+
+# ============================================================ 环身爆发(双击↓+K) · 各武器变形
+func _skill_burst() -> void:
+	var col: Color = weapon["color"]
+	var center := global_position + Vector2(0, -30)
+	match weapon["id"]:
+		"cannon":   # 全向弹幕: 360° 8 弹
+			for i in range(8):
+				var a := TAU * i / 8.0
+				_spawn_proj_vel(1.2, col, _skill_dmg(1.0), Vector2(cos(a), sin(a)) * 620.0, 1.2, 2)
+			Fx.shockwave(get_parent(), center, col)
+			_play_sfx("atk_cannon", -1.0)
+		"hammer":   # 震地圈: 环形冲击波 + 强向外击退
+			velocity.y = -180.0
+			Fx.shockwave(get_parent(), global_position + Vector2(0, 6), col)
+			Fx.shockwave(get_parent(), center, Color(1, 0.8, 0.4))
+			Fx.explosion(get_parent(), center, 150.0)
+			_aoe_hit(center, 170.0, _skill_dmg(1.6), 360.0, -180.0)
+			Game.shake(13.0)
+			_play_sfx("atk_hammer", -1.0)
+		_:          # 铁剑 旋风斩: 环身多段斩
+			velocity.y = -160.0
+			for i in range(5):
+				var a := TAU * i / 5.0
+				Fx.play_slash(get_parent(), center + Vector2(cos(a), sin(a)) * 70.0, facing, slash_frames, 1.0, col)
+			Fx.shockwave(get_parent(), center, col)
+			_aoe_hit(center, 135.0, _skill_dmg(1.4), 240.0, -120.0)
+			Game.shake(9.0)
+			_play_sfx("attack", -1.0)
+	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.16))
+	Game.hitstop(0.07, 0.05)
+	_squash(Vector2(1.2, 0.85))
+
+# ============================================================ 大招(V, 满怒气) · 各武器终结技
 func _cast_ult() -> void:
 	if rage < MAX_RAGE:
 		Fx.popup(get_parent(), global_position + Vector2(0, -92), "怒气不足", Color(1.0, 0.6, 0.3))
@@ -541,28 +639,31 @@ func _cast_ult() -> void:
 	rage = 0.0
 	_aim_facing()
 	var col: Color = weapon["color"]
-	Game.hitstop(0.14, 0.05)
+	Game.hitstop(0.16, 0.05)
 	Game.shake(18.0)
-	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.3))
+	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.32))
 	match weapon["id"]:
-		"hammer", "cannon":
-			for i in range(3):
-				_fire_skill()
-		_:
+		"hammer":   # 陨星重击: 巨型砸地, 超大范围
+			velocity.y = -120.0
+			var gp := global_position + Vector2(0, 4)
+			Fx.explosion(get_parent(), gp, 260.0)
+			Fx.shockwave(get_parent(), gp, col)
+			Fx.shockwave(get_parent(), gp + Vector2(0, -30), Color(1, 0.85, 0.4))
+			_aoe_hit(global_position, 300.0, _skill_dmg(3.0), 360.0, -360.0)
+		"cannon":   # 过载炮击: 蓄力贯穿巨炮(双发)
+			for yo in [-26.0, -48.0]:
+				_spawn_projectile(fx_frames["bolt2"], 3.0, col, _skill_dmg(2.0), 1200.0, 2.0, 99, yo)
+			Fx.shockwave(get_parent(), global_position + Vector2(facing * 60, -34), col)
+			Fx.explosion(get_parent(), global_position + Vector2(facing * 90, -34), 150.0)
+			_aoe_hit(global_position + Vector2(facing * 160, -34), 200.0, _skill_dmg(2.0), 300.0, -120.0)
+		_:          # 铁剑 千刃斩: 三道剑气 + 范围爆发
 			for i in range(3):
 				_spawn_projectile(slash_frames, 1.8 + i * 0.3, col, _skill_dmg(1.2), 720.0, 1.4, 99, -34.0 - i * 14.0)
 				Fx.play_slash(get_parent(), global_position + Vector2(facing * 44, -34 - i * 12), facing, slash_frames, 1.4, col)
-	var dmg := _skill_dmg(2.5)
-	for e in get_tree().get_nodes_in_group("enemy"):
-		if is_instance_valid(e) and e.global_position.distance_to(global_position) < 240.0 and e.has_method("take_damage"):
-			var kd := signf(e.global_position.x - global_position.x)
-			if kd == 0.0:
-				kd = float(facing)
-			e.take_damage(dmg, Vector2(kd * 420.0, -300.0))
-			Fx.hit_spark(get_parent(), e.global_position)
+			_aoe_hit(global_position, 240.0, _skill_dmg(2.5), 420.0, -300.0)
 	Fx.popup(get_parent(), global_position + Vector2(0, -96), "▶ " + weapon["name"] + " 终结技!", col)
 	_play_sfx("slam", -1.0)
-	resource_changed.emit(mp, MAX_MP, rage, MAX_RAGE)
+	resource_changed.emit(mp, max_mp(), rage, MAX_RAGE)
 
 func _spawn_projectile(frames: SpriteFrames, scale: float, tint: Color, dmg: int,
 		spd: float, life: float, pierce: int, yoff: float = -34.0) -> void:
@@ -630,23 +731,35 @@ func _do_dive(delta: float) -> void:
 func _dive_land() -> void:
 	state = S.NORMAL
 	_squash(Vector2(1.8, 0.5))
-	# 下砸专属: 橙红双层冲击波 + 爆点 + 尘环
-	Fx.shockwave(get_parent(), global_position, Color(1.0, 0.6, 0.2))
-	Fx.shockwave(get_parent(), global_position, Color(1.0, 0.85, 0.4))
-	Fx.hit_spark(get_parent(), global_position)
+	var col: Color = weapon["color"]
 	Fx.dust(get_parent(), global_position + Vector2(-30, 0), -1)
 	Fx.dust(get_parent(), global_position + Vector2(30, 0), 1)
-	Fx.screen_flash(get_tree(), Color(1.0, 0.6, 0.2, 0.2))
-	Game.shake(13.0)
-	Game.hitstop(0.09, 0.04)
+	Fx.hit_spark(get_parent(), global_position)
 	_play_sfx("slam", -3.0)
-	for e in get_tree().get_nodes_in_group("enemy"):
-		if is_instance_valid(e) and e.global_position.distance_to(global_position) < 160.0 and e.has_method("take_damage"):
-			var kdir := signf(e.global_position.x - global_position.x)
-			if kdir == 0.0:
-				kdir = 1.0
-			e.take_damage(3, Vector2(kdir * 320.0, -280.0))
-			Fx.hit_spark(get_parent(), e.global_position)
+	# 各武器下砸变形
+	var radius := 160.0
+	var dmg := _skill_dmg(1.5)
+	match weapon["id"]:
+		"hammer":   # 天崩: 大范围砸地震荡
+			radius = 220.0
+			dmg = _skill_dmg(2.2)
+			Fx.explosion(get_parent(), global_position, 200.0)
+			Fx.shockwave(get_parent(), global_position, col)
+			Game.shake(17.0)
+			Game.hitstop(0.11, 0.04)
+		"cannon":   # 俯冲轰炸: 落点爆炸 + 左右扫射弹
+			Fx.explosion(get_parent(), global_position, 150.0)
+			for sx in [-1.0, 1.0]:
+				_spawn_proj_vel(1.2, col, _skill_dmg(1.0), Vector2(sx, -0.2) * 700.0, 0.9, 2)
+			Game.shake(13.0)
+			Game.hitstop(0.09, 0.04)
+		_:          # 铁剑 流星斩: 橙红双层冲击波
+			Fx.shockwave(get_parent(), global_position, Color(1.0, 0.6, 0.2))
+			Fx.shockwave(get_parent(), global_position, Color(1.0, 0.85, 0.4))
+			Game.shake(13.0)
+			Game.hitstop(0.09, 0.04)
+	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.2))
+	_aoe_hit(global_position, radius, dmg, 320.0, -280.0)
 
 # ------------------------------------------------------------- 武器 / 攻击
 func _switch_weapon() -> void:

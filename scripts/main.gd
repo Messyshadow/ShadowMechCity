@@ -808,13 +808,22 @@ func _motion_burst() -> void:
 	# 一排假人, 让位移/弹道技能也有命中目标
 	for dx in [70.0, 150.0, 230.0]:
 		_spawn_enemy(player.position.x + dx, player.position.y, dummy_type)
+	# SHOT_WEAPON: sword/hammer/cannon — 切到指定武器再放技能(验证武器联动变形)
+	var wid := OS.get_environment("SHOT_WEAPON")
+	if wid != "":
+		for i in range(Weapons.LIST.size()):
+			if Weapons.LIST[i]["id"] == wid:
+				player.weapon_index = i
+				player.weapon = Weapons.get_weapon(i)
+				player._apply_weapon()
+				break
 	await get_tree().create_timer(0.5).timeout   # 等镜头/场景稳定
 	var out_dir := ProjectSettings.globalize_path("res://screenshots/motion")
 	DirAccess.make_dir_recursive_absolute(out_dir)
-	# SHOT_SKILL: ""=普攻J / ground=地面波 / upper=上挑 / dash=突进斩 / ult=大招
+	# SHOT_SKILL: ""=普攻J / ground / upper / dash / burst / ult
 	var skill := OS.get_environment("SHOT_SKILL")
 	var frames := 5
-	# 预置状态(专为拍效果: 突进直接 arm 搓招窗口, 大招直接给满怒气)
+	# 预置状态(专为拍效果: 搓招直接 arm 窗口, 大招直接给满怒气)
 	match skill:
 		"upper":
 			Input.action_press("move_up")
@@ -822,11 +831,14 @@ func _motion_burst() -> void:
 			player._dash_ready = 0.4
 			player._dash_dir = 1
 			Input.action_press("move_right")
+		"burst":
+			player._down_ready = 0.4
+			Input.action_press("move_down")
 		"ult":
 			player.rage = player.MAX_RAGE
 	await get_tree().process_frame
 	var trigger := "attack"
-	if skill == "ground" or skill == "upper" or skill == "dash":
+	if skill == "ground" or skill == "upper" or skill == "dash" or skill == "burst":
 		trigger = "skill"
 		frames = 8
 	elif skill == "ult":
@@ -841,6 +853,8 @@ func _motion_burst() -> void:
 		Input.action_release("move_up")
 	if skill == "dash":
 		Input.action_release("move_right")
+	if skill == "burst":
+		Input.action_release("move_down")
 	# 连拍, 每帧约 0.1s, 覆盖整段技能
 	for i in range(frames):
 		await get_tree().create_timer(0.1).timeout

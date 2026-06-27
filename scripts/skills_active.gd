@@ -8,5 +8,6 @@ const ARCHETYPES := {
 	"ground":   {"name": "地面波", "mp": 15.0, "cd": 0.55},
 	"upper":    {"name": "上挑",   "mp": 16.0, "cd": 0.90},
 	"dash_atk": {"name": "突进斩", "mp": 20.0, "cd": 1.00},
+	"burst":    {"name": "环身爆发", "mp": 30.0, "cd": 1.30},
 	"ult":      {"name": "终结大招", "mp": 0.0, "cd": 0.30, "rage": 100.0},
 }

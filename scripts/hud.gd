@@ -77,7 +77,7 @@ func _build_control_chips() -> void:
 	skill_box.alignment = BoxContainer.ALIGNMENT_END
 	add_child(skill_box)
 	_chip(skill_box, "J", "普攻", Color(0.7, 0.95, 1.0))
-	_chip(skill_box, "K", "技能 上/→→变招", Color(1.0, 0.7, 0.4))
+	_chip(skill_box, "K", "技能 上/→→/↓↓变招", Color(1.0, 0.7, 0.4))
 	_chip(skill_box, "V", "大招", Color(1.0, 0.6, 0.3))
 	_chip(skill_box, "Q", "换武器", Color(0.9, 0.8, 1.0))
 	_chip(skill_box, "T", "加点", Color(1.0, 0.85, 0.4))

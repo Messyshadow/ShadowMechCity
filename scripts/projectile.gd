@@ -6,6 +6,7 @@ var speed := 620.0
 var damage := 2
 var pierce := 2
 var life := 1.4
+var vel := Vector2.ZERO   # 若非零: 按此向量飞行(任意角度, 用于全向弹幕)
 var _hit: Array = []
 
 func setup(frames: SpriteFrames, facing: float, p_damage: int, scale: float = 1.2, tint: Color = Color.WHITE) -> void:
@@ -39,7 +40,11 @@ func _ready() -> void:
 	Fx.dash_dust(get_parent(), global_position, dir)
 
 func _physics_process(delta: float) -> void:
-	position.x += dir * speed * delta
+	if vel != Vector2.ZERO:
+		position += vel * delta
+		rotation = vel.angle()
+	else:
+		position.x += dir * speed * delta
 	life -= delta
 	if life <= 0.0:
 		_fade()

@@ -17,6 +17,11 @@ const TREE := [
 	{"id": "lifesteal", "name": "吸血攻击", "branch": "战斗", "max": 2, "cost": 2, "req": ["atk"], "desc": "命中有几率回血"},
 	{"id": "wave", "name": "剑气波强化", "branch": "战斗", "max": 3, "cost": 1, "req": [], "desc": "斩击波穿透 +1"},
 	{"id": "spin", "name": "旋风斩", "branch": "战斗", "max": 1, "cost": 2, "req": ["atk"], "desc": "连击终结化为范围旋风斩"},
+	# 机械超频(青) - 主动技能强化(技力/怒气体系)
+	{"id": "mp_max", "name": "技力强化", "branch": "超频", "max": 3, "cost": 1, "req": [], "desc": "技力上限 +20"},
+	{"id": "mp_regen", "name": "技力回流", "branch": "超频", "max": 3, "cost": 1, "req": ["mp_max"], "desc": "技力回复 +3/s"},
+	{"id": "skill_dmg", "name": "过载输出", "branch": "超频", "max": 3, "cost": 1, "req": [], "desc": "主动技能伤害 +15%"},
+	{"id": "skill_cd", "name": "招式精通", "branch": "超频", "max": 2, "cost": 2, "req": ["skill_dmg"], "desc": "招式冷却 -15%"},
 	# 探索(黄)
 	{"id": "magnet", "name": "拾取吸附", "branch": "探索", "max": 1, "cost": 1, "req": [], "desc": "金币/经验自动吸附"},
 	# 终极(紫)
