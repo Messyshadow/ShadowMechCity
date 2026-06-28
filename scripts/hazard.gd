@@ -25,8 +25,8 @@ func _ready() -> void:
 	z_index = 6
 	var cs := CollisionShape2D.new()
 	var sh := RectangleShape2D.new()
-	if kind == "steam":
-		# 蒸汽=向上的气柱, 危害区在喷口上方
+	if kind == "steam" or kind == "rune":
+		# 蒸汽/符文光柱=向上的柱体, 危害区在基座上方
 		sh.size = Vector2(hz_w, hz_h * 5.0)
 		cs.position = Vector2(0, -hz_h * 2.5)
 	else:
@@ -73,12 +73,12 @@ func _build_visual() -> void:
 			hub.polygon = _rect_poly(r * 0.5, r * 0.5)
 			hub.color = Color(0.35, 0.37, 0.42)
 			_gear.add_child(hub)
-		_:   # steam: 锚定喷口、向上的气柱(scale.y 增长即喷起)
+		_:   # steam/rune: 锚定基座、向上的柱体(scale.y 增长即喷起)
 			_vis = Polygon2D.new()
 			(_vis as Polygon2D).polygon = PackedVector2Array([
 				Vector2(-hz_w * 0.5, -hz_h), Vector2(hz_w * 0.5, -hz_h),
 				Vector2(hz_w * 0.5, 0), Vector2(-hz_w * 0.5, 0)])
-			(_vis as Polygon2D).color = Color(0.85, 0.95, 1.0, 0.5)
+			(_vis as Polygon2D).color = Color(1.0, 0.85, 0.4, 0.6) if kind == "rune" else Color(0.85, 0.95, 1.0, 0.5)
 			_vis.material = add
 			_vis.scale.y = 0.25
 			add_child(_vis)
@@ -88,9 +88,9 @@ func _physics_process(delta: float) -> void:
 	_cd = maxf(0.0, _cd - delta)
 	if _gear:
 		_gear.rotation += delta * 3.0
-	# 蒸汽阀: 周期喷发(预警→喷发), 只有喷发期才有伤害+高柱; 其余时间安全可踩
+	# 蒸汽阀/符文光柱: 周期喷发(预警→喷发), 只有喷发期才有伤害+高柱; 其余时间安全
 	var active := true
-	if kind == "steam":
+	if kind == "steam" or kind == "rune":
 		var ph := fmod(_t, STEAM_PERIOD)
 		_erupting = ph < STEAM_ERUPT
 		active = _erupting

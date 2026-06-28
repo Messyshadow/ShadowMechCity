@@ -25,6 +25,11 @@ const ENEMY_DEFS := {
 	"frog": {"sprite": "mushroom", "frames": 8, "fps": 6.5, "scale": 0.62, "hp": 7, "speed": 50.0, "size": Vector2(56, 52), "tint": Color(0.6, 0.95, 0.5), "behavior": "shooter", "dmg": 1, "kbr": 0.1},
 	"snake": {"sprite": "jelly", "frames": 6, "fps": 8.0, "scale": 0.6, "hp": 6, "speed": 96.0, "size": Vector2(54, 44), "tint": Color(0.7, 0.95, 1.0), "behavior": "flyer", "dmg": 1, "kbr": 0.1},
 	"deep_brute": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.05, "hp": 46, "speed": 50.0, "size": Vector2(100, 112), "tint": Color(0.45, 0.8, 0.85), "behavior": "charger", "dmg": 3, "kbr": 0.7},
+	# 遗迹神殿专属敌种(阶段10.3)
+	"gargoyle": {"sprite": "bat", "frames": 4, "fps": 6.5, "scale": 0.78, "hp": 9, "speed": 70.0, "size": Vector2(58, 56), "tint": Color(0.72, 0.7, 0.62), "behavior": "flyer", "dmg": 2, "kbr": 0.15},
+	"guard": {"sprite": "beast", "frames": 6, "fps": 5.0, "scale": 0.7, "hp": 13, "speed": 56.0, "size": Vector2(56, 66), "tint": Color(0.8, 0.78, 0.55), "behavior": "charger", "dmg": 2, "kbr": 0.35},
+	"priest": {"sprite": "bird", "frames": 7, "fps": 8.3, "scale": 0.64, "hp": 8, "speed": 34.0, "size": Vector2(58, 58), "tint": Color(0.85, 0.75, 1.0), "behavior": "shooter", "dmg": 1, "kbr": 0.1},
+	"guard_elite": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.08, "hp": 50, "speed": 50.0, "size": Vector2(104, 114), "tint": Color(0.85, 0.78, 0.5), "behavior": "charger", "dmg": 3, "kbr": 0.8},
 }
 
 const WALL := 40
@@ -44,6 +49,8 @@ var boss_bar: CanvasLayer
 var _boss: Node = null
 var inv_panel: CanvasLayer
 var _bounds: Array = [0, 0, 1400, 560]   # 当前房间边界(用于攀墙越界保护)
+var _rune_total := 0                      # 当前房间符文板总数
+var _rune_lit := 0                        # 已点亮数(全亮→开符文封门)
 
 # 钥匙信息: 名称 + 获取地点提示
 const KEY_INFO := {
@@ -166,6 +173,8 @@ func _enter_room(id: String, from_room: String) -> void:
 	door_cd = 0.45
 	# 清空旧房间
 	_locked_doors = []
+	_rune_total = 0
+	_rune_lit = 0
 	for c in world.get_children():
 		c.queue_free()
 	_build_parallax(room["theme"])
@@ -196,6 +205,13 @@ func _enter_room(id: String, from_room: String) -> void:
 	# 水域 [cx, cy, w, h, (flowx=0), (flowy=0)]
 	for wt in room.get("water", []):
 		_make_water(wt)
+	# 符文封门 [x, top, w, h] (踩亮全部符文板后解除)
+	for rg in room.get("rune_gates", []):
+		_make_rune_barrier(rg[0], rg[1], rg[2], rg[3])
+	# 符文板 [x, y] (踩上点亮)
+	for rn in room.get("runes", []):
+		_make_rune(rn[0], rn[1])
+		_rune_total += 1
 	for e in room.get("enemies", []):
 		_spawn_enemy(e[0], e[1], e[2])
 	for it in room.get("items", []):
@@ -442,6 +458,55 @@ func _make_belt(cx: float, cy: float, w: float, h: float, push: float, tint: Col
 	if be.has_method("setup"):
 		be.setup(w, h, push, tint)
 	world.add_child(be)
+
+func _make_rune(x: float, y: float) -> void:
+	var r := Area2D.new()
+	r.set_script(load("res://scripts/rune.gd"))
+	r.position = Vector2(x, y)
+	world.add_child(r)
+
+func _make_rune_barrier(x: float, top: float, w: float, h: float) -> void:
+	var body := StaticBody2D.new()
+	body.collision_layer = 0b00001
+	body.add_to_group("rune_barrier")
+	body.position = Vector2(x + w * 0.5, top + h * 0.5)
+	var col := CollisionShape2D.new()
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(w, h)
+	col.shape = shape
+	body.add_child(col)
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	var seal := Polygon2D.new()
+	seal.polygon = PackedVector2Array([Vector2(-w * 0.5, -h * 0.5), Vector2(w * 0.5, -h * 0.5), Vector2(w * 0.5, h * 0.5), Vector2(-w * 0.5, h * 0.5)])
+	seal.color = Color(0.55, 0.4, 0.85, 0.55)
+	seal.material = add
+	body.add_child(seal)
+	# 符文纹路
+	var ln := Line2D.new()
+	ln.width = 3.0
+	ln.closed = true
+	ln.default_color = Color(0.8, 0.7, 1.0, 0.8)
+	var pts := PackedVector2Array()
+	for i in range(6):
+		var a := TAU * i / 6.0 - PI / 2.0
+		pts.append(Vector2(cos(a) * w * 0.3, sin(a) * h * 0.32))
+	ln.points = pts
+	ln.material = add
+	body.add_child(ln)
+	world.add_child(body)
+
+func rune_lit_inc() -> void:
+	_rune_lit += 1
+	if _rune_total > 0 and _rune_lit >= _rune_total:
+		for c in world.get_children():
+			if c.is_in_group("rune_barrier"):
+				Fx.death_burst(world, c.global_position, Color(0.85, 0.7, 1.0))
+				c.queue_free()
+		Fx.popup(world, player.global_position + Vector2(0, -96), "符文共鸣!  封门开启", Color(1.0, 0.9, 0.5))
+		Fx.screen_flash(get_tree(), Color(0.8, 0.7, 1.0, 0.3))
+		play_sfx("ui", -2.0)
+		Game.shake(6.0)
 
 func _make_water(wt: Array) -> void:
 	# [cx, cy, w, h, (flowx), (flowy)]
