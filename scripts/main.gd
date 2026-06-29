@@ -30,6 +30,11 @@ const ENEMY_DEFS := {
 	"guard": {"sprite": "beast", "frames": 6, "fps": 5.0, "scale": 0.7, "hp": 13, "speed": 56.0, "size": Vector2(56, 66), "tint": Color(0.8, 0.78, 0.55), "behavior": "charger", "dmg": 2, "kbr": 0.35},
 	"priest": {"sprite": "bird", "frames": 7, "fps": 8.3, "scale": 0.64, "hp": 8, "speed": 34.0, "size": Vector2(58, 58), "tint": Color(0.85, 0.75, 1.0), "behavior": "shooter", "dmg": 1, "kbr": 0.1},
 	"guard_elite": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.08, "hp": 50, "speed": 50.0, "size": Vector2(104, 114), "tint": Color(0.85, 0.78, 0.5), "behavior": "charger", "dmg": 3, "kbr": 0.8},
+	# 废铁矿坑专属敌种(阶段10.4)
+	"gearbat": {"sprite": "bat", "frames": 4, "fps": 9.0, "scale": 0.68, "hp": 7, "speed": 92.0, "size": Vector2(52, 50), "tint": Color(0.78, 0.76, 0.7), "behavior": "flyer", "dmg": 1, "kbr": 0.1},
+	"drillworm": {"sprite": "beast", "frames": 6, "fps": 5.5, "scale": 0.66, "hp": 12, "speed": 78.0, "size": Vector2(56, 60), "tint": Color(0.7, 0.62, 0.5), "behavior": "charger", "dmg": 2, "kbr": 0.3},
+	"moltenslime": {"sprite": "slime", "frames": 6, "fps": 6.7, "scale": 0.66, "hp": 9, "speed": 60.0, "size": Vector2(56, 58), "tint": Color(1.0, 0.6, 0.3), "behavior": "charger", "dmg": 2, "kbr": 0.1},
+	"drill_brute": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.06, "hp": 48, "speed": 52.0, "size": Vector2(102, 112), "tint": Color(0.78, 0.65, 0.45), "behavior": "charger", "dmg": 3, "kbr": 0.75},
 }
 
 const WALL := 40
