@@ -656,6 +656,8 @@ func _make_door(room: Dictionary, d: Dictionary) -> void:
 		"right": pos = Vector2(b[2] - 12, (d["p"] + b[3]) * 0.5); size = Vector2(46, b[3] - d["p"])
 		"down":  pos = Vector2(d["p"], b[3] + 36); size = Vector2(110, 60)
 		"up":    pos = Vector2(d["p"], b[1] + 16); size = Vector2(110, 60)
+	if d["side"] == "down":
+		_make_downward_portal(room, d)
 	var locked: String = d.get("locked", "")
 	var tag := "%s>%s" % [room_id, d["to"]]
 	var is_locked := locked != "" and not Game.is_door_unlocked(tag)
@@ -797,7 +799,7 @@ func _on_door(body: Node, d: Dictionary, tag: String, locked: String) -> void:
 	# 门触发在碰撞信号期: 换房(重建几何/oneway)必须延迟到 flush 之后,
 	# 否则 "Can't change this state while flushing queries"。先锁 door_cd 防重入。
 	door_cd = 0.6
-	if d["side"] == "down" and not Rooms.ROOMS[room_id].get("shafts", []).is_empty():
+	if d["side"] == "down":
 		_play_shaft_transition.call_deferred(d["to"])
 	else:
 		_enter_room.call_deferred(d["to"], room_id)
@@ -813,6 +815,68 @@ func _play_shaft_transition(to_room: String) -> void:
 	var tw:=create_tween();tw.tween_property(player,"global_position",start+Vector2(0,170),0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN);tw.parallel().tween_property(camera,"global_position",camera.global_position+Vector2(0,140),0.42)
 	await tw.finished
 	Fx.screen_flash(get_tree(),Color(0.08,0.02,0.16,0.9));player.set_physics_process(true);camera.target=player;_enter_room(to_room,room_id)
+
+func _make_downward_portal(room: Dictionary, d: Dictionary) -> void:
+	# 王城的手工深井已经包含完整井壁与链条，不再叠加通用入口。
+	for shaft in room.get("shafts", []):
+		if absf(float(shaft[0]) - float(d["p"])) < float(shaft[2]) * 0.55:
+			return
+	var b = room["bounds"]
+	var root := Node2D.new()
+	root.position = Vector2(d["p"], b[3] - 104)
+	root.z_index = 2
+	var theme: String = room.get("theme", "city")
+	var rim_color: Color = {
+		"water": Color(0.20, 0.82, 0.93), "mine": Color(0.95, 0.40, 0.15),
+		"temple": Color(0.90, 0.72, 0.30), "factory": Color(1.0, 0.42, 0.16),
+		"void": Color(0.70, 0.38, 1.0), "castle": Color(0.65, 0.48, 1.0)
+	}.get(theme, Color(0.50, 0.85, 1.0))
+	# 把原来仅有地面缺口的洞口，变成向下收束、能看出深度的机械竖井。
+	var abyss := Polygon2D.new()
+	abyss.polygon = PackedVector2Array([Vector2(-72, 0), Vector2(72, 0), Vector2(52, 210), Vector2(-52, 210)])
+	abyss.color = Color(0.006, 0.012, 0.025, 0.96)
+	root.add_child(abyss)
+	var inner := Polygon2D.new()
+	inner.polygon = PackedVector2Array([Vector2(-48, 8), Vector2(48, 8), Vector2(34, 176), Vector2(-34, 176)])
+	inner.color = Color(rim_color.r * 0.10, rim_color.g * 0.13, rim_color.b * 0.18, 0.85)
+	root.add_child(inner)
+	var frame := Line2D.new()
+	frame.width = 10.0
+	frame.default_color = rim_color.darkened(0.22)
+	frame.points = PackedVector2Array([Vector2(-76, 12), Vector2(-76, -62), Vector2(-48, -96), Vector2(48, -96), Vector2(76, -62), Vector2(76, 12)])
+	root.add_child(frame)
+	var glow := Line2D.new()
+	glow.width = 2.5
+	glow.default_color = rim_color.lightened(0.18)
+	glow.points = PackedVector2Array([Vector2(-60, 2), Vector2(-42, -78), Vector2(42, -78), Vector2(60, 2)])
+	root.add_child(glow)
+	for x in [-28.0, 28.0]:
+		var cable := Line2D.new()
+		cable.width = 3.0
+		cable.default_color = Color(0.16, 0.20, 0.26, 0.95)
+		cable.points = PackedVector2Array([Vector2(x, -72), Vector2(x * 0.74, 178)])
+		root.add_child(cable)
+	var sign := Label.new()
+	sign.text = "↓ 下层"
+	sign.position = Vector2(-42, -126)
+	sign.size = Vector2(84, 26)
+	sign.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sign.add_theme_font_size_override("font_size", 15)
+	sign.add_theme_color_override("font_color", rim_color.lightened(0.25))
+	sign.add_theme_color_override("font_outline_color", Color(0.005, 0.01, 0.02))
+	sign.add_theme_constant_override("outline_size", 4)
+	root.add_child(sign)
+	var mist := CPUParticles2D.new()
+	mist.position = Vector2(0, 28)
+	mist.amount = 18
+	mist.lifetime = 1.8
+	mist.direction = Vector2(0, -1)
+	mist.spread = 24.0
+	mist.initial_velocity_min = 10.0
+	mist.initial_velocity_max = 28.0
+	mist.color = Color(rim_color.r, rim_color.g, rim_color.b, 0.34)
+	root.add_child(mist)
+	world.add_child(root)
 
 # ============================================================ 存档点
 func _make_save_point(pos: Vector2) -> void:
