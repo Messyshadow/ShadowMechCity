@@ -216,6 +216,7 @@ func _enter_room(id: String, from_room: String) -> void:
 	_build_parallax(room["theme"])
 	var tint: Color = Rooms.THEME_TINT.get(room["theme"], Color.WHITE)
 	_build_geometry(room, tint)
+	_make_room_atmosphere(room)
 	# 装饰物(非碰撞中景, decor): [x, y, "theme/sprite", scale]
 	for dc in room.get("decor", []):
 		_make_decor(dc[0], dc[1], dc[2], dc[3] if dc.size() > 3 else 1.0)
@@ -627,6 +628,28 @@ func _make_decor(x: float, y: float, path: String, scale: float) -> void:
 	s.modulate = Color(1.0, 0.98, 1.0)   # 中景, 保持可辨识
 	world.add_child(s)
 
+func _make_room_atmosphere(room: Dictionary) -> void:
+	var theme: String = room.get("theme", "")
+	if theme != "water" and theme != "mine": return
+	var b = room["bounds"]
+	var root := Node2D.new()
+	root.z_index = -3
+	# 用低对比的空气层拉开远近关系；刻意避免把同一个支撑物平铺成图案墙。
+	var haze := Polygon2D.new()
+	haze.polygon = PackedVector2Array([Vector2(b[0],155),Vector2(b[2],155),Vector2(b[2],b[3]-70),Vector2(b[0],b[3]-70)])
+	if theme == "water":
+		haze.color = Color(0.01,0.20,0.23,0.16)
+		var service_pipe := Line2D.new(); service_pipe.width = 16.0; service_pipe.default_color = Color(0.025,0.12,0.14,0.58)
+		service_pipe.points = PackedVector2Array([Vector2(b[0]+150,120),Vector2(b[0]+270,120),Vector2(b[0]+292,150),Vector2(b[0]+292,300)]); root.add_child(service_pipe)
+		var lamp := Polygon2D.new(); lamp.polygon = PackedVector2Array([Vector2(b[0]+278,210),Vector2(b[0]+306,210),Vector2(b[0]+312,236),Vector2(b[0]+272,236)]); lamp.color = Color(0.25,0.82,0.82,0.42); root.add_child(lamp)
+	else:
+		haze.color = Color(0.27,0.07,0.015,0.12)
+		var distant_rig := Line2D.new(); distant_rig.width = 13.0; distant_rig.default_color = Color(0.16,0.065,0.025,0.52)
+		distant_rig.points = PackedVector2Array([Vector2(b[2]-260,140),Vector2(b[2]-190,275),Vector2(b[2]-120,140)]); root.add_child(distant_rig)
+		var ember := Polygon2D.new(); ember.polygon = PackedVector2Array([Vector2(b[2]-201,285),Vector2(b[2]-179,285),Vector2(b[2]-174,308),Vector2(b[2]-206,308)]); ember.color = Color(0.9,0.25,0.04,0.36); root.add_child(ember)
+	root.add_child(haze)
+	world.add_child(root)
+
 func _make_oneway(x: float, y: float, w: float, tint: Color = Color.WHITE) -> void:
 	var body := StaticBody2D.new()
 	body.collision_layer = 0b00001
@@ -823,7 +846,8 @@ func _make_downward_portal(room: Dictionary, d: Dictionary) -> void:
 			return
 	var b = room["bounds"]
 	var root := Node2D.new()
-	root.position = Vector2(d["p"], b[3] - 104)
+	# 入口与地面齐平：它是可掉落的维护井，不是竖在场景里的传送门。
+	root.position = Vector2(d["p"], b[3] - 8)
 	root.z_index = 2
 	var theme: String = room.get("theme", "city")
 	var rim_color: Color = {
@@ -831,43 +855,34 @@ func _make_downward_portal(room: Dictionary, d: Dictionary) -> void:
 		"temple": Color(0.90, 0.72, 0.30), "factory": Color(1.0, 0.42, 0.16),
 		"void": Color(0.70, 0.38, 1.0), "castle": Color(0.65, 0.48, 1.0)
 	}.get(theme, Color(0.50, 0.85, 1.0))
-	# 把原来仅有地面缺口的洞口，变成向下收束、能看出深度的机械竖井。
+	# 内井向下收束；屏幕底部被 HUD 遮住时，井沿与侧壁仍能清楚说明落点。
 	var abyss := Polygon2D.new()
-	abyss.polygon = PackedVector2Array([Vector2(-72, 0), Vector2(72, 0), Vector2(52, 210), Vector2(-52, 210)])
+	abyss.polygon = PackedVector2Array([Vector2(-58, 0), Vector2(58, 0), Vector2(42, 210), Vector2(-42, 210)])
 	abyss.color = Color(0.006, 0.012, 0.025, 0.96)
 	root.add_child(abyss)
 	var inner := Polygon2D.new()
-	inner.polygon = PackedVector2Array([Vector2(-48, 8), Vector2(48, 8), Vector2(34, 176), Vector2(-34, 176)])
+	inner.polygon = PackedVector2Array([Vector2(-38, 7), Vector2(38, 7), Vector2(27, 176), Vector2(-27, 176)])
 	inner.color = Color(rim_color.r * 0.10, rim_color.g * 0.13, rim_color.b * 0.18, 0.85)
 	root.add_child(inner)
-	var frame := Line2D.new()
-	frame.width = 10.0
-	frame.default_color = rim_color.darkened(0.22)
-	frame.points = PackedVector2Array([Vector2(-76, 12), Vector2(-76, -62), Vector2(-48, -96), Vector2(48, -96), Vector2(76, -62), Vector2(76, 12)])
-	root.add_child(frame)
-	var glow := Line2D.new()
-	glow.width = 2.5
-	glow.default_color = rim_color.lightened(0.18)
-	glow.points = PackedVector2Array([Vector2(-60, 2), Vector2(-42, -78), Vector2(42, -78), Vector2(60, 2)])
-	root.add_child(glow)
+	_make_portal_maintenance_details(root, theme, rim_color)
 	for x in [-28.0, 28.0]:
 		var cable := Line2D.new()
 		cable.width = 3.0
-		cable.default_color = Color(0.16, 0.20, 0.26, 0.95)
-		cable.points = PackedVector2Array([Vector2(x, -72), Vector2(x * 0.74, 178)])
+		cable.default_color = Color(0.09, 0.12, 0.16, 0.95)
+		cable.points = PackedVector2Array([Vector2(x, 6), Vector2(x * 0.70, 178)])
 		root.add_child(cable)
 	var sign := Label.new()
-	sign.text = "↓ 下层"
-	sign.position = Vector2(-42, -126)
-	sign.size = Vector2(84, 26)
+	sign.text = "↓"
+	sign.position = Vector2(66, -34)
+	sign.size = Vector2(22, 24)
 	sign.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sign.add_theme_font_size_override("font_size", 15)
+	sign.add_theme_font_size_override("font_size", 19)
 	sign.add_theme_color_override("font_color", rim_color.lightened(0.25))
 	sign.add_theme_color_override("font_outline_color", Color(0.005, 0.01, 0.02))
 	sign.add_theme_constant_override("outline_size", 4)
 	root.add_child(sign)
 	var mist := CPUParticles2D.new()
-	mist.position = Vector2(0, 28)
+	mist.position = Vector2(0, 18)
 	mist.amount = 18
 	mist.lifetime = 1.8
 	mist.direction = Vector2(0, -1)
@@ -877,6 +892,85 @@ func _make_downward_portal(room: Dictionary, d: Dictionary) -> void:
 	mist.color = Color(rim_color.r, rim_color.g, rim_color.b, 0.34)
 	root.add_child(mist)
 	world.add_child(root)
+
+func _make_portal_maintenance_details(root: Node2D, theme: String, rim_color: Color) -> void:
+	# 两块嵌入地面的铆钉井沿，中央保持敞开；比单纯发光轮廓更接近可使用的工业结构。
+	var hatch_outline := PackedVector2Array([Vector2(-66,4),Vector2(-51,-13),Vector2(51,-13),Vector2(66,4),Vector2(49,21),Vector2(-49,21),Vector2(-66,4)])
+	var hatch_outer := Line2D.new()
+	hatch_outer.width = 12.0
+	hatch_outer.default_color = Color(0.055,0.075,0.095,0.98)
+	hatch_outer.points = hatch_outline
+	root.add_child(hatch_outer)
+	var hatch_inner := Line2D.new()
+	hatch_inner.width = 3.0
+	hatch_inner.default_color = rim_color.darkened(0.12)
+	hatch_inner.points = hatch_outline
+	root.add_child(hatch_inner)
+	for side in [-1.0, 1.0]:
+		var plate := Polygon2D.new()
+		plate.polygon = PackedVector2Array([Vector2(side * 92, -4), Vector2(side * 61, -4), Vector2(side * 54, 18), Vector2(side * 84, 26)])
+		plate.color = Color(0.10, 0.14, 0.18, 0.98)
+		root.add_child(plate)
+		_make_portal_solid_panel(root, Vector2(side * 75, 10), Vector2(28, 34), rim_color.darkened(0.45))
+		var rim := Line2D.new()
+		rim.width = 7.0
+		rim.default_color = rim_color.darkened(0.30)
+		rim.points = PackedVector2Array([Vector2(side * 94, 7), Vector2(side * 68, -7), Vector2(side * 57, 12), Vector2(side * 50, 160)])
+		root.add_child(rim)
+		var rail := Line2D.new()
+		rail.width = 4.0
+		rail.default_color = rim_color.lightened(0.06)
+		rail.points = PackedVector2Array([Vector2(side * 96, 8), Vector2(side * 96, -48), Vector2(side * 66, -48)])
+		root.add_child(rail)
+		for y in [-34.0, -14.0]:
+			var bolt := Polygon2D.new()
+			bolt.polygon = PackedVector2Array([Vector2(side * 77 - 4, y), Vector2(side * 77, y - 4), Vector2(side * 77 + 4, y), Vector2(side * 77, y + 4)])
+			bolt.color = rim_color.lightened(0.20)
+			root.add_child(bolt)
+	# 井口内侧的半开防坠栅：它从左边折起，清楚地暗示此处是向下路径而不是传送点。
+	for x in [-43.0, -29.0, -15.0]:
+		var grate := Line2D.new()
+		grate.width = 3.0
+		grate.default_color = rim_color.darkened(0.42)
+		grate.points = PackedVector2Array([Vector2(x, -2), Vector2(x + 17, 40)])
+		root.add_child(grate)
+	var side_detail := Line2D.new()
+	side_detail.width = 6.0
+	side_detail.default_color = rim_color.darkened(0.18)
+	if theme == "water":
+		side_detail.points = PackedVector2Array([Vector2(-180, -54), Vector2(-116, -54), Vector2(-104, -30), Vector2(-104, 12)])
+		var valve := Polygon2D.new()
+		valve.polygon = PackedVector2Array([Vector2(112, -44), Vector2(128, -52), Vector2(144, -44), Vector2(136, -28), Vector2(120, -28)])
+		valve.color = rim_color.darkened(0.15)
+		root.add_child(valve)
+	elif theme == "mine":
+		side_detail.points = PackedVector2Array([Vector2(-132, 14), Vector2(-110, -70), Vector2(-86, 14), Vector2(-64, -70), Vector2(-42, 14)])
+		var pulley := Line2D.new()
+		pulley.width = 5.0
+		pulley.default_color = Color(0.72, 0.37, 0.16)
+		pulley.points = PackedVector2Array([Vector2(118, -64), Vector2(142, -38), Vector2(118, -12), Vector2(94, -38), Vector2(118, -64)])
+		root.add_child(pulley)
+	else:
+		side_detail.points = PackedVector2Array([Vector2(-150, -40), Vector2(-108, -40), Vector2(-94, 12)])
+	root.add_child(side_detail)
+
+func _make_portal_solid_panel(root: Node2D, pos: Vector2, size: Vector2, tint: Color) -> void:
+	var panel := Sprite2D.new()
+	panel.texture = load("res://assets/tiles/metal_wall.png")
+	panel.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	panel.region_enabled = true
+	panel.region_rect = Rect2(0, 0, size.x, size.y)
+	panel.position = pos
+	panel.modulate = tint
+	root.add_child(panel)
+	var cap := Sprite2D.new()
+	cap.texture = load("res://assets/tiles/metal_top.png")
+	cap.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	cap.region_enabled = true
+	cap.region_rect = Rect2(0, 0, size.x + 8, 12)
+	cap.position = pos + Vector2(0, -size.y * 0.5 + 4)
+	cap.modulate = tint.lightened(0.28)
+	root.add_child(cap)
 
 # ============================================================ 存档点
 func _make_save_point(pos: Vector2) -> void:
@@ -1006,6 +1100,51 @@ func _build_parallax(theme: String) -> void:
 	_bg_layer(base + "sky.png", 0.08, 3.2, Vector2(-300, -340))
 	_bg_layer(base + "far.png", 0.28, 2.6, Vector2(0, -160))
 	_bg_layer(base + "near.png", 0.55, 2.6, Vector2(0, -10))
+	_add_theme_atmosphere(theme)
+
+func _add_theme_atmosphere(theme: String) -> void:
+	if theme != "water" and theme != "mine": return
+	var layer := ParallaxLayer.new()
+	layer.motion_scale = Vector2(0.76, 0.76)
+	layer.motion_mirroring = Vector2(1680, 0)
+	var art := Node2D.new()
+	art.z_index = -4
+	if theme == "water":
+		# 水道的管线、检修灯和滴水，让重复拱顶后面仍有可辨认的工业层次。
+		for x in range(-160, 1800, 330):
+			var pipe := Line2D.new()
+			pipe.width = 15.0
+			pipe.default_color = Color(0.06, 0.19, 0.22, 0.92)
+			pipe.points = PackedVector2Array([Vector2(x, 120), Vector2(x + 130, 120), Vector2(x + 152, 156), Vector2(x + 152, 300)])
+			art.add_child(pipe)
+			var lamp := Polygon2D.new()
+			lamp.polygon = PackedVector2Array([Vector2(x + 143, 165), Vector2(x + 161, 165), Vector2(x + 166, 183), Vector2(x + 138, 183)])
+			lamp.color = Color(0.20, 0.88, 0.93, 0.72)
+			art.add_child(lamp)
+			var drip := Line2D.new()
+			drip.width = 2.0
+			drip.default_color = Color(0.30, 0.90, 1.0, 0.38)
+			drip.points = PackedVector2Array([Vector2(x + 153, 188), Vector2(x + 149, 238)])
+			art.add_child(drip)
+	else:
+		# 矿坑增加支撑梁、绞盘索和暖色矿灯，打破平铺山体的单调感。
+		for x in range(-120, 1800, 300):
+			var beam := Line2D.new()
+			beam.width = 18.0
+			beam.default_color = Color(0.20, 0.105, 0.055, 0.92)
+			beam.points = PackedVector2Array([Vector2(x, 80), Vector2(x + 60, 210), Vector2(x + 122, 80)])
+			art.add_child(beam)
+			var rope := Line2D.new()
+			rope.width = 3.0
+			rope.default_color = Color(0.18, 0.13, 0.10, 0.82)
+			rope.points = PackedVector2Array([Vector2(x + 60, 210), Vector2(x + 60, 370)])
+			art.add_child(rope)
+			var lantern := Polygon2D.new()
+			lantern.polygon = PackedVector2Array([Vector2(x + 50, 226), Vector2(x + 70, 226), Vector2(x + 76, 252), Vector2(x + 44, 252)])
+			lantern.color = Color(1.0, 0.38, 0.08, 0.62)
+			art.add_child(lantern)
+	layer.add_child(art)
+	pbg.add_child(layer)
 
 func _bg_layer(path: String, motion: float, sc: float, off: Vector2) -> void:
 	var layer := ParallaxLayer.new()
