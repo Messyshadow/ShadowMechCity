@@ -59,7 +59,10 @@ func set_hp(cur: int, maxv: int, phase: int) -> void:
 	var fill := bar.get_theme_stylebox("fill") as StyleBoxFlat
 	if fill:
 		fill.bg_color = Color(0.95, 0.25, 0.2) if phase == 1 else Color(1.0, 0.45, 0.15)
-	name_label.text = name_label.text.split("  ")[0] + ("  ·  第2阶段·狂化" if phase >= 2 else "")
+	var suffix := ""
+	if phase == 2: suffix = "  ·  第2阶段·虚空形态"
+	elif phase >= 3: suffix = "  ·  第3阶段·光核失控"
+	name_label.text = name_label.text.split("  ")[0] + suffix
 
 func hide_boss() -> void:
 	var tw := create_tween()

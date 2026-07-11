@@ -816,6 +816,7 @@ func _switch_weapon() -> void:
 	Game.weapon_index = weapon_index
 	_apply_weapon()
 	weapon_changed.emit(weapon["name"], weapon["color"])
+	Fx.weapon_switch(get_parent(), global_position + Vector2(0, -34), weapon["color"], weapon["id"])
 	Fx.popup(get_parent(), global_position + Vector2(0, -86), "▶ " + weapon["name"], weapon["color"])
 	_play_sfx("ui", -4.0)
 

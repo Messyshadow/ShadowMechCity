@@ -39,6 +39,10 @@ const ENEMY_DEFS := {
 	"void_eagle": {"sprite": "bird", "frames": 7, "fps": 10.0, "scale": 0.7, "hp": 11, "speed": 150.0, "size": Vector2(62, 54), "tint": Color(0.58, 0.8, 1.0), "behavior": "diver", "dmg": 2, "kbr": 0.15},
 	"void_wyvern": {"sprite": "bat", "frames": 4, "fps": 8.5, "scale": 1.0, "hp": 16, "speed": 92.0, "size": Vector2(82, 66), "tint": Color(0.72, 0.42, 1.0), "behavior": "teleflyer", "dmg": 2, "kbr": 0.25},
 	"storm_mage": {"sprite": "bird", "frames": 7, "fps": 8.3, "scale": 0.72, "hp": 14, "speed": 38.0, "size": Vector2(62, 64), "tint": Color(0.55, 0.7, 1.0), "behavior": "storm_mage", "dmg": 2, "kbr": 0.2},
+	# 暗影王城精英(阶段10.6)
+	"soul_shield": {"sprite": "golem", "frames": 6, "fps": 8.0, "scale": 0.98, "hp": 34, "speed": 42.0, "size": Vector2(92, 108), "tint": Color(0.5, 0.68, 0.9), "behavior": "charger", "dmg": 3, "kbr": 0.8},
+	"soul_spear": {"sprite": "beast", "frames": 6, "fps": 6.5, "scale": 0.82, "hp": 26, "speed": 92.0, "size": Vector2(66, 78), "tint": Color(0.82, 0.35, 0.65), "behavior": "charger", "dmg": 3, "kbr": 0.45},
+	"soul_cannon": {"sprite": "bird", "frames": 7, "fps": 8.3, "scale": 0.82, "hp": 24, "speed": 34.0, "size": Vector2(66, 70), "tint": Color(0.55, 0.4, 1.0), "behavior": "storm_mage", "dmg": 3, "kbr": 0.35},
 }
 
 const WALL := 40
@@ -119,7 +123,12 @@ func _setup_boss_bar() -> void:
 func _spawn_boss(room: Dictionary, id: String) -> void:
 	var bd: Dictionary = room["boss"]
 	var b := CharacterBody2D.new()
-	b.set_script(load("res://scripts/void_dragon_boss.gd") if bd.get("mode", "") == "void_dragon" else load("res://scripts/boss.gd"))
+	var mode: String = bd.get("mode", "")
+	var boss_script := load("res://scripts/boss.gd")
+	if mode == "void_dragon": boss_script = load("res://scripts/void_dragon_boss.gd")
+	elif mode == "soul_knights": boss_script = load("res://scripts/soul_knights_boss.gd")
+	elif mode == "void_king": boss_script = load("res://scripts/void_king_boss.gd")
+	b.set_script(boss_script)
 	b.boss_name = bd["name"]
 	b.sprite_name = bd["sprite"]
 	b.frame_count = bd.get("frames", 6)
@@ -140,17 +149,22 @@ func _spawn_boss(room: Dictionary, id: String) -> void:
 	# 封闭竞技场: 在出口门放挡板, 击败后移除
 	var bnds = room["bounds"]
 	for d in room["doors"]:
-		var blk := StaticBody2D.new()
-		blk.collision_layer = 0b00001
-		var bx: float = bnds[0] + 20 if d["side"] == "left" else bnds[2] - 20
-		blk.position = Vector2(bx, (d["p"] + bnds[3]) * 0.5)
-		var bc := CollisionShape2D.new()
-		var bsh := RectangleShape2D.new()
-		bsh.size = Vector2(40, bnds[3] - d["p"])
-		bc.shape = bsh
-		blk.add_child(bc)
-		blk.set_meta("arena_block", true)
-		world.add_child(blk)
+		_arena_block_for_door(bnds, d)
+
+func _arena_block_for_door(bnds: Array, d: Dictionary) -> void:
+	var blk := StaticBody2D.new(); blk.collision_layer = 0b00001
+	var size := Vector2(40, 120)
+	match d["side"]:
+		"left":
+			size = Vector2(40, maxf(40, bnds[3] - d["p"])); blk.position = Vector2(bnds[0] + 20, (d["p"] + bnds[3]) * 0.5)
+		"right":
+			size = Vector2(40, maxf(40, bnds[3] - d["p"])); blk.position = Vector2(bnds[2] - 20, (d["p"] + bnds[3]) * 0.5)
+		"up":
+			size = Vector2(120, 40); blk.position = Vector2(d["p"], bnds[1] + 20)
+		"down":
+			size = Vector2(120, 40); blk.position = Vector2(d["p"], bnds[3] + 20)
+	var bc := CollisionShape2D.new(); var bsh := RectangleShape2D.new(); bsh.size = size; bc.shape = bsh; blk.add_child(bc)
+	blk.set_meta("arena_block", true); world.add_child(blk)
 
 func _on_boss_defeated(id: String) -> void:
 	Game.give_item("boss_" + id)
@@ -168,6 +182,14 @@ func _on_boss_defeated(id: String) -> void:
 	Pickup.spawn(world, Vector2(player.global_position.x + 80, player.global_position.y - 20), "chest", 1)
 	Pickup.spawn_gear(world, Vector2(player.global_position.x - 80, player.global_position.y - 20), ItemsData.generate(3))
 	save_now()
+	if id == "castle_throne":
+		_show_ending()
+
+func _show_ending() -> void:
+	var cl := CanvasLayer.new(); cl.layer = 80
+	var veil := ColorRect.new(); veil.set_anchors_preset(Control.PRESET_FULL_RECT); veil.color = Color(0.01,0.0,0.03,0.0); cl.add_child(veil)
+	var title := Label.new(); title.text = "光核重新点燃\n暗影机械城仍在等待黎明"; title.set_anchors_preset(Control.PRESET_CENTER); title.position=Vector2(-300,-70); title.size=Vector2(600,160); title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",34); title.add_theme_color_override("font_color",Color(0.65,0.9,1)); title.add_theme_color_override("font_outline_color",Color(0,0,0)); title.add_theme_constant_override("outline_size",8); title.modulate.a=0; cl.add_child(title); add_child(cl)
+	var tw:=veil.create_tween(); tw.tween_property(veil,"color:a",0.82,1.2); tw.tween_callback(func(): title.create_tween().tween_property(title,"modulate:a",1.0,1.0))
 
 func _process(delta: float) -> void:
 	if door_cd > 0.0:
@@ -222,6 +244,8 @@ func _enter_room(id: String, from_room: String) -> void:
 	# 方向性虚空气流 [cx, cy, w, h, flow_x, flow_y]
 	for wd in room.get("winds", []):
 		_make_wind(wd[0], wd[1], wd[2], wd[3], Vector2(wd[4], wd[5]))
+	for shaft in room.get("shafts", []):
+		_make_shaft(shaft[0], shaft[1], shaft[2], shaft[3])
 	# 水域 [cx, cy, w, h, (flowx=0), (flowy=0)]
 	for wt in room.get("water", []):
 		_make_water(wt)
@@ -569,6 +593,19 @@ func _make_wind(cx: float, cy: float, w: float, h: float, flow: Vector2) -> void
 	wd.setup_flow(w, h, flow, "wind")
 	world.add_child(wd)
 
+func _make_shaft(cx: float, top: float, width: float, depth: float) -> void:
+	var root := Node2D.new(); root.position = Vector2(cx, top); root.z_index = 4
+	var well := Polygon2D.new(); well.polygon = PackedVector2Array([Vector2(-width * 0.5, 0), Vector2(width * 0.5, 0), Vector2(width * 0.38, depth), Vector2(-width * 0.38, depth)])
+	well.color = Color(0.015, 0.01, 0.035, 0.96); root.add_child(well)
+	for side in [-1, 1]:
+		var rim := Line2D.new(); rim.width = 12.0; rim.default_color = Color(0.3, 0.36, 0.48)
+		rim.points = PackedVector2Array([Vector2(side * width * 0.5, -8), Vector2(side * width * 0.42, depth)]); root.add_child(rim)
+		var chain := Line2D.new(); chain.width = 3.0; chain.default_color = Color(0.28, 0.22, 0.34)
+		chain.points = PackedVector2Array([Vector2(side * width * 0.3, 8), Vector2(side * width * 0.28, depth * 0.78)]); root.add_child(chain)
+	var arrow := Label.new(); arrow.text = "▼"; arrow.position = Vector2(-18, 18); arrow.add_theme_font_size_override("font_size", 34); arrow.add_theme_color_override("font_color", Color(0.55, 0.9, 1.0)); root.add_child(arrow)
+	var particles := CPUParticles2D.new(); particles.position = Vector2(0, 12); particles.amount = 24; particles.lifetime = 1.4; particles.direction = Vector2(0, 1); particles.spread = 18.0; particles.initial_velocity_min = 40; particles.initial_velocity_max = 90; particles.color = Color(0.5, 0.35, 1.0, 0.55); root.add_child(particles)
+	world.add_child(root)
+
 func _make_hazard(x: float, top: float, w: float, h: float, dmg: int, kind: String) -> void:
 	var hz := Area2D.new()
 	hz.set_script(load("res://scripts/hazard.gd"))
@@ -734,6 +771,13 @@ func _show_door_hint(pos: Vector2, text: String, color: Color) -> void:
 func _on_door(body: Node, d: Dictionary, tag: String, locked: String) -> void:
 	if door_cd > 0.0 or not body.is_in_group("player"):
 		return
+	var required: Array = d.get("requires", [])
+	if not _has_required_abilities(required):
+		var missing: Array[String] = []
+		for ability in required:
+			if ability != "dash" and not Game.has_ability(ability): missing.append(Game.ABILITY_NAME.get(ability, ability))
+		Fx.popup(world, player.global_position + Vector2(0,-95), "终章封印缺少: " + " / ".join(missing), Color(0.75,0.55,1))
+		door_cd=0.8; return
 	if locked != "" and not Game.is_door_unlocked(tag):
 		if Game.has_item(locked):
 			Game.unlock_door(tag)
@@ -753,7 +797,22 @@ func _on_door(body: Node, d: Dictionary, tag: String, locked: String) -> void:
 	# 门触发在碰撞信号期: 换房(重建几何/oneway)必须延迟到 flush 之后,
 	# 否则 "Can't change this state while flushing queries"。先锁 door_cd 防重入。
 	door_cd = 0.6
-	_enter_room.call_deferred(d["to"], room_id)
+	if d["side"] == "down" and not Rooms.ROOMS[room_id].get("shafts", []).is_empty():
+		_play_shaft_transition.call_deferred(d["to"])
+	else:
+		_enter_room.call_deferred(d["to"], room_id)
+
+func _has_required_abilities(required: Array) -> bool:
+	for ability in required:
+		if ability != "dash" and not Game.has_ability(ability): return false
+	return true
+
+func _play_shaft_transition(to_room: String) -> void:
+	door_cd=2.0; player.velocity=Vector2.ZERO; player.set_physics_process(false); camera.target=null
+	var start:=player.global_position
+	var tw:=create_tween();tw.tween_property(player,"global_position",start+Vector2(0,170),0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN);tw.parallel().tween_property(camera,"global_position",camera.global_position+Vector2(0,140),0.42)
+	await tw.finished
+	Fx.screen_flash(get_tree(),Color(0.08,0.02,0.16,0.9));player.set_physics_process(true);camera.target=player;_enter_room(to_room,room_id)
 
 # ============================================================ 存档点
 func _make_save_point(pos: Vector2) -> void:
@@ -878,7 +937,7 @@ func _build_parallax(theme: String) -> void:
 	add_child(pbg)
 	move_child(pbg, 0)
 	# 虚空区复用已有工厂层，再由紫青色瓦片/气流统一主题，避免引入未授权素材。
-	var bg_theme := "factory" if theme == "void" else theme
+	var bg_theme := "temple" if theme == "castle" else ("factory" if theme == "void" else theme)
 	var base := "res://assets/bg/%s/" % bg_theme
 	_bg_layer(base + "sky.png", 0.08, 3.2, Vector2(-300, -340))
 	_bg_layer(base + "far.png", 0.28, 2.6, Vector2(0, -160))
@@ -995,9 +1054,12 @@ func _auto_screenshot() -> void:
 	var rid := OS.get_environment("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
-	if OS.get_environment("SHOT_BOSS_PHASE") == "2" and is_instance_valid(_boss):
+	var shot_phase := OS.get_environment("SHOT_BOSS_PHASE").to_int()
+	if shot_phase >= 2 and is_instance_valid(_boss):
 		await get_tree().process_frame
-		_boss.take_damage(int(_boss.max_hp / 2) + 1, Vector2.ZERO)
+		player.iframes = 99.0
+		var damage_ratio := 0.7 if shot_phase >= 3 else 0.5
+		_boss.take_damage(int(_boss.max_hp * damage_ratio) + 1, Vector2.ZERO)
 	# 动作连拍(打击感验收): 在角色面前放假人, 自动打一套, 连存若干帧
 	if OS.get_environment("SHOT_MOTION") == "1":
 		await _motion_burst()
@@ -1024,6 +1086,11 @@ func _auto_screenshot() -> void:
 		Game.coins = 500
 		if inv_panel and inv_panel.has_method("_toggle"):
 			inv_panel._toggle()
+	if OS.get_environment("SHOT_SWITCH") == "1":
+		player._switch_weapon()
+	if OS.get_environment("SHOT_END") == "1" and is_instance_valid(_boss):
+		await get_tree().process_frame
+		_boss.take_damage(_boss.max_hp + 1, Vector2.ZERO)
 	var shot_wait := OS.get_environment("SHOT_WAIT").to_float()
 	await get_tree().create_timer(shot_wait if shot_wait > 0.0 else 1.6).timeout
 	await RenderingServer.frame_post_draw

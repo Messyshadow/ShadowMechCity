@@ -423,7 +423,7 @@ const ROOMS := {
 		"winds": [[900, 430, 230, 430, 0, -300]],
 		"enemies": [[650, 360, "storm_mage"], [1100, 260, "void_wyvern"]],
 		"save": Vector2(260, 700), "start_spawn": Vector2(180, 660),
-		"doors": [{"side": "left", "p": 570, "to": "void_hangar"}, {"side": "right", "p": 570, "to": "void_throne"}],
+		"doors": [{"side": "left", "p": 570, "to": "void_hangar"}, {"side": "right", "p": 570, "to": "void_throne"}, {"side": "down", "p": 850, "to": "castle_gate", "requires":["dash","bomb","aqua","wall_climb","glide","shadow_glider"]}],
 	},
 	"void_throne": {
 		"name": "虚空要塞·天龙王座", "theme": "void", "map": Vector2i(4, -1),
@@ -432,6 +432,13 @@ const ROOMS := {
 		"boss": {"x": 1250, "y": 300, "sprite": "bat", "name": "虚空天龙机甲", "hp": 320, "scale": 2.3, "size": Vector2(150, 110), "frames": 4, "fps": 8.5, "mode": "void_dragon", "tint": Color(0.65, 0.4, 1.0)},
 		"doors": [{"side": "left", "p": 570, "to": "void_core"}],
 	},
+	# ============================ 暗影王城终章(阶段10.6) ============================
+	"castle_gate": {"name":"暗影王城·城门高塔","theme":"castle","map":Vector2i(3,0),"bounds":[0,0,1900,760],"shafts":[[950,560,190,260]],"platforms":[[260,580,180,24,true],[620,450,180,24,true],[1050,390,190,24,true],[1450,520,180,24,true]],"enemies":[[520,410,"soul_shield"],[1120,350,"soul_spear"],[1540,480,"soul_cannon"]],"save":Vector2(220,760),"start_spawn":Vector2(850,90),"doors":[{"side":"up","p":850,"to":"void_core"},{"side":"down","p":950,"to":"castle_gallery"}]},
+	"castle_gallery": {"name":"暗影王城·铸魂长廊","theme":"castle","map":Vector2i(3,1),"bounds":[0,0,2100,760],"shafts":[[1600,560,180,260]],"platforms":[[300,560,190,24,true],[680,430,180,24,true],[1050,300,200,24,true],[1420,440,180,24,true],[1800,580,170,24,true]],"enemies":[[420,520,"soul_spear"],[980,260,"soul_cannon"],[1450,400,"soul_shield"]],"start_spawn":Vector2(950,90),"doors":[{"side":"up","p":950,"to":"castle_gate"},{"side":"down","p":1600,"to":"castle_chapel"}]},
+	"castle_chapel": {"name":"暗影王城·机械礼拜堂","theme":"castle","map":Vector2i(3,2),"bounds":[0,0,2000,780],"shafts":[[1000,590,210,260]],"platforms":[[260,600,180,24,true],[560,470,170,24,true],[1000,330,220,24,true],[1440,470,170,24,true],[1740,600,180,24,true]],"enemies":[[520,430,"soul_shield"],[980,290,"soul_cannon"],[1500,430,"soul_spear"]],"save":Vector2(240,780),"start_spawn":Vector2(1600,90),"doors":[{"side":"up","p":1600,"to":"castle_gallery"},{"side":"down","p":1000,"to":"castle_knights"}]},
+	"castle_knights": {"name":"暗影王城·骑士竞技场","theme":"castle","map":Vector2i(3,3),"bounds":[0,0,1800,700],"platforms":[[360,500,180,24],[900,360,220,24],[1420,500,180,24]],"enemies":[],"boss":{"x":1250,"y":700,"sprite":"golem","name":"王城铸魂骑士团","hp":420,"scale":1.8,"size":Vector2(120,145),"mode":"soul_knights","summon":true,"summon_type":"soul_spear","tint":Color(0.65,0.5,0.9)},"doors":[{"side":"up","p":900,"to":"castle_chapel"},{"side":"down","p":900,"to":"castle_shaft"}]},
+	"castle_shaft": {"name":"暗影王城·君王升降井","theme":"castle","map":Vector2i(3,4),"bounds":[0,0,1700,900],"shafts":[[850,180,300,700]],"platforms":[[280,720,170,24,true],[560,570,160,24,true],[960,430,170,24,true],[1260,280,170,24,true]],"enemies":[[420,680,"soul_spear"],[1050,390,"soul_cannon"],[1330,240,"soul_shield"]],"save":Vector2(250,900),"start_spawn":Vector2(900,90),"doors":[{"side":"up","p":900,"to":"castle_knights"},{"side":"down","p":850,"to":"castle_throne"}]},
+	"castle_throne": {"name":"暗影王城·虚空王座","theme":"castle","map":Vector2i(3,5),"bounds":[0,0,1900,760],"platforms":[[380,540,200,24],[950,390,240,24],[1500,540,200,24]],"enemies":[],"boss":{"x":1320,"y":760,"sprite":"golem","name":"虚空机械君王","hp":600,"scale":2.1,"size":Vector2(140,170),"mode":"void_king","tint":Color(0.55,0.25,0.85)},"doors":[{"side":"up","p":950,"to":"castle_shaft"}]},
 }
 
 # 区域瓦片色调
@@ -442,4 +449,5 @@ const THEME_TINT := {
 	"temple": Color(0.85, 0.72, 1.0),
 	"factory": Color(1.0, 0.82, 0.55),
 	"void": Color(0.62, 0.55, 1.0),
+	"castle": Color(0.56, 0.48, 0.72),
 }

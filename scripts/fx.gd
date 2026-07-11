@@ -157,6 +157,19 @@ static func screen_flash(tree: SceneTree, color: Color = Color(1, 1, 1, 0.35)) -
 	tw.tween_property(rect, "color:a", 0.0, 0.22)
 	tw.tween_callback(cl.queue_free)
 
+static func weapon_switch(parent: Node, pos: Vector2, color: Color, weapon_kind: String) -> void:
+	if parent == null: return
+	for radius in [18.0, 34.0]:
+		var ring := Line2D.new(); ring.width = 4.0; ring.closed = true; ring.default_color = color
+		var pts := PackedVector2Array()
+		for i in range(24):
+			var a := TAU * i / 24.0; pts.append(Vector2(cos(a), sin(a)) * radius)
+		ring.points = pts; ring.position = pos; ring.z_index = 30; parent.add_child(ring)
+		var tw := ring.create_tween(); tw.tween_property(ring, "scale", Vector2(0.2, 0.2), 0.52); tw.parallel().tween_property(ring, "modulate:a", 0.0, 0.52); tw.tween_callback(ring.queue_free)
+	var flare := Line2D.new(); flare.width = 6.0 if weapon_kind == "hammer" else 3.0; flare.default_color = color
+	flare.points = PackedVector2Array([pos + Vector2(0, -54), pos + Vector2(0, 42)]); flare.z_index = 31; parent.add_child(flare)
+	var ft := flare.create_tween(); ft.tween_property(flare, "modulate:a", 0.0, 0.42); ft.tween_callback(flare.queue_free)
+
 ## 冲击波环 (落地砸地/AoE)
 static func shockwave(parent: Node, pos: Vector2, color: Color = Color(0.6, 0.85, 1.0)) -> void:
 	if parent == null or not is_instance_valid(parent):
