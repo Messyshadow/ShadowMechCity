@@ -27,6 +27,8 @@ var unlocked_doors: Dictionary = {} # "roomA>roomB" -> true (已解锁的门)
 
 # ---- 收集系统(隐藏宝藏/生命碎片, 回溯解锁) ----
 var collected: Dictionary = {}      # secret_id -> true (已收集, 不再刷出)
+var cleared_rooms: Dictionary = {}  # 本次生命内已清空的战斗房，过门不立即刷怪
+var opened_chests: Dictionary = {}  # 本次生命内已开的普通宝箱，防反复进门刷奖励
 var heart_pieces: int = 0           # 生命碎片数 → 永久 +最大生命
 const HEART_TOTAL := 6              # 全图生命碎片总数(收集度统计)
 
@@ -47,6 +49,24 @@ func visit_room(id: String) -> void:
 	if not visited.has(id):
 		visited[id] = true
 	map_changed.emit()
+
+func mark_room_cleared(id: String) -> void:
+	if id != "":
+		cleared_rooms[id] = true
+
+func is_room_cleared(id: String) -> bool:
+	return cleared_rooms.has(id)
+
+func open_session_chest(id: String) -> void:
+	if id != "":
+		opened_chests[id] = true
+
+func is_session_chest_open(id: String) -> bool:
+	return opened_chests.has(id)
+
+func reset_session_encounters() -> void:
+	cleared_rooms.clear()
+	opened_chests.clear()
 
 func give_item(id: String) -> void:
 	items[id] = true
@@ -110,6 +130,7 @@ func reset() -> void:
 	skills = {}; items = {}; unlocked_doors = {}; visited = {}; current_room = ""
 	inventory = []; equipped = {}; abilities = {}
 	collected = {}; heart_pieces = 0
+	reset_session_encounters()
 
 func xp_needed() -> int:
 	return 4 + level * 3
@@ -191,13 +212,16 @@ func equip_bonus(stat: String) -> float:
 
 # ---- 能力(银河城: 找到才解锁, 用于能力门) ----
 var abilities: Dictionary = {}     # ability_id -> true
-const ABILITY_NAME := {"dash": "冲刺", "bomb": "炸弹", "wall_climb": "攀墙", "glide": "滑翔翼", "aqua": "水下推进器", "double_jump": "二段跳"}
+const ABILITY_NAME := {"dash": "冲刺", "bomb": "炸弹", "wall_climb": "攀墙", "glide": "滑翔翼", "shadow_glider": "暗影滑翔翼", "aqua": "水下推进器", "double_jump": "二段跳"}
 
 func has_ability(id: String) -> bool:
 	return abilities.has(id)
 
 func grant_ability(id: String) -> void:
 	abilities[id] = true
+	# 兼容升级：暗影滑翔翼包含旧 glide，旧存档和熔岩腔穴能力均不失效。
+	if id == "shadow_glider":
+		abilities["glide"] = true
 	progression_changed.emit()
 
 const ACTIONS := {

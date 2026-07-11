@@ -884,7 +884,9 @@ func _start_attack() -> void:
 		Fx.screen_flash(get_tree(), Color(1.0, 0.55, 0.2, 0.12))
 	_play_sfx(weapon["sfx"], -3.0)
 	if is_on_floor() and not attack_up:
-		velocity.x = facing * (110.0 if attack_index < combo_max else 230.0)
+		# 默认原地攻击；只有明确按住左右方向才踏步，避免自动推进伤害区。
+		var attack_move := Input.get_axis("move_left", "move_right")
+		velocity.x = attack_move * (110.0 if attack_index < combo_max else 230.0)
 
 func _swing_weapon() -> void:
 	if weapon_pivot == null:
@@ -1029,6 +1031,9 @@ func _die() -> void:
 	_respawn()
 
 func _respawn() -> void:
+	Game.reset_session_encounters()
+	if has_node("/root/Main") and get_node("/root/Main").has_method("reload_current_room_after_death"):
+		get_node("/root/Main").reload_current_room_after_death()
 	global_position = spawn_point
 	velocity = Vector2.ZERO
 	health = max_hp()

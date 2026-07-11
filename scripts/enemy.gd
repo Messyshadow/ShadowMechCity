@@ -18,6 +18,8 @@ var knockback_resist := 0.0   # 0~1, brute 较高
 const GRAVITY := 1400.0
 const PROJ := preload("res://scripts/enemy_projectile.gd")
 var _shoot_cd := 0.0
+var _special_cd := 1.0
+var _hit_count := 0
 
 var hp: int
 var dir := -1
@@ -81,6 +83,7 @@ func _build() -> void:
 	anim.material = flash_mat
 	anim.play("move")
 	add_child(anim)
+	_add_void_silhouette()
 
 	touch = Area2D.new()
 	touch.collision_layer = 0
@@ -104,6 +107,19 @@ func _build() -> void:
 	wall_ray.collision_mask = 0b00001
 	add_child(wall_ray)
 
+func _add_void_silhouette() -> void:
+	if behavior in ["diver", "teleflyer"]:
+		for side in [-1, 1]:
+			var wing := Polygon2D.new()
+			wing.polygon = PackedVector2Array([Vector2(0, -body_size.y * 0.65), Vector2(side * body_size.x * 0.95, -body_size.y), Vector2(side * body_size.x * 0.62, -body_size.y * 0.28)])
+			wing.color = Color(tint.r, tint.g, tint.b, 0.72); wing.z_index = -1; add_child(wing)
+	elif behavior == "storm_mage":
+		var halo := Line2D.new(); halo.width = 4.0; halo.closed = true; halo.default_color = Color(0.55, 0.75, 1.0, 0.9)
+		var pts := PackedVector2Array()
+		for i in range(20):
+			var a := TAU * i / 20.0; pts.append(Vector2(cos(a) * 34.0, sin(a) * 12.0 - body_size.y - 12.0))
+		halo.points = pts; add_child(halo)
+
 func _physics_process(delta: float) -> void:
 	_t += delta
 	player = get_tree().get_first_node_in_group("player") as Node2D
@@ -124,7 +140,7 @@ func _physics_process(delta: float) -> void:
 	if player and is_instance_valid(player) and _atk_cd <= 0.0:
 		var dx: float = player.global_position.x - global_position.x
 		var dy: float = absf(player.global_position.y - global_position.y)
-		if absf(dx) < ATTACK_RANGE and dy < 64.0 and (is_on_floor() or behavior == "flyer"):
+		if absf(dx) < ATTACK_RANGE and dy < 64.0 and (is_on_floor() or _is_flying_behavior()):
 			_start_attack(signf(dx))
 			move_and_slide()
 			_damage_player()
@@ -132,6 +148,9 @@ func _physics_process(delta: float) -> void:
 
 	match behavior:
 		"flyer":   _b_flyer(delta)
+		"diver": _b_diver(delta)
+		"teleflyer": _b_teleflyer(delta)
+		"storm_mage": _b_storm_mage(delta)
 		"charger": _b_charger(delta)
 		"shooter": _b_shooter(delta)
 		_:         _b_walker(delta)   # walker / brute 共用
@@ -157,6 +176,50 @@ func _b_shooter(delta: float) -> void:
 		dir = 1 if to.x > 0 else -1
 		anim.flip_h = dir > 0
 
+func _is_flying_behavior() -> bool:
+	return behavior in ["flyer", "diver", "teleflyer", "storm_mage"]
+
+func _b_diver(delta: float) -> void:
+	_special_cd -= delta
+	if not player or not is_instance_valid(player):
+		_b_flyer(delta)
+		return
+	dir = 1 if player.global_position.x > global_position.x else -1
+	if _special_cd <= 0.0 and absf(player.global_position.x - global_position.x) < 460.0:
+		velocity = (player.global_position + Vector2(0, -20) - global_position).normalized() * move_speed * 3.0
+		_special_cd = 2.2
+		_ghost()
+	else:
+		var perch := player.global_position + Vector2(-dir * 170.0, -190.0)
+		velocity = velocity.move_toward((perch - global_position).normalized() * move_speed, 260.0 * delta)
+	anim.flip_h = dir > 0
+
+func _b_teleflyer(delta: float) -> void:
+	_special_cd -= delta
+	_b_flyer(delta)
+	if _special_cd <= 0.0 and player and is_instance_valid(player):
+		for i in range(3):
+			_ghost()
+		global_position = player.global_position + Vector2(randf_range(-220.0, 220.0), randf_range(-190.0, -90.0))
+		_base_y = global_position.y
+		_special_cd = 2.8
+		Fx.screen_flash(get_tree(), Color(0.55, 0.3, 1.0, 0.15))
+
+func _b_storm_mage(delta: float) -> void:
+	velocity = velocity.move_toward(Vector2(0, sin(_t * 2.0) * 45.0), 150.0 * delta)
+	_shoot_cd -= delta
+	if _shoot_cd > 0.0 or not player or not is_instance_valid(player):
+		return
+	var origin := global_position + Vector2(0, -body_size.y * 0.5)
+	var aim := (player.global_position + Vector2(0, -35) - origin).normalized()
+	var spread := [-0.24, 0.0, 0.24] if (_hit_count / 3) % 2 == 1 else [0.0]
+	for angle in spread:
+		var p := Area2D.new()
+		p.set_script(PROJ); p.position = origin; get_parent().add_child(p)
+		p.setup(aim.rotated(angle) * 340.0, contact_damage, Color(0.55, 0.45, 1.0))
+	_shoot_cd = 1.25
+	Fx.shockwave(get_parent(), origin, Color(0.55, 0.45, 1.0))
+
 # --------------------------------------------------- 近身攻击
 func _start_attack(face: float) -> void:
 	_atk_state = 1
@@ -172,7 +235,7 @@ func _start_attack(face: float) -> void:
 	anim.create_tween().tween_property(anim, "scale", s, 0.34)
 
 func _do_attack(delta: float) -> void:
-	if not is_on_floor() and behavior != "flyer":
+	if not is_on_floor() and not _is_flying_behavior():
 		velocity.y = min(velocity.y + GRAVITY * delta, 700.0)
 	if _atk_state == 1:
 		# 起手: 原地蓄力, 闪白渐隐
@@ -183,7 +246,7 @@ func _do_attack(delta: float) -> void:
 			_atk_state = 2
 			_atk_timer = 0.26
 			velocity.x = dir * (move_speed * 4.0 + 160.0)   # 扑击突进
-			if behavior == "flyer":
+			if _is_flying_behavior():
 				velocity.y = -60.0
 	else:
 		# 扑击中
@@ -192,7 +255,7 @@ func _do_attack(delta: float) -> void:
 		if _atk_timer <= 0.0:
 			_atk_state = 0
 			_atk_cd = 1.5
-			if behavior == "flyer":
+			if _is_flying_behavior():
 				_base_y = global_position.y
 
 # --------------------------------------------------- 行为
@@ -275,8 +338,9 @@ func take_damage(amount: int, knockback: Vector2) -> void:
 	if dead:
 		return
 	hp -= amount
+	_hit_count += 1
 	velocity = knockback * (1.0 - knockback_resist)
-	if behavior == "flyer":
+	if _is_flying_behavior():
 		_base_y = global_position.y   # 飞行敌被击退后更新基准高度
 	_flash()
 	Fx.hit_ring(get_parent(), global_position + Vector2(0, -body_size.y * 0.5), Color(1, 0.92, 0.6))

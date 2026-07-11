@@ -18,6 +18,7 @@ const ROOMS := {
 		"doors": [
 			{"side": "left", "p": 430, "to": "temple"},
 			{"side": "right", "p": 430, "to": "mine"},
+			{"side": "up", "p": 700, "to": "void_deck"},
 		],
 		"save": Vector2(220, 560),
 		"start_spawn": Vector2(160, 500),
@@ -384,6 +385,53 @@ const ROOMS := {
 			"hp": 160, "scale": 1.9, "size": Vector2(120, 150)},
 		"doors": [{"side": "left", "p": 430, "to": "factory_conveyor"}],
 	},
+	# ============================ 虚空要塞(阶段10.5) ============================
+	"void_deck": {
+		"name": "虚空要塞·破碎甲板", "theme": "void", "map": Vector2i(0, -1),
+		"bounds": [0, 0, 1900, 720],
+		"platforms": [[260, 560, 180, 24, true], [560, 460, 170, 24, true], [900, 360, 190, 24, true], [1260, 450, 180, 24, true], [1580, 540, 180, 24, true]],
+		"oneways": [[720, 520, 160]],
+		"winds": [[1100, 390, 420, 300, 80, -270]],
+		"abilities": [[420, 420, "shadow_glider"]],
+		"enemies": [[760, 320, "void_eagle"], [1320, 410, "storm_mage"]],
+		"save": Vector2(210, 720), "start_spawn": Vector2(700, 90),
+		"doors": [{"side": "down", "p": 700, "to": "hub"}, {"side": "right", "p": 590, "to": "void_bridge"}],
+	},
+	"void_bridge": {
+		"name": "虚空要塞·风暴舰桥", "theme": "void", "map": Vector2i(1, -1),
+		"bounds": [0, 0, 2200, 720], "pits": [[820, 420, 3], [1540, 360, 3]],
+		"platforms": [[300, 560, 180, 24, true], [620, 470, 150, 24, true], [1020, 420, 170, 24, true], [1320, 330, 180, 24, true], [1740, 450, 170, 24, true], [2020, 560, 150, 24, true]],
+		"winds": [[820, 420, 520, 360, -420, 0], [1540, 400, 460, 380, 390, -40]],
+		"enemies": [[620, 420, "void_eagle"], [1100, 360, "void_wyvern"], [1840, 410, "storm_mage"]],
+		"start_spawn": Vector2(180, 680),
+		"doors": [{"side": "left", "p": 590, "to": "void_deck"}, {"side": "right", "p": 590, "to": "void_hangar"}],
+	},
+	"void_hangar": {
+		"name": "虚空要塞·裂隙机库", "theme": "void", "map": Vector2i(2, -1),
+		"bounds": [0, 0, 2100, 820], "pits": [[1050, 620, 3]],
+		"platforms": [[260, 650, 180, 24, true], [520, 520, 160, 24, true], [820, 390, 170, 24, true], [1050, 210, 200, 24, true], [1340, 390, 170, 24, true], [1650, 520, 160, 24, true], [1900, 650, 150, 24, true]],
+		"winds": [[1050, 500, 260, 600, 0, -360]],
+		"hazards": [[1450, 800, 140, 20, 2, "rune"]],
+		"enemies": [[580, 470, "void_eagle"], [980, 180, "void_wyvern"], [1420, 340, "storm_mage"], [1740, 470, "void_eagle"]],
+		"items": [[1050, 180, "chest", ""]], "start_spawn": Vector2(180, 780),
+		"doors": [{"side": "left", "p": 690, "to": "void_bridge"}, {"side": "right", "p": 690, "to": "void_core"}],
+	},
+	"void_core": {
+		"name": "虚空要塞·核心舱", "theme": "void", "map": Vector2i(3, -1),
+		"bounds": [0, 0, 1700, 700],
+		"platforms": [[300, 520, 180, 24, true], [620, 410, 170, 24, true], [950, 300, 190, 24, true], [1300, 470, 180, 24, true]],
+		"winds": [[900, 430, 230, 430, 0, -300]],
+		"enemies": [[650, 360, "storm_mage"], [1100, 260, "void_wyvern"]],
+		"save": Vector2(260, 700), "start_spawn": Vector2(180, 660),
+		"doors": [{"side": "left", "p": 570, "to": "void_hangar"}, {"side": "right", "p": 570, "to": "void_throne"}],
+	},
+	"void_throne": {
+		"name": "虚空要塞·天龙王座", "theme": "void", "map": Vector2i(4, -1),
+		"bounds": [0, 0, 1800, 700], "platforms": [[360, 500, 180, 24], [900, 360, 220, 24], [1420, 500, 180, 24]],
+		"oneways": [], "enemies": [], "items": [],
+		"boss": {"x": 1250, "y": 300, "sprite": "bat", "name": "虚空天龙机甲", "hp": 320, "scale": 2.3, "size": Vector2(150, 110), "frames": 4, "fps": 8.5, "mode": "void_dragon", "tint": Color(0.65, 0.4, 1.0)},
+		"doors": [{"side": "left", "p": 570, "to": "void_core"}],
+	},
 }
 
 # 区域瓦片色调
@@ -393,4 +441,5 @@ const THEME_TINT := {
 	"water": Color(0.65, 0.95, 1.0),
 	"temple": Color(0.85, 0.72, 1.0),
 	"factory": Color(1.0, 0.82, 0.55),
+	"void": Color(0.62, 0.55, 1.0),
 }

@@ -35,6 +35,10 @@ const ENEMY_DEFS := {
 	"drillworm": {"sprite": "beast", "frames": 6, "fps": 5.5, "scale": 0.66, "hp": 12, "speed": 78.0, "size": Vector2(56, 60), "tint": Color(0.7, 0.62, 0.5), "behavior": "charger", "dmg": 2, "kbr": 0.3},
 	"moltenslime": {"sprite": "slime", "frames": 6, "fps": 6.7, "scale": 0.66, "hp": 9, "speed": 60.0, "size": Vector2(56, 58), "tint": Color(1.0, 0.6, 0.3), "behavior": "charger", "dmg": 2, "kbr": 0.1},
 	"drill_brute": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.06, "hp": 48, "speed": 52.0, "size": Vector2(102, 112), "tint": Color(0.78, 0.65, 0.45), "behavior": "charger", "dmg": 3, "kbr": 0.75},
+	# 虚空要塞专属敌种(阶段10.5)
+	"void_eagle": {"sprite": "bird", "frames": 7, "fps": 10.0, "scale": 0.7, "hp": 11, "speed": 150.0, "size": Vector2(62, 54), "tint": Color(0.58, 0.8, 1.0), "behavior": "diver", "dmg": 2, "kbr": 0.15},
+	"void_wyvern": {"sprite": "bat", "frames": 4, "fps": 8.5, "scale": 1.0, "hp": 16, "speed": 92.0, "size": Vector2(82, 66), "tint": Color(0.72, 0.42, 1.0), "behavior": "teleflyer", "dmg": 2, "kbr": 0.25},
+	"storm_mage": {"sprite": "bird", "frames": 7, "fps": 8.3, "scale": 0.72, "hp": 14, "speed": 38.0, "size": Vector2(62, 64), "tint": Color(0.55, 0.7, 1.0), "behavior": "storm_mage", "dmg": 2, "kbr": 0.2},
 }
 
 const WALL := 40
@@ -103,6 +107,10 @@ func save_now() -> void:
 	Game.player_hp = player.health
 	Game.save_game()
 
+func reload_current_room_after_death() -> void:
+	var id := room_id
+	_enter_room.call_deferred(id, "")
+
 func _setup_boss_bar() -> void:
 	boss_bar = CanvasLayer.new()
 	boss_bar.set_script(load("res://scripts/boss_bar.gd"))
@@ -111,7 +119,7 @@ func _setup_boss_bar() -> void:
 func _spawn_boss(room: Dictionary, id: String) -> void:
 	var bd: Dictionary = room["boss"]
 	var b := CharacterBody2D.new()
-	b.set_script(load("res://scripts/boss.gd"))
+	b.set_script(load("res://scripts/void_dragon_boss.gd") if bd.get("mode", "") == "void_dragon" else load("res://scripts/boss.gd"))
 	b.boss_name = bd["name"]
 	b.sprite_name = bd["sprite"]
 	b.frame_count = bd.get("frames", 6)
@@ -173,6 +181,7 @@ func _process(delta: float) -> void:
 
 # ============================================================ 房间加载
 func _enter_room(id: String, from_room: String) -> void:
+	_record_room_clear()
 	room_id = id
 	var room: Dictionary = Rooms.ROOMS[id]
 	door_cd = 0.45
@@ -189,7 +198,10 @@ func _enter_room(id: String, from_room: String) -> void:
 	for dc in room.get("decor", []):
 		_make_decor(dc[0], dc[1], dc[2], dc[3] if dc.size() > 3 else 1.0)
 	for p in room.get("platforms", []):
-		_make_solid(p[0], p[1], p[2], p[3], true, tint)
+		if p.size() > 4 and p[4]:
+			_make_oneway(p[0], p[1], p[2], tint)
+		else:
+			_make_solid(p[0], p[1], p[2], p[3], true, tint)
 	# 内部迷宫墙 [x, top, w, h] (竖墙/隔墙, 非地面)
 	for wseg in room.get("walls", []):
 		_make_solid(wseg[0], wseg[1], wseg[2], wseg[3], false, tint)
@@ -207,6 +219,9 @@ func _enter_room(id: String, from_room: String) -> void:
 	# 热气流 [cx, cy, w, h, force]
 	for ud in room.get("updrafts", []):
 		_make_updraft(ud[0], ud[1], ud[2], ud[3], ud[4])
+	# 方向性虚空气流 [cx, cy, w, h, flow_x, flow_y]
+	for wd in room.get("winds", []):
+		_make_wind(wd[0], wd[1], wd[2], wd[3], Vector2(wd[4], wd[5]))
 	# 水域 [cx, cy, w, h, (flowx=0), (flowy=0)]
 	for wt in room.get("water", []):
 		_make_water(wt)
@@ -217,10 +232,15 @@ func _enter_room(id: String, from_room: String) -> void:
 	for rn in room.get("runes", []):
 		_make_rune(rn[0], rn[1])
 		_rune_total += 1
-	for e in room.get("enemies", []):
-		_spawn_enemy(e[0], e[1], e[2])
+	if not Game.is_room_cleared(id):
+		for e in room.get("enemies", []):
+			_spawn_enemy(e[0], e[1], e[2])
 	for it in room.get("items", []):
 		var iid: String = it[3] if it.size() > 3 else ""
+		if it[2] == "chest" and iid == "":
+			iid = "%s:chest:%d:%d" % [id, int(it[0]), int(it[1])]
+		if it[2] == "chest" and Game.is_session_chest_open(iid):
+			continue
 		var val := 3 if it[2] == "coin" else 1
 		Pickup.spawn(world, Vector2(it[0], it[1]), it[2], val, false, iid)
 	# 能力拾取物 [x, y, ability_id]
@@ -262,6 +282,16 @@ func _enter_room(id: String, from_room: String) -> void:
 	if hud.has_method("set_area"):
 		hud.set_area(room["name"])
 	_show_banner(room["name"])
+
+func _record_room_clear() -> void:
+	if room_id == "" or not is_instance_valid(world):
+		return
+	var living := 0
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(enemy) and not enemy.is_in_group("boss") and not enemy.get("dead"):
+			living += 1
+	if living == 0 and not Rooms.ROOMS.get(room_id, {}).get("enemies", []).is_empty():
+		Game.mark_room_cleared(room_id)
 
 func _spawn_for(room: Dictionary, from_room: String) -> Vector2:
 	var b = room["bounds"]
@@ -531,6 +561,13 @@ func _make_updraft(cx: float, cy: float, w: float, h: float, force: float) -> vo
 	if ud.has_method("setup"):
 		ud.setup(w, h, force)
 	world.add_child(ud)
+
+func _make_wind(cx: float, cy: float, w: float, h: float, flow: Vector2) -> void:
+	var wd := Area2D.new()
+	wd.set_script(load("res://scripts/updraft.gd"))
+	wd.position = Vector2(cx, cy)
+	wd.setup_flow(w, h, flow, "wind")
+	world.add_child(wd)
 
 func _make_hazard(x: float, top: float, w: float, h: float, dmg: int, kind: String) -> void:
 	var hz := Area2D.new()
@@ -840,7 +877,9 @@ func _build_parallax(theme: String) -> void:
 	pbg = ParallaxBackground.new()
 	add_child(pbg)
 	move_child(pbg, 0)
-	var base := "res://assets/bg/%s/" % theme
+	# 虚空区复用已有工厂层，再由紫青色瓦片/气流统一主题，避免引入未授权素材。
+	var bg_theme := "factory" if theme == "void" else theme
+	var base := "res://assets/bg/%s/" % bg_theme
 	_bg_layer(base + "sky.png", 0.08, 3.2, Vector2(-300, -340))
 	_bg_layer(base + "far.png", 0.28, 2.6, Vector2(0, -160))
 	_bg_layer(base + "near.png", 0.55, 2.6, Vector2(0, -10))
@@ -956,6 +995,9 @@ func _auto_screenshot() -> void:
 	var rid := OS.get_environment("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	if OS.get_environment("SHOT_BOSS_PHASE") == "2" and is_instance_valid(_boss):
+		await get_tree().process_frame
+		_boss.take_damage(int(_boss.max_hp / 2) + 1, Vector2.ZERO)
 	# 动作连拍(打击感验收): 在角色面前放假人, 自动打一套, 连存若干帧
 	if OS.get_environment("SHOT_MOTION") == "1":
 		await _motion_burst()
@@ -982,7 +1024,8 @@ func _auto_screenshot() -> void:
 		Game.coins = 500
 		if inv_panel and inv_panel.has_method("_toggle"):
 			inv_panel._toggle()
-	await get_tree().create_timer(1.6).timeout
+	var shot_wait := OS.get_environment("SHOT_WAIT").to_float()
+	await get_tree().create_timer(shot_wait if shot_wait > 0.0 else 1.6).timeout
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("res://_shot.png"))
 	await get_tree().create_timer(0.1).timeout

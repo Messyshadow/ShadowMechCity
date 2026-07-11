@@ -10,6 +10,7 @@ var item_data: Dictionary = {}   # gear 的装备数据
 var _t := 0.0
 var _spawn_y := 0.0
 var sprite: Sprite2D
+const MAGNET_RADIUS := 170.0
 
 const TEX := {
 	"coin": "res://assets/items/coin.png",
@@ -87,11 +88,12 @@ func _physics_process(delta: float) -> void:
 	global_position.y = _spawn_y + sin(_t * 4.0) * 4.0
 	sprite.rotation = sin(_t * 3.0) * 0.2
 	# 拾取吸附
-	if Game.skill_lv("magnet") > 0:
+	if kind in ["coin", "orb", "shard", "gear"]:
 		var pl := get_tree().get_first_node_in_group("player") as Node2D
 		if pl and is_instance_valid(pl):
 			var d := pl.global_position - global_position
-			if d.length() < 200.0:
+			var radius := MAGNET_RADIUS + Game.skill_lv("magnet") * 60.0
+			if d.length() < radius:
 				global_position += d.normalized() * 360.0 * delta
 				_spawn_y = global_position.y
 
@@ -148,6 +150,8 @@ func _on_body(body: Node) -> void:
 	queue_free()
 
 func _open_chest() -> void:
+	if item_id != "":
+		Game.open_session_chest(item_id)
 	# 宝箱: 喷出金币 + 经验 + 提示
 	var n := 6 + randi() % 6
 	for i in range(n):
