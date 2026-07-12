@@ -84,6 +84,7 @@ func _build() -> void:
 	anim.play("move")
 	add_child(anim)
 	_add_void_silhouette()
+	_add_theme_role_visual()
 
 	touch = Area2D.new()
 	touch.collision_layer = 0
@@ -119,6 +120,26 @@ func _add_void_silhouette() -> void:
 		for i in range(20):
 			var a := TAU * i / 20.0; pts.append(Vector2(cos(a) * 34.0, sin(a) * 12.0 - body_size.y - 12.0))
 		halo.points = pts; add_child(halo)
+
+func _add_theme_role_visual() -> void:
+	match enemy_name:
+		"soul_shield":
+			var shield := Polygon2D.new()
+			shield.polygon = PackedVector2Array([Vector2(-body_size.x*0.82,-body_size.y*0.92),Vector2(-body_size.x*0.32,-body_size.y*1.10),Vector2(-body_size.x*0.20,-body_size.y*0.18),Vector2(-body_size.x*0.72,4)])
+			shield.color = Color(0.22,0.48,0.82,0.88); shield.z_index = 2; add_child(shield)
+			var hub := Polygon2D.new(); hub.polygon = PackedVector2Array([Vector2(-52,-72),Vector2(-42,-82),Vector2(-32,-72),Vector2(-42,-62)]); hub.color=Color(0.72,0.92,1.0,0.95); hub.z_index=3; add_child(hub)
+		"soul_spear":
+			var spear := Line2D.new(); spear.width=7.0; spear.default_color=Color(0.92,0.28,0.62,0.92); spear.z_index=2
+			spear.points=PackedVector2Array([Vector2(-body_size.x*0.82,-body_size.y*0.94),Vector2(body_size.x*1.08,-body_size.y*0.40)]); add_child(spear)
+			var blade := Polygon2D.new(); blade.polygon=PackedVector2Array([Vector2(body_size.x*1.18,-body_size.y*0.37),Vector2(body_size.x*0.82,-body_size.y*0.55),Vector2(body_size.x*0.93,-body_size.y*0.26)]); blade.color=Color(1.0,0.50,0.82,0.94); blade.z_index=3; add_child(blade)
+		"soul_cannon":
+			var cannon := Polygon2D.new(); cannon.polygon=PackedVector2Array([Vector2(-body_size.x*0.58,-body_size.y*1.12),Vector2(body_size.x*0.62,-body_size.y*1.12),Vector2(body_size.x*0.82,-body_size.y*0.78),Vector2(-body_size.x*0.42,-body_size.y*0.70)]); cannon.color=Color(0.34,0.22,0.72,0.90); cannon.z_index=2; add_child(cannon)
+			var barrel := Line2D.new(); barrel.width=12.0; barrel.default_color=Color(0.62,0.40,1.0,0.95); barrel.points=PackedVector2Array([Vector2(8,-body_size.y),Vector2(body_size.x*1.06,-body_size.y)]); barrel.z_index=3; add_child(barrel)
+			var core := Polygon2D.new(); core.polygon=PackedVector2Array([Vector2(-10,-body_size.y-10),Vector2(0,-body_size.y-20),Vector2(10,-body_size.y-10),Vector2(0,-body_size.y)]); core.color=Color(0.82,0.68,1.0,0.98); core.z_index=4; add_child(core)
+		"storm_mage":
+			var cloak := Polygon2D.new(); cloak.polygon=PackedVector2Array([Vector2(-body_size.x*0.72,-body_size.y*0.70),Vector2(0,-body_size.y*1.18),Vector2(body_size.x*0.72,-body_size.y*0.70),Vector2(body_size.x*0.54,0),Vector2(-body_size.x*0.54,0)]); cloak.color=Color(0.20,0.24,0.65,0.54); cloak.z_index=-2; add_child(cloak)
+			var staff := Line2D.new(); staff.width=5.0; staff.default_color=Color(0.52,0.72,1.0,0.86); staff.points=PackedVector2Array([Vector2(body_size.x*0.48,-body_size.y*1.06),Vector2(body_size.x*0.72,2)]); add_child(staff)
+			var orb := Polygon2D.new(); orb.polygon=PackedVector2Array([Vector2(body_size.x*0.48-8,-body_size.y*1.10),Vector2(body_size.x*0.48,-body_size.y*1.20),Vector2(body_size.x*0.48+8,-body_size.y*1.10),Vector2(body_size.x*0.48,-body_size.y)]); orb.color=Color(0.52,0.78,1.0,0.92); add_child(orb)
 
 func _physics_process(delta: float) -> void:
 	_t += delta

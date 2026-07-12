@@ -3,6 +3,8 @@ extends Node2D
 
 const PLAYER_SCRIPT := preload("res://scripts/player.gd")
 const ENEMY_SCRIPT := preload("res://scripts/enemy.gd")
+const THEME_BACKDROP_SCRIPT := preload("res://scripts/theme_backdrop.gd")
+const DOWNWARD_PORTAL_VISUAL := preload("res://scripts/downward_portal_visual.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -36,16 +38,17 @@ const ENEMY_DEFS := {
 	"moltenslime": {"sprite": "slime", "frames": 6, "fps": 6.7, "scale": 0.66, "hp": 9, "speed": 60.0, "size": Vector2(56, 58), "tint": Color(1.0, 0.6, 0.3), "behavior": "charger", "dmg": 2, "kbr": 0.1},
 	"drill_brute": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.06, "hp": 48, "speed": 52.0, "size": Vector2(102, 112), "tint": Color(0.78, 0.65, 0.45), "behavior": "charger", "dmg": 3, "kbr": 0.75},
 	# 虚空要塞专属敌种(阶段10.5)
-	"void_eagle": {"sprite": "bird", "frames": 7, "fps": 10.0, "scale": 0.7, "hp": 11, "speed": 150.0, "size": Vector2(62, 54), "tint": Color(0.58, 0.8, 1.0), "behavior": "diver", "dmg": 2, "kbr": 0.15},
+	"void_eagle": {"sprite": "bat", "frames": 4, "fps": 9.0, "scale": 0.82, "hp": 11, "speed": 150.0, "size": Vector2(62, 54), "tint": Color(0.58, 0.8, 1.0), "behavior": "diver", "dmg": 2, "kbr": 0.15},
 	"void_wyvern": {"sprite": "bat", "frames": 4, "fps": 8.5, "scale": 1.0, "hp": 16, "speed": 92.0, "size": Vector2(82, 66), "tint": Color(0.72, 0.42, 1.0), "behavior": "teleflyer", "dmg": 2, "kbr": 0.25},
-	"storm_mage": {"sprite": "bird", "frames": 7, "fps": 8.3, "scale": 0.72, "hp": 14, "speed": 38.0, "size": Vector2(62, 64), "tint": Color(0.55, 0.7, 1.0), "behavior": "storm_mage", "dmg": 2, "kbr": 0.2},
+	"storm_mage": {"sprite": "jelly", "frames": 6, "fps": 7.2, "scale": 0.78, "hp": 14, "speed": 38.0, "size": Vector2(62, 64), "tint": Color(0.55, 0.7, 1.0), "behavior": "storm_mage", "dmg": 2, "kbr": 0.2},
 	# 暗影王城精英(阶段10.6)
 	"soul_shield": {"sprite": "golem", "frames": 6, "fps": 8.0, "scale": 0.98, "hp": 34, "speed": 42.0, "size": Vector2(92, 108), "tint": Color(0.5, 0.68, 0.9), "behavior": "charger", "dmg": 3, "kbr": 0.8},
 	"soul_spear": {"sprite": "beast", "frames": 6, "fps": 6.5, "scale": 0.82, "hp": 26, "speed": 92.0, "size": Vector2(66, 78), "tint": Color(0.82, 0.35, 0.65), "behavior": "charger", "dmg": 3, "kbr": 0.45},
-	"soul_cannon": {"sprite": "bird", "frames": 7, "fps": 8.3, "scale": 0.82, "hp": 24, "speed": 34.0, "size": Vector2(66, 70), "tint": Color(0.55, 0.4, 1.0), "behavior": "storm_mage", "dmg": 3, "kbr": 0.35},
+	"soul_cannon": {"sprite": "golem", "frames": 6, "fps": 8.0, "scale": 0.72, "hp": 24, "speed": 34.0, "size": Vector2(76, 88), "tint": Color(0.55, 0.4, 1.0), "behavior": "storm_mage", "dmg": 3, "kbr": 0.35},
 }
 
 const WALL := 40
+const DOWN_PORTAL_HALF_WIDTH := 90.0
 
 var world: Node2D
 var pbg: ParallaxBackground
@@ -214,6 +217,7 @@ func _enter_room(id: String, from_room: String) -> void:
 	for c in world.get_children():
 		c.queue_free()
 	_build_parallax(room["theme"])
+	_make_theme_backdrop(room)
 	var tint: Color = Rooms.THEME_TINT.get(room["theme"], Color.WHITE)
 	_build_geometry(room, tint)
 	_make_room_atmosphere(room)
@@ -246,7 +250,8 @@ func _enter_room(id: String, from_room: String) -> void:
 	for wd in room.get("winds", []):
 		_make_wind(wd[0], wd[1], wd[2], wd[3], Vector2(wd[4], wd[5]))
 	for shaft in room.get("shafts", []):
-		_make_shaft(shaft[0], shaft[1], shaft[2], shaft[3])
+		if shaft[3] >= 500:
+			_make_shaft(shaft[0], shaft[1], shaft[2], shaft[3])
 	# 水域 [cx, cy, w, h, (flowx=0), (flowy=0)]
 	for wt in room.get("water", []):
 		_make_water(wt)
@@ -328,7 +333,7 @@ func _spawn_for(room: Dictionary, from_room: String) -> Vector2:
 			match d["side"]:
 				"left":  return Vector2(b[0] + 90, b[3] - 30)
 				"right": return Vector2(b[2] - 90, b[3] - 30)
-				"down":  return Vector2(d["p"] + 110, b[3] - 30)   # 从下方上来, 站到洞口旁
+				"down":  return Vector2(d["p"] + DOWN_PORTAL_HALF_WIDTH + 55.0, b[3] - 30)   # 从下方上来, 站到井口旁
 				"up":    return Vector2(d["p"], b[1] + 90)          # 从上方落下
 	return room.get("start_spawn", Vector2((b[0] + b[2]) * 0.5, b[3] - 40))
 
@@ -349,7 +354,7 @@ func _build_geometry(room: Dictionary, tint: Color) -> void:
 	# 地面(底), 留下行门缺口 + 坑(pit/熔铁河)缺口
 	var ground_ranges: Array = []
 	for gx in down_xs:
-		ground_ranges.append([gx - 60.0, gx + 60.0])
+		ground_ranges.append([gx - DOWN_PORTAL_HALF_WIDTH, gx + DOWN_PORTAL_HALF_WIDTH])
 	for p in room.get("pits", []):
 		ground_ranges.append([p[0] - p[1] * 0.5, p[0] + p[1] * 0.5])
 	_build_ground_gaps(L - WALL, R + WALL, B, 200, ground_ranges, tint)
@@ -677,7 +682,7 @@ func _make_door(room: Dictionary, d: Dictionary) -> void:
 	match d["side"]:
 		"left":  pos = Vector2(b[0] + 12, (d["p"] + b[3]) * 0.5); size = Vector2(46, b[3] - d["p"])
 		"right": pos = Vector2(b[2] - 12, (d["p"] + b[3]) * 0.5); size = Vector2(46, b[3] - d["p"])
-		"down":  pos = Vector2(d["p"], b[3] + 36); size = Vector2(110, 60)
+		"down":  pos = Vector2(d["p"], b[3] + 36); size = Vector2(DOWN_PORTAL_HALF_WIDTH * 2.0, 60)
 		"up":    pos = Vector2(d["p"], b[1] + 16); size = Vector2(110, 60)
 	if d["side"] == "down":
 		_make_downward_portal(room, d)
@@ -840,139 +845,23 @@ func _play_shaft_transition(to_room: String) -> void:
 	Fx.screen_flash(get_tree(),Color(0.08,0.02,0.16,0.9));player.set_physics_process(true);camera.target=player;_enter_room(to_room,room_id)
 
 func _make_downward_portal(room: Dictionary, d: Dictionary) -> void:
-	# 王城的手工深井已经包含完整井壁与链条，不再叠加通用入口。
-	for shaft in room.get("shafts", []):
-		if absf(float(shaft[0]) - float(d["p"])) < float(shaft[2]) * 0.55:
-			return
-	var b = room["bounds"]
-	var root := Node2D.new()
-	# 入口与地面齐平：它是可掉落的维护井，不是竖在场景里的传送门。
-	root.position = Vector2(d["p"], b[3] - 8)
-	root.z_index = 2
-	var theme: String = room.get("theme", "city")
-	var rim_color: Color = {
-		"water": Color(0.20, 0.82, 0.93), "mine": Color(0.95, 0.40, 0.15),
-		"temple": Color(0.90, 0.72, 0.30), "factory": Color(1.0, 0.42, 0.16),
-		"void": Color(0.70, 0.38, 1.0), "castle": Color(0.65, 0.48, 1.0)
-	}.get(theme, Color(0.50, 0.85, 1.0))
-	# 内井向下收束；屏幕底部被 HUD 遮住时，井沿与侧壁仍能清楚说明落点。
-	var abyss := Polygon2D.new()
-	abyss.polygon = PackedVector2Array([Vector2(-58, 0), Vector2(58, 0), Vector2(42, 210), Vector2(-42, 210)])
-	abyss.color = Color(0.006, 0.012, 0.025, 0.96)
-	root.add_child(abyss)
-	var inner := Polygon2D.new()
-	inner.polygon = PackedVector2Array([Vector2(-38, 7), Vector2(38, 7), Vector2(27, 176), Vector2(-27, 176)])
-	inner.color = Color(rim_color.r * 0.10, rim_color.g * 0.13, rim_color.b * 0.18, 0.85)
-	root.add_child(inner)
-	_make_portal_maintenance_details(root, theme, rim_color)
-	for x in [-28.0, 28.0]:
-		var cable := Line2D.new()
-		cable.width = 3.0
-		cable.default_color = Color(0.09, 0.12, 0.16, 0.95)
-		cable.points = PackedVector2Array([Vector2(x, 6), Vector2(x * 0.70, 178)])
-		root.add_child(cable)
-	var sign := Label.new()
-	sign.text = "↓"
-	sign.position = Vector2(66, -34)
-	sign.size = Vector2(22, 24)
-	sign.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sign.add_theme_font_size_override("font_size", 19)
-	sign.add_theme_color_override("font_color", rim_color.lightened(0.25))
-	sign.add_theme_color_override("font_outline_color", Color(0.005, 0.01, 0.02))
-	sign.add_theme_constant_override("outline_size", 4)
-	root.add_child(sign)
-	var mist := CPUParticles2D.new()
-	mist.position = Vector2(0, 18)
-	mist.amount = 18
-	mist.lifetime = 1.8
-	mist.direction = Vector2(0, -1)
-	mist.spread = 24.0
-	mist.initial_velocity_min = 10.0
-	mist.initial_velocity_max = 28.0
-	mist.color = Color(rim_color.r, rim_color.g, rim_color.b, 0.34)
-	root.add_child(mist)
-	world.add_child(root)
-
-func _make_portal_maintenance_details(root: Node2D, theme: String, rim_color: Color) -> void:
-	# 两块嵌入地面的铆钉井沿，中央保持敞开；比单纯发光轮廓更接近可使用的工业结构。
-	var hatch_outline := PackedVector2Array([Vector2(-66,4),Vector2(-51,-13),Vector2(51,-13),Vector2(66,4),Vector2(49,21),Vector2(-49,21),Vector2(-66,4)])
-	var hatch_outer := Line2D.new()
-	hatch_outer.width = 12.0
-	hatch_outer.default_color = Color(0.055,0.075,0.095,0.98)
-	hatch_outer.points = hatch_outline
-	root.add_child(hatch_outer)
-	var hatch_inner := Line2D.new()
-	hatch_inner.width = 3.0
-	hatch_inner.default_color = rim_color.darkened(0.12)
-	hatch_inner.points = hatch_outline
-	root.add_child(hatch_inner)
-	for side in [-1.0, 1.0]:
-		var plate := Polygon2D.new()
-		plate.polygon = PackedVector2Array([Vector2(side * 92, -4), Vector2(side * 61, -4), Vector2(side * 54, 18), Vector2(side * 84, 26)])
-		plate.color = Color(0.10, 0.14, 0.18, 0.98)
-		root.add_child(plate)
-		_make_portal_solid_panel(root, Vector2(side * 75, 10), Vector2(28, 34), rim_color.darkened(0.45))
-		var rim := Line2D.new()
-		rim.width = 7.0
-		rim.default_color = rim_color.darkened(0.30)
-		rim.points = PackedVector2Array([Vector2(side * 94, 7), Vector2(side * 68, -7), Vector2(side * 57, 12), Vector2(side * 50, 160)])
-		root.add_child(rim)
-		var rail := Line2D.new()
-		rail.width = 4.0
-		rail.default_color = rim_color.lightened(0.06)
-		rail.points = PackedVector2Array([Vector2(side * 96, 8), Vector2(side * 96, -48), Vector2(side * 66, -48)])
-		root.add_child(rail)
-		for y in [-34.0, -14.0]:
-			var bolt := Polygon2D.new()
-			bolt.polygon = PackedVector2Array([Vector2(side * 77 - 4, y), Vector2(side * 77, y - 4), Vector2(side * 77 + 4, y), Vector2(side * 77, y + 4)])
-			bolt.color = rim_color.lightened(0.20)
-			root.add_child(bolt)
-	# 井口内侧的半开防坠栅：它从左边折起，清楚地暗示此处是向下路径而不是传送点。
-	for x in [-43.0, -29.0, -15.0]:
-		var grate := Line2D.new()
-		grate.width = 3.0
-		grate.default_color = rim_color.darkened(0.42)
-		grate.points = PackedVector2Array([Vector2(x, -2), Vector2(x + 17, 40)])
-		root.add_child(grate)
-	var side_detail := Line2D.new()
-	side_detail.width = 6.0
-	side_detail.default_color = rim_color.darkened(0.18)
-	if theme == "water":
-		side_detail.points = PackedVector2Array([Vector2(-180, -54), Vector2(-116, -54), Vector2(-104, -30), Vector2(-104, 12)])
-		var valve := Polygon2D.new()
-		valve.polygon = PackedVector2Array([Vector2(112, -44), Vector2(128, -52), Vector2(144, -44), Vector2(136, -28), Vector2(120, -28)])
-		valve.color = rim_color.darkened(0.15)
-		root.add_child(valve)
-	elif theme == "mine":
-		side_detail.points = PackedVector2Array([Vector2(-132, 14), Vector2(-110, -70), Vector2(-86, 14), Vector2(-64, -70), Vector2(-42, 14)])
-		var pulley := Line2D.new()
-		pulley.width = 5.0
-		pulley.default_color = Color(0.72, 0.37, 0.16)
-		pulley.points = PackedVector2Array([Vector2(118, -64), Vector2(142, -38), Vector2(118, -12), Vector2(94, -38), Vector2(118, -64)])
-		root.add_child(pulley)
-	else:
-		side_detail.points = PackedVector2Array([Vector2(-150, -40), Vector2(-108, -40), Vector2(-94, 12)])
-	root.add_child(side_detail)
-
-func _make_portal_solid_panel(root: Node2D, pos: Vector2, size: Vector2, tint: Color) -> void:
-	var panel := Sprite2D.new()
-	panel.texture = load("res://assets/tiles/metal_wall.png")
-	panel.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	panel.region_enabled = true
-	panel.region_rect = Rect2(0, 0, size.x, size.y)
-	panel.position = pos
-	panel.modulate = tint
-	root.add_child(panel)
-	var cap := Sprite2D.new()
-	cap.texture = load("res://assets/tiles/metal_top.png")
-	cap.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
-	cap.region_enabled = true
-	cap.region_rect = Rect2(0, 0, size.x + 8, 12)
-	cap.position = pos + Vector2(0, -size.y * 0.5 + 4)
-	cap.modulate = tint.lightened(0.28)
-	root.add_child(cap)
-
-# ============================================================ 存档点
+	var portal_bounds = room["bounds"]
+	var portal_theme: String = room.get("theme", "city")
+	var portal_visual := Node2D.new()
+	portal_visual.set_script(DOWNWARD_PORTAL_VISUAL)
+	portal_visual.position = Vector2(d["p"], portal_bounds[3] - 4)
+	portal_visual.setup(portal_theme, DOWN_PORTAL_HALF_WIDTH * 2.0, 250.0)
+	var portal_mist := CPUParticles2D.new()
+	portal_mist.position = Vector2(0, 22)
+	portal_mist.amount = 22
+	portal_mist.lifetime = 1.7
+	portal_mist.direction = Vector2(0, -1)
+	portal_mist.spread = 22.0
+	portal_mist.initial_velocity_min = 12.0
+	portal_mist.initial_velocity_max = 34.0
+	portal_mist.color = Color(0.42,0.50,0.82,0.28)
+	portal_visual.add_child(portal_mist)
+	world.add_child(portal_visual)
 func _make_save_point(pos: Vector2) -> void:
 	var area := Area2D.new()
 	area.collision_layer = 0
@@ -1088,12 +977,22 @@ func _setup_camera() -> void:
 	em.color = Color(1.0, 0.6, 0.3, 0.25)
 	camera.add_child(em)
 
+func _make_theme_backdrop(room: Dictionary) -> void:
+	var theme: String = room.get("theme", "")
+	if theme != "castle" and theme != "void": return
+	var backdrop := Node2D.new()
+	backdrop.set_script(THEME_BACKDROP_SCRIPT)
+	backdrop.setup(theme, room["bounds"])
+	world.add_child(backdrop)
+
 func _build_parallax(theme: String) -> void:
 	if pbg and is_instance_valid(pbg):
 		pbg.queue_free()
 	pbg = ParallaxBackground.new()
+	pbg.layer = -20
 	add_child(pbg)
 	move_child(pbg, 0)
+	_bg_fill_layer(theme)
 	# 虚空区复用已有工厂层，再由紫青色瓦片/气流统一主题，避免引入未授权素材。
 	var bg_theme := "temple" if theme == "castle" else ("factory" if theme == "void" else theme)
 	var base := "res://assets/bg/%s/" % bg_theme
@@ -1101,6 +1000,21 @@ func _build_parallax(theme: String) -> void:
 	_bg_layer(base + "far.png", 0.28, 2.6, Vector2(0, -160))
 	_bg_layer(base + "near.png", 0.55, 2.6, Vector2(0, -10))
 	_add_theme_atmosphere(theme)
+
+func _bg_fill_layer(theme: String) -> void:
+	var colors := {
+		"city": Color("09121b"), "factory": Color("190b08"), "mine": Color("130b08"),
+		"water": Color("061a1d"), "temple": Color("0d0918"), "void": Color("05091c"),
+		"castle": Color("0b0719")
+	}
+	var fill_color: Color = colors.get(theme, Color("090d16"))
+	var layer := ParallaxLayer.new()
+	layer.motion_scale = Vector2.ZERO
+	var fill := Polygon2D.new()
+	fill.polygon = PackedVector2Array([Vector2(-2200,-1400),Vector2(5200,-1400),Vector2(5200,2600),Vector2(-2200,2600)])
+	fill.color = fill_color
+	layer.add_child(fill)
+	pbg.add_child(layer)
 
 func _add_theme_atmosphere(theme: String) -> void:
 	if theme != "water" and theme != "mine": return
