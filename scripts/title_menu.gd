@@ -12,14 +12,36 @@ func _ready() -> void:
 	settings.set_script(load("res://scripts/settings_panel.gd"))
 	add_child(settings)
 	if "--shot" in OS.get_cmdline_args() or "--shot" in OS.get_cmdline_user_args():
-		_auto_shot()
+		# 发布包从标题场景启动；房间 QA 必须先进入主场景，不能在只读 PCK 上截标题页后退出。
+		if _qa_option("SHOT_ROOM") != "":
+			get_tree().change_scene_to_file.call_deferred("res://main.tscn")
+		else:
+			_auto_shot()
 
 func _auto_shot() -> void:
 	await get_tree().create_timer(1.0).timeout
 	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("res://_shot.png"))
+	var shot_output := _qa_option("SHOT_OUTPUT")
+	if shot_output == "":
+		shot_output = ProjectSettings.globalize_path("res://_shot.png")
+	var save_error := get_viewport().get_texture().get_image().save_png(shot_output)
+	if save_error != OK:
+		push_error("Failed to save title QA screenshot to %s: %s" % [shot_output, error_string(save_error)])
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
+
+func _qa_option(env_name: String) -> String:
+	var value := OS.get_environment(env_name)
+	if value != "":
+		return value
+	var prefix := "--%s=" % env_name.to_lower().replace("_", "-")
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with(prefix):
+			return arg.trim_prefix(prefix)
+	for arg in OS.get_cmdline_args():
+		if arg.begins_with(prefix):
+			return arg.trim_prefix(prefix)
+	return ""
 
 func _build_bg() -> void:
 	var sky := TextureRect.new()

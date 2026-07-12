@@ -55,7 +55,49 @@ func _draw() -> void:
 		draw_line(Vector2(side*(half+25),18),Vector2(side*(half+25),-64),rim.darkened(0.24),7,true)
 		draw_line(Vector2(side*(half+25),-64),Vector2(side*(half-42),-64),rim.darkened(0.24),7,true)
 		draw_circle(Vector2(side*(half+25),-65),7,rim.lightened(0.18))
+	_draw_lintel(half)
+	_draw_support_braces(half)
+	_draw_guide_lamps(half)
+	_draw_landing_cues(half)
 	_draw_theme_detail(half)
+
+func _draw_lintel(half: float) -> void:
+	# 厚门楣把洞口读成嵌入地面的机械竖井，而不是一圈发光线。
+	var beam := Rect2(-half - 34.0, -96.0, width + 68.0, 24.0)
+	draw_rect(beam, Color(0.055, 0.07, 0.095, 1.0), true)
+	draw_rect(beam, rim.darkened(0.38), false, 5.0)
+	draw_line(Vector2(-half - 20.0, -82.0), Vector2(half + 20.0, -82.0), rim.lightened(0.08), 3.0, true)
+	for x in [-half - 18.0, half + 18.0]:
+		draw_circle(Vector2(x, -84.0), 5.0, Color(0.38, 0.44, 0.50, 1.0))
+
+func _draw_support_braces(half: float) -> void:
+	for side in [-1.0, 1.0]:
+		var outer: float = side * (half + 30.0)
+		var inner: float = side * (half - 38.0)
+		draw_line(Vector2(outer, -74.0), Vector2(inner, -10.0), Color(0.12, 0.15, 0.20, 1.0), 13.0, true)
+		draw_line(Vector2(outer, -74.0), Vector2(inner, -10.0), rim.darkened(0.30), 3.0, true)
+
+func _draw_guide_lamps(half: float) -> void:
+	for side in [-1.0, 1.0]:
+		var p: Vector2 = Vector2(side * (half + 50.0), -48.0)
+		draw_circle(p, 14.0, Color(rim.r, rim.g, rim.b, 0.12))
+		draw_circle(p, 7.0, rim.lightened(0.28))
+		draw_circle(p, 3.0, Color(0.92, 0.98, 1.0, 1.0))
+	# 三枚向下灯标明确交互方向。
+	for y in [-58.0, -45.0, -32.0]:
+		var spread: float = (y + 58.0) * 0.38
+		draw_line(Vector2(-spread, y), Vector2(0.0, y + 8.0), rim, 3.0, true)
+		draw_line(Vector2(spread, y), Vector2(0.0, y + 8.0), rim, 3.0, true)
+
+func _draw_landing_cues(half: float) -> void:
+	# 井口两侧的防滑落脚板与铆钉让玩家看清安全站位。
+	for side in [-1.0, 1.0]:
+		var start: float = side * (half + 4.0)
+		var finish: float = side * (half + 82.0)
+		draw_line(Vector2(start, 5.0), Vector2(finish, 5.0), Color(0.10, 0.13, 0.17, 1.0), 18.0, true)
+		draw_line(Vector2(start, 0.0), Vector2(finish, 0.0), rim.darkened(0.16), 4.0, true)
+		for offset in [20.0, 44.0, 68.0]:
+			draw_circle(Vector2(side * (half + offset), 4.0), 2.5, Color(0.55, 0.60, 0.65, 1.0))
 
 func _draw_theme_detail(half: float) -> void:
 	match theme:

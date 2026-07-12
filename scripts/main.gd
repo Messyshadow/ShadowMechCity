@@ -1168,7 +1168,7 @@ func play_sfx(key: String, db: float = 0.0) -> void:
 			p.queue_free())
 
 func _auto_screenshot() -> void:
-	var rid := OS.get_environment("SHOT_ROOM")
+	var rid := _qa_option("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
 	var shot_phase := OS.get_environment("SHOT_BOSS_PHASE").to_int()
@@ -1182,14 +1182,14 @@ func _auto_screenshot() -> void:
 		await _motion_burst()
 		return
 	# 镜头取景: SHOT_AT="x,y" 把镜头钉在指定点(脱离跟随), 用于看房间任意区域
-	var cam_at := OS.get_environment("SHOT_AT")
+	var cam_at := _qa_option("SHOT_AT")
 	if cam_at != "" and is_instance_valid(camera):
 		var parts := cam_at.split(",")
 		if parts.size() == 2:
 			camera.target = null
 			camera.global_position = Vector2(parts[0].to_float(), parts[1].to_float())
 	# SHOT_ZOOM<1 看更广, >1 拉近(默认1)
-	var cam_zoom := OS.get_environment("SHOT_ZOOM")
+	var cam_zoom := _qa_option("SHOT_ZOOM")
 	if cam_zoom != "" and is_instance_valid(camera):
 		var z := cam_zoom.to_float()
 		if z > 0.0:
@@ -1208,12 +1208,30 @@ func _auto_screenshot() -> void:
 	if OS.get_environment("SHOT_END") == "1" and is_instance_valid(_boss):
 		await get_tree().process_frame
 		_boss.take_damage(_boss.max_hp + 1, Vector2.ZERO)
-	var shot_wait := OS.get_environment("SHOT_WAIT").to_float()
+	var shot_wait := _qa_option("SHOT_WAIT").to_float()
 	await get_tree().create_timer(shot_wait if shot_wait > 0.0 else 1.6).timeout
 	await RenderingServer.frame_post_draw
-	get_viewport().get_texture().get_image().save_png(ProjectSettings.globalize_path("res://_shot.png"))
+	var shot_output := _qa_option("SHOT_OUTPUT")
+	if shot_output == "":
+		shot_output = ProjectSettings.globalize_path("res://_shot.png")
+	var save_error := get_viewport().get_texture().get_image().save_png(shot_output)
+	if save_error != OK:
+		push_error("Failed to save QA screenshot to %s: %s" % [shot_output, error_string(save_error)])
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
+
+func _qa_option(env_name: String) -> String:
+	var value := OS.get_environment(env_name)
+	if value != "":
+		return value
+	var prefix := "--%s=" % env_name.to_lower().replace("_", "-")
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with(prefix):
+			return arg.trim_prefix(prefix)
+	for arg in OS.get_cmdline_args():
+		if arg.begins_with(prefix):
+			return arg.trim_prefix(prefix)
+	return ""
 
 # 动作连拍: 角色面前放站桩假人, 触发一次攻击, 连存若干帧供打击感验收
 # 用法: SHOT_MOTION=1 (可选 SHOT_ROOM=<房间> / SHOT_ENEMY=<敌人type>) ... --shot
