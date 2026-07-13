@@ -28,6 +28,7 @@ const MAX_AIR_JUMPS := 1           # 二段跳次数
 const AIR_JUMP_MULT := 1.08        # 二段跳比一段更高(更容易够到空中敌)
 
 const WALL_SLIDE_SPEED := 80.0     # 墙滑更慢, 留出反应时间
+const SHAFT_FALL_SPEED := 230.0    # 可操作竖井：让镜头跟得上并保留约 2.5 秒下降过程
 const CLIMB_SPEED := 150.0         # 攀墙速度(需能力)
 const GLIDE_FALL_SPEED := 95.0     # 滑翔下落速度(需能力)
 # 水域(10.2): 基础游泳人人可用; 水下推进器(aqua)= 快速全向游动, 可顶住水流闸门
@@ -105,6 +106,8 @@ var slash_frames: SpriteFrames
 
 # 武器
 var weapon_index := 0
+var _relic_hit_charge := 0
+var shaft_mode := false
 var weapon: Dictionary = Weapons.get_weapon(0)
 var attack_up := false
 var fx_frames := {}      # 各武器特效帧
@@ -203,7 +206,7 @@ func _build_nodes() -> void:
 
 func _physics_process(delta: float) -> void:
 	# 掉出世界 -> 死亡重生
-	if state != S.DEAD and global_position.y > KILL_Y:
+	if state != S.DEAD and not shaft_mode and global_position.y > KILL_Y:
 		_die()
 		return
 
@@ -346,6 +349,8 @@ func _do_normal(delta: float) -> void:
 			velocity.y = minf(velocity.y, GLIDE_FALL_SPEED)
 			if randf() < 0.25:
 				Fx.dust(get_parent(), global_position + Vector2(0, 14), 0.0)
+	if shaft_mode and velocity.y > SHAFT_FALL_SPEED:
+		velocity.y = SHAFT_FALL_SPEED
 
 	# 跳跃判定(水中用跳键划水, 不触发跳)
 	if jump_buffer > 0.0 and not in_water:
@@ -370,6 +375,9 @@ func _do_normal(delta: float) -> void:
 		_squash(Vector2(1.25, 0.75))
 		_play_sfx("land", -6.0)
 	_was_in_air = not on_floor
+	# 竖井中保留左右移动、墙滑、墙跳和滑翔；屏蔽战斗/冲刺/切换以防越界。
+	if shaft_mode:
+		return
 
 	# 切换武器
 	if Input.is_action_just_pressed("switch"):
@@ -811,7 +819,7 @@ func _dive_land() -> void:
 
 # ------------------------------------------------------------- 武器 / 攻击
 func _switch_weapon() -> void:
-	weapon_index = (weapon_index + 1) % Weapons.LIST.size()
+	weapon_index = _next_unlocked_weapon(weapon_index)
 	weapon = Weapons.get_weapon(weapon_index)
 	Game.weapon_index = weapon_index
 	_apply_weapon()
@@ -819,6 +827,12 @@ func _switch_weapon() -> void:
 	Fx.weapon_switch(get_parent(), global_position + Vector2(0, -34), weapon["color"], weapon["id"])
 	Fx.popup(get_parent(), global_position + Vector2(0, -86), "▶ " + weapon["name"], weapon["color"])
 	_play_sfx("ui", -4.0)
+
+func _next_unlocked_weapon(from_index: int) -> int:
+	for offset in range(1, Weapons.LIST.size() + 1):
+		var candidate := (from_index + offset) % Weapons.LIST.size()
+		if Game.is_weapon_unlocked(Weapons.LIST[candidate]["id"]): return candidate
+	return 0
 
 func _apply_weapon() -> void:
 	if weapon_sprite:
@@ -963,12 +977,21 @@ func _land_hit(enemy: Node2D) -> void:
 	if Game.skill_lv("ultimate") > 0:
 		dmg += 1
 	# 暴击 (技能 + 装备)
-	var is_crit := randf() < (0.12 * Game.skill_lv("crit") + Game.equip_bonus("crit"))
+	var is_crit := randf() < (0.12 * Game.skill_lv("crit") + Game.equip_bonus("crit") + float(weapon.get("crit_bonus", 0.0)))
 	if is_crit:
 		dmg *= 2
 	var kb := Vector2(facing * (240.0 if not is_finisher else 440.0), -120.0)
+	var was_alive := not bool(enemy.get("dead"))
 	if enemy.has_method("take_damage"):
 		enemy.take_damage(dmg, kb)
+	match weapon.get("trait", ""):
+		"rune_wave":
+			_relic_hit_charge += 1
+			if _relic_hit_charge >= 3: _relic_hit_charge = 0; _release_rune_wave()
+		"void_harvest":
+			if was_alive and bool(enemy.get("dead")): _heal_void_harvest()
+		"corrosion":
+			if enemy.has_method("apply_corrosion"): enemy.apply_corrosion(4.0, 1)
 	var hit_pos: Vector2 = (global_position + enemy.global_position) * 0.5
 	Fx.hit_spark(get_parent(), hit_pos)
 	if is_crit:
@@ -992,6 +1015,19 @@ func _land_hit(enemy: Node2D) -> void:
 	# 命中回技力 + 攒怒气
 	gain_mp(MP_ON_HIT)
 	gain_rage(RAGE_ON_HIT)
+
+func _release_rune_wave() -> void:
+	var proj := Area2D.new(); proj.set_script(PROJECTILE_SCRIPT)
+	proj.position = global_position + Vector2(facing * 50, -38); get_parent().add_child(proj)
+	if proj.has_method("setup"):
+		proj.setup(fx_frames["bolt2"], float(facing), int(weapon["damage"]), 1.35, Color(1.0, 0.78, 0.25))
+		proj.speed = 720.0; proj.life = 1.5; proj.pierce = 4
+	Fx.screen_flash(get_tree(), Color(1.0, 0.72, 0.18, 0.12))
+
+func _heal_void_harvest() -> void:
+	if health >= max_hp(): return
+	health = mini(health + 1, max_hp()); health_changed.emit(health, max_hp())
+	Fx.popup(get_parent(), global_position + Vector2(0, -80), "虚空汲取 +1", Color(0.72, 0.4, 1.0))
 
 # ------------------------------------------------------------- 受伤/死亡
 func take_damage(amount: int, from_pos: Vector2) -> void:

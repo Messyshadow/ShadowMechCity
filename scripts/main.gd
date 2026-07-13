@@ -5,6 +5,7 @@ const PLAYER_SCRIPT := preload("res://scripts/player.gd")
 const ENEMY_SCRIPT := preload("res://scripts/enemy.gd")
 const THEME_BACKDROP_SCRIPT := preload("res://scripts/theme_backdrop.gd")
 const DOWNWARD_PORTAL_VISUAL := preload("res://scripts/downward_portal_visual.gd")
+const SHAFT_TRANSITION_SCRIPT := preload("res://scripts/shaft_transition.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -64,6 +65,7 @@ var _door_hint: Node = null
 var boss_bar: CanvasLayer
 var _boss: Node = null
 var inv_panel: CanvasLayer
+var map_panel: Control
 var _bounds: Array = [0, 0, 1400, 560]   # 当前房间边界(用于攀墙越界保护)
 var _rune_total := 0                      # 当前房间符文板总数
 var _rune_lit := 0                        # 已点亮数(全亮→开符文封门)
@@ -184,9 +186,16 @@ func _on_boss_defeated(id: String) -> void:
 	# 掉落宝箱 + 传奇装备
 	Pickup.spawn(world, Vector2(player.global_position.x + 80, player.global_position.y - 20), "chest", 1)
 	Pickup.spawn_gear(world, Vector2(player.global_position.x - 80, player.global_position.y - 20), ItemsData.generate(3))
+	_spawn_room_weapon_rewards(Rooms.ROOMS[id], id, true)
 	save_now()
 	if id == "castle_throne":
 		_show_ending()
+
+func _spawn_room_weapon_rewards(room: Dictionary, id: String, boss_just_defeated: bool) -> void:
+	if room.has("boss") and not boss_just_defeated and not Game.has_item("boss_" + id): return
+	for reward in room.get("weapons", []):
+		if not Game.is_weapon_unlocked(reward[2]):
+			Pickup.spawn_weapon(world, Vector2(reward[0], reward[1]), reward[2])
 
 func _show_ending() -> void:
 	var cl := CanvasLayer.new(); cl.layer = 80
@@ -269,17 +278,19 @@ func _enter_room(id: String, from_room: String) -> void:
 		var iid: String = it[3] if it.size() > 3 else ""
 		if it[2] == "chest" and iid == "":
 			iid = "%s:chest:%d:%d" % [id, int(it[0]), int(it[1])]
-		if it[2] == "chest" and Game.is_session_chest_open(iid):
+		if it[2] == "chest" and (Game.is_session_chest_open(iid) or Game.is_chest_collected(iid)):
 			continue
 		var val := 3 if it[2] == "coin" else 1
 		Pickup.spawn(world, Vector2(it[0], it[1]), it[2], val, false, iid)
 	# 能力拾取物 [x, y, ability_id]
 	for ab in room.get("abilities", []):
 		Pickup.spawn_ability(world, Vector2(ab[0], ab[1]), ab[2])
+	_spawn_room_weapon_rewards(room, id, false)
 	# 隐藏收集物(生命碎片等) [x, y, kind, secret_id]: 已收集则不再刷出
 	for sc in room.get("secrets", []):
 		if not Game.is_collected(sc[3]):
 			Pickup.spawn(world, Vector2(sc[0], sc[1]), sc[2], 1, false, sc[3])
+
 	# 冲刺门 [x, top, w, h]  (冲刺相位穿越)
 	for g in room.get("gates", []):
 		_make_dash_gate(g[0], g[1], g[2], g[3])
@@ -687,6 +698,7 @@ func _make_door(room: Dictionary, d: Dictionary) -> void:
 	if d["side"] == "down":
 		_make_downward_portal(room, d)
 	var locked: String = d.get("locked", "")
+	var is_hidden: bool = d.get("hidden", false)
 	var tag := "%s>%s" % [room_id, d["to"]]
 	var is_locked := locked != "" and not Game.is_door_unlocked(tag)
 
@@ -703,7 +715,7 @@ func _make_door(room: Dictionary, d: Dictionary) -> void:
 	var glow := Line2D.new()
 	glow.width = 5.0
 	glow.closed = true
-	glow.default_color = Color(1.0, 0.5, 0.3) if is_locked else Color(0.5, 0.95, 1.0)
+	glow.default_color = Color(1.0, 0.5, 0.3) if is_locked else (Color(0.72, 0.38, 1.0, 0.72) if is_hidden else Color(0.5, 0.95, 1.0))
 	var pts := PackedVector2Array()
 	var rw: float = size.x * 0.5 + 6
 	var rh: float = min(size.y * 0.5, 70.0)
@@ -715,6 +727,15 @@ func _make_door(room: Dictionary, d: Dictionary) -> void:
 	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	glow.material = mat
 	area.add_child(glow)
+	if is_hidden:
+		var echo := Label.new()
+		echo.text = "◆ 隐藏回响"
+		echo.position = Vector2(-72, -minf(size.y * 0.5, 70.0) - 34)
+		echo.add_theme_font_size_override("font_size", 16)
+		echo.add_theme_color_override("font_color", Color(0.78, 0.56, 1.0, 0.82))
+		echo.add_theme_color_override("font_outline_color", Color(0.02, 0.0, 0.05))
+		echo.add_theme_constant_override("outline_size", 5)
+		area.add_child(echo)
 	var tw := glow.create_tween().set_loops()
 	tw.tween_property(glow, "modulate:a", 0.4, 0.7)
 	tw.tween_property(glow, "modulate:a", 1.0, 0.7)
@@ -806,7 +827,8 @@ func _on_door(body: Node, d: Dictionary, tag: String, locked: String) -> void:
 		var missing: Array[String] = []
 		for ability in required:
 			if ability != "dash" and not Game.has_ability(ability): missing.append(Game.ABILITY_NAME.get(ability, ability))
-		Fx.popup(world, player.global_position + Vector2(0,-95), "终章封印缺少: " + " / ".join(missing), Color(0.75,0.55,1))
+		var gate_name := "隐藏回响需要: " if d.get("hidden", false) else "终章封印缺少: "
+		Fx.popup(world, player.global_position + Vector2(0,-95), gate_name + " / ".join(missing), Color(0.75,0.55,1))
 		door_cd=0.8; return
 	if locked != "" and not Game.is_door_unlocked(tag):
 		if Game.has_item(locked):
@@ -838,11 +860,30 @@ func _has_required_abilities(required: Array) -> bool:
 	return true
 
 func _play_shaft_transition(to_room: String) -> void:
-	door_cd=2.0; player.velocity=Vector2.ZERO; player.set_physics_process(false); camera.target=null
-	var start:=player.global_position
-	var tw:=create_tween();tw.tween_property(player,"global_position",start+Vector2(0,170),0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN);tw.parallel().tween_property(camera,"global_position",camera.global_position+Vector2(0,140),0.42)
-	await tw.finished
-	Fx.screen_flash(get_tree(),Color(0.08,0.02,0.16,0.9));player.set_physics_process(true);camera.target=player;_enter_room(to_room,room_id)
+	door_cd = 99.0
+	var from_room := room_id
+	var room: Dictionary = Rooms.ROOMS[room_id]
+	var floor_y: float = float(room["bounds"][3])
+	var shaft := Node2D.new()
+	shaft.set_script(SHAFT_TRANSITION_SCRIPT)
+	shaft.global_position = Vector2(player.global_position.x, floor_y)
+	world.add_child(shaft)
+	shaft.setup(room.get("theme", "city"), player)
+	player.shaft_mode = true
+	player.z_index = 10
+	player.state = 0
+	player.velocity = Vector2(0.0, 90.0)
+	player.global_position = Vector2(shaft.global_position.x, floor_y + 52.0)
+	camera.target = player
+	if camera.has_method("begin_shaft"):
+		camera.begin_shaft(floor_y + shaft.SHAFT_DEPTH)
+	await shaft.finished
+	player.shaft_mode = false
+	player.z_index = 0
+	if camera.has_method("end_shaft"):
+		camera.end_shaft()
+	Fx.screen_flash(get_tree(), Color(0.08, 0.02, 0.16, 0.72))
+	_enter_room(to_room, from_room)
 
 func _make_downward_portal(room: Dictionary, d: Dictionary) -> void:
 	var portal_bounds = room["bounds"]
@@ -1111,6 +1152,7 @@ func _setup_map_panel() -> void:
 	mp.set_anchors_preset(Control.PRESET_FULL_RECT)
 	mp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	mp.set_script(load("res://scripts/map_panel.gd"))
+	map_panel = mp
 	cl.add_child(mp)
 	add_child(cl)
 	# 背包面板
@@ -1171,6 +1213,17 @@ func _auto_screenshot() -> void:
 	var rid := _qa_option("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	if _qa_option("SHOT_COMPLETION") == "1":
+		for id in ["hub","mine","factory_entry","void_core","secret_void_observatory"]: Game.visited[id] = true
+		Game.items["boss_mine_boss"] = true
+		Game.permanent_chests["secret_chest_hub"] = true; Game.permanent_chests["secret_chest_void"] = true
+		Game.unlock_weapon("relic_blade")
+		for sid in ["heart_hub","memory_hub_archive","memory_void_observatory"]: Game.collected[sid] = true
+		Game.current_room = room_id
+		map_panel.open = true; map_panel.queue_redraw()
+	if _qa_option("SHOT_SHAFT") == "1":
+		await _shaft_capture_burst()
+		return
 	var shot_phase := OS.get_environment("SHOT_BOSS_PHASE").to_int()
 	if shot_phase >= 2 and is_instance_valid(_boss):
 		await get_tree().process_frame
@@ -1217,6 +1270,34 @@ func _auto_screenshot() -> void:
 	var save_error := get_viewport().get_texture().get_image().save_png(shot_output)
 	if save_error != OK:
 		push_error("Failed to save QA screenshot to %s: %s" % [shot_output, error_string(save_error)])
+	await get_tree().create_timer(0.1).timeout
+	get_tree().quit()
+
+func _shaft_capture_burst() -> void:
+	await get_tree().process_frame
+	var down_door: Dictionary = {}
+	for door in Rooms.ROOMS[room_id].get("doors", []):
+		if door.get("side", "") == "down":
+			down_door = door
+			break
+	if down_door.is_empty():
+		push_error("SHOT_SHAFT requested in room without a down door: " + room_id)
+		get_tree().quit(1)
+		return
+	player.global_position = Vector2(float(down_door["p"]), float(_bounds[3]) + 24.0)
+	_play_shaft_transition.call_deferred(down_door["to"])
+	await get_tree().process_frame
+	var out_dir := _qa_option("SHOT_OUTPUT")
+	if out_dir == "":
+		out_dir = ProjectSettings.globalize_path("res://screenshots/shaft")
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	for i in range(6):
+		await get_tree().create_timer(0.38).timeout
+		await RenderingServer.frame_post_draw
+		print("SHAFT_FRAME %d player=%s camera=%s" % [i, player.global_position, camera.global_position])
+		var save_error := get_viewport().get_texture().get_image().save_png("%s/frame_%d.png" % [out_dir, i])
+		if save_error != OK:
+			push_error("Failed shaft frame %d: %s" % [i, error_string(save_error)])
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
 

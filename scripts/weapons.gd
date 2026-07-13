@@ -30,6 +30,27 @@ const LIST := [
 		"hand": Vector2(10, -34), "rest_rot": 0.0,
 		"fx": "spin", "fx_scale": 1.15, "fx_tint": Color(0.95, 0.85, 1.0), "sfx": "atk_cannon",
 	},
+	{
+		"id": "relic_blade", "name": "遗迹大剑", "type": "melee", "trait": "rune_wave",
+		"damage": 7, "combo": 3, "atk_time": 0.30, "hit_size": Vector2(146, 124), "reach": 72,
+		"color": Color(0.95, 0.78, 0.28), "shake": 7.0, "sprite": "res://assets/weapons/relic_blade.svg",
+		"hand": Vector2(5, -34), "rest_rot": -0.58, "fx": "slash", "fx_scale": 1.25,
+		"fx_tint": Color(1.0, 0.78, 0.25), "sfx": "attack",
+	},
+	{
+		"id": "void_blade", "name": "虚空之刃", "type": "melee", "trait": "void_harvest",
+		"damage": 9, "combo": 4, "atk_time": 0.22, "hit_size": Vector2(132, 116), "reach": 66,
+		"crit_bonus": 0.20, "color": Color(0.72, 0.35, 1.0), "shake": 6.0,
+		"sprite": "res://assets/weapons/void_blade.svg", "hand": Vector2(7, -34), "rest_rot": -0.52,
+		"fx": "spin", "fx_scale": 1.12, "fx_tint": Color(0.74, 0.36, 1.0), "sfx": "attack",
+	},
+	{
+		"id": "corrupt_scythe", "name": "腐化镰刀", "type": "melee", "trait": "corrosion",
+		"damage": 8, "combo": 2, "atk_time": 0.44, "hit_size": Vector2(190, 135), "reach": 82,
+		"color": Color(0.48, 1.0, 0.42), "shake": 8.0, "sprite": "res://assets/weapons/corrupt_scythe.svg",
+		"hand": Vector2(3, -34), "rest_rot": -0.75, "fx": "bolt", "fx_scale": 1.35,
+		"fx_tint": Color(0.46, 1.0, 0.38), "sfx": "atk_hammer",
+	},
 ]
 
 static func get_weapon(idx: int) -> Dictionary:

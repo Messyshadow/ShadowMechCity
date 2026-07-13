@@ -10,6 +10,8 @@ var trauma := 0.0
 var trauma_decay := 1.4
 var max_offset := Vector2(26, 18)
 var max_roll := 0.05
+var _normal_smooth := 7.0
+var _normal_y_offset := -36.0
 
 func _ready() -> void:
 	add_to_group("camera")
@@ -17,6 +19,17 @@ func _ready() -> void:
 
 func add_trauma(amount: float) -> void:
 	trauma = clampf(trauma + amount / 12.0, 0.0, 1.0)
+
+func begin_shaft(bottom_y: float) -> void:
+	_normal_smooth = smooth
+	_normal_y_offset = y_offset
+	smooth = 3.2
+	y_offset = 72.0
+	limit_bottom = int(bottom_y + 110.0)
+
+func end_shaft() -> void:
+	smooth = _normal_smooth
+	y_offset = _normal_y_offset
 
 func _process(delta: float) -> void:
 	if target and is_instance_valid(target):

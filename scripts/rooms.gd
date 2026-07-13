@@ -10,7 +10,7 @@ const ROOMS := {
 	"hub": {
 		"name": "中央车站", "theme": "city", "map": Vector2i(0, 0),
 		"bounds": [0, 0, 1400, 560],
-		"platforms": [[300, 440, 180, 24], [900, 400, 200, 24], [0, 160, 200, 22]],   # 左上高台(攀墙回溯)
+		"platforms": [[300, 440, 180, 24], [900, 400, 200, 24], [0, 160, 200, 22], [1040,300,150,22,true], [1180,205,150,22,true], [1120,105,170,22,true]],
 		"oneways": [[600, 470, 150]],
 		"enemies": [],   # 中央车站=新手村, 安全区不刷敌人
 		"items": [[1240, 520, "coin", ""]],
@@ -19,6 +19,7 @@ const ROOMS := {
 			{"side": "left", "p": 430, "to": "temple"},
 			{"side": "right", "p": 430, "to": "mine"},
 			{"side": "up", "p": 700, "to": "void_deck"},
+			{"side": "up", "p": 1120, "to": "secret_hub_archive", "hidden": true, "requires": ["wall_climb"]},
 		],
 		"save": Vector2(220, 560),
 		"start_spawn": Vector2(160, 500),
@@ -67,6 +68,7 @@ const ROOMS := {
 		"start_spawn": Vector2(250, 680),
 		"doors": [
 			{"side": "down", "p": 900, "to": "temple_undercroft"},
+			{"side": "left", "p": 260, "to": "secret_temple_orbit", "hidden": true, "requires": ["double_jump", "wall_climb"]},
 		],
 	},
 	# 神殿·地宫: 机械守卫精英 + 齿轮古机关 + 多层迷宫
@@ -116,7 +118,7 @@ const ROOMS := {
 	# 守护神殿: 远古机械守护神 封闭竞技场
 	"temple_sanctum": {
 		"name": "神殿·守护神殿", "theme": "temple", "map": Vector2i(0, 1),
-		"bounds": [0, 0, 1500, 620],
+		"bounds": [0, 0, 1500, 620], "weapons": [[750, 540, "relic_blade"]],
 		"platforms": [[300, 440, 180, 24], [1020, 440, 180, 24]],
 		"oneways": [],
 		"enemies": [],
@@ -137,6 +139,7 @@ const ROOMS := {
 			[1300, 520, 160, 24], [1720, 520, 160, 24],   # pit2 两侧
 			[1450, 370, 180, 24], [1900, 440, 170, 24],
 			[1080, 250, 220, 24],   # 高处
+			[1900, 310, 160, 22, true], [1900, 185, 160, 22, true], [1900, 80, 170, 22, true],
 		],
 		"oneways": [[470, 470, 150], [1640, 460, 150]],
 		"enemies": [[420, 660, "drillworm"], [1320, 660, "moltenslime"], [1980, 660, "drillworm"],
@@ -147,6 +150,7 @@ const ROOMS := {
 			{"side": "left", "p": 560, "to": "hub"},
 			{"side": "right", "p": 560, "to": "factory_entry", "locked": "red_key"},
 			{"side": "down", "p": 1080, "to": "depths"},
+			{"side": "up", "p": 1900, "to": "secret_mine_cache", "hidden": true, "requires": ["bomb"]},
 		],
 	},
 	"depths": {
@@ -240,6 +244,7 @@ const ROOMS := {
 			[1150, 250, 200, 24],                        # 激流上方干道(有推进器也可走上面绕)
 			[1700, 360, 170, 24], [1900, 500, 160, 24],
 			[300, 620, 150, 24], [1800, 620, 150, 24],   # 水下台
+			[1750, 225, 160, 22, true], [1750, 105, 170, 22, true],
 		],
 		"walls": [[900, 300, 44, 460], [1400, 300, 44, 460]],   # 把激流夹成必经通道
 		"hazards": [[600, 740, 220, 20, 1, "poison"], [1850, 740, 220, 20, 1, "poison"]],
@@ -250,6 +255,7 @@ const ROOMS := {
 		"doors": [
 			{"side": "left", "p": 620, "to": "water_grotto"},
 			{"side": "right", "p": 620, "to": "water_boss"},
+			{"side": "up", "p": 1750, "to": "secret_water_cistern", "hidden": true, "requires": ["aqua"]},
 		],
 	},
 	# 深渊巢穴: 深渊机械巨鳄 封闭竞技场(半淹没)
@@ -258,7 +264,7 @@ const ROOMS := {
 		"bounds": [0, 0, 1600, 620],
 		"water": [[800, 480, 1560, 320]],
 		"platforms": [[300, 410, 180, 24], [1120, 410, 180, 24]],
-		"oneways": [],
+		"oneways": [], "weapons": [[800, 540, "corrupt_scythe"]],
 		"enemies": [],
 		"items": [],
 		"boss": {"x": 1120, "y": 620, "sprite": "lion", "name": "深渊机械巨鳄",
@@ -306,6 +312,7 @@ const ROOMS := {
 			[1020, 560, 160, 24], [880, 470, 140, 24], [1180, 470, 140, 24],   # 跨左坑/下行门两侧
 			[1500, 520, 150, 24], [1640, 420, 150, 24], [1860, 520, 160, 24],  # 跨右坑
 			[1010, 280, 240, 24],                                              # 高处奖励
+			[1010, 165, 170, 22, true], [1010, 72, 180, 22, true],
 		],
 		"walls": [[520, 470, 44, 250], [1340, 220, 44, 300]],
 		"oneways": [[1060, 470, 160]],
@@ -317,6 +324,7 @@ const ROOMS := {
 		"doors": [
 			{"side": "left", "p": 590, "to": "factory_entry"},
 			{"side": "down", "p": 1100, "to": "factory_conveyor"},
+			{"side": "up", "p": 1010, "to": "secret_factory_heat", "hidden": true, "requires": ["dash", "bomb"]},
 		],
 	},
 	# 熔铁回廊: 竖向多层 + 熔铁陷阱 + 暗墙后生命碎片(需炸弹回溯); 上→熔炉大厅 右→传送链区
@@ -415,7 +423,7 @@ const ROOMS := {
 		"hazards": [[1450, 800, 140, 20, 2, "rune"]],
 		"enemies": [[580, 470, "void_eagle"], [980, 180, "void_wyvern"], [1420, 340, "storm_mage"], [1740, 470, "void_eagle"]],
 		"items": [[1050, 180, "chest", ""]], "start_spawn": Vector2(180, 780),
-		"doors": [{"side": "left", "p": 690, "to": "void_bridge"}, {"side": "right", "p": 690, "to": "void_core"}],
+		"doors": [{"side": "left", "p": 690, "to": "void_bridge"}, {"side": "right", "p": 690, "to": "void_core"}, {"side": "up", "p": 1050, "to": "secret_void_observatory", "hidden": true, "requires": ["shadow_glider"]}],
 	},
 	"void_core": {
 		"name": "虚空要塞·核心舱", "theme": "void", "map": Vector2i(3, -1),
@@ -423,7 +431,7 @@ const ROOMS := {
 		"platforms": [[300, 520, 180, 24, true], [620, 410, 170, 24, true], [950, 300, 190, 24, true], [1300, 470, 180, 24, true]],
 		"winds": [[900, 430, 230, 430, 0, -300]],
 		"enemies": [[650, 360, "storm_mage"], [1100, 260, "void_wyvern"]],
-		"save": Vector2(260, 700), "start_spawn": Vector2(180, 660),
+		"save": Vector2(260, 700), "start_spawn": Vector2(180, 660), "weapons": [[950, 260, "void_blade"]],
 		"doors": [{"side": "left", "p": 570, "to": "void_hangar"}, {"side": "right", "p": 570, "to": "void_throne"}, {"side": "down", "p": 850, "to": "castle_gate", "requires":["dash","bomb","aqua","wall_climb","glide","shadow_glider"]}],
 	},
 	"void_throne": {
@@ -436,10 +444,55 @@ const ROOMS := {
 	# ============================ 暗影王城终章(阶段10.6) ============================
 	"castle_gate": {"name":"暗影王城·城门高塔","theme":"castle","map":Vector2i(3,0),"bounds":[0,0,1900,760],"shafts":[[950,560,190,260]],"platforms":[[260,580,180,24,true],[620,450,180,24,true],[1050,390,190,24,true],[1450,520,180,24,true]],"enemies":[[520,410,"soul_shield"],[1120,350,"soul_spear"],[1540,480,"soul_cannon"]],"save":Vector2(220,760),"start_spawn":Vector2(850,90),"doors":[{"side":"up","p":850,"to":"void_core"},{"side":"down","p":950,"to":"castle_gallery"}]},
 	"castle_gallery": {"name":"暗影王城·铸魂长廊","theme":"castle","map":Vector2i(3,1),"bounds":[0,0,2100,760],"shafts":[[1600,560,180,260]],"platforms":[[300,560,190,24,true],[680,430,180,24,true],[1050,300,200,24,true],[1420,440,180,24,true],[1800,580,170,24,true]],"enemies":[[420,520,"soul_spear"],[980,260,"soul_cannon"],[1450,400,"soul_shield"]],"start_spawn":Vector2(950,90),"doors":[{"side":"up","p":950,"to":"castle_gate"},{"side":"down","p":1600,"to":"castle_chapel"}]},
-	"castle_chapel": {"name":"暗影王城·机械礼拜堂","theme":"castle","map":Vector2i(3,2),"bounds":[0,0,2000,780],"shafts":[[1000,590,210,260]],"platforms":[[260,600,180,24,true],[560,470,170,24,true],[1000,330,220,24,true],[1440,470,170,24,true],[1740,600,180,24,true]],"enemies":[[520,430,"soul_shield"],[980,290,"soul_cannon"],[1500,430,"soul_spear"]],"save":Vector2(240,780),"start_spawn":Vector2(1600,90),"doors":[{"side":"up","p":1600,"to":"castle_gallery"},{"side":"down","p":1000,"to":"castle_knights"}]},
+	"castle_chapel": {"name":"暗影王城·机械礼拜堂","theme":"castle","map":Vector2i(3,2),"bounds":[0,0,2000,780],"shafts":[[1000,590,210,260]],"platforms":[[260,600,180,24,true],[560,470,170,24,true],[1000,330,220,24,true],[1440,470,170,24,true],[1740,600,180,24,true]],"enemies":[[520,430,"soul_shield"],[980,290,"soul_cannon"],[1500,430,"soul_spear"]],"save":Vector2(240,780),"start_spawn":Vector2(1600,90),"doors":[{"side":"up","p":1600,"to":"castle_gallery"},{"side":"down","p":1000,"to":"castle_knights"},{"side":"right","p":560,"to":"secret_castle_ossuary","hidden":true,"requires":["dash","bomb","aqua","wall_climb","glide","shadow_glider"]}]},
 	"castle_knights": {"name":"暗影王城·骑士竞技场","theme":"castle","map":Vector2i(3,3),"bounds":[0,0,1800,700],"platforms":[[360,500,180,24],[900,360,220,24],[1420,500,180,24]],"enemies":[],"boss":{"x":1250,"y":700,"sprite":"golem","name":"王城铸魂骑士团","hp":420,"scale":1.8,"size":Vector2(120,145),"mode":"soul_knights","summon":true,"summon_type":"soul_spear","tint":Color(0.65,0.5,0.9)},"doors":[{"side":"up","p":900,"to":"castle_chapel"},{"side":"down","p":900,"to":"castle_shaft"}]},
 	"castle_shaft": {"name":"暗影王城·君王升降井","theme":"castle","map":Vector2i(3,4),"bounds":[0,0,1700,900],"shafts":[[850,180,300,700]],"platforms":[[280,720,170,24,true],[560,570,160,24,true],[960,430,170,24,true],[1260,280,170,24,true]],"enemies":[[420,680,"soul_spear"],[1050,390,"soul_cannon"],[1330,240,"soul_shield"]],"save":Vector2(250,900),"start_spawn":Vector2(900,90),"doors":[{"side":"up","p":900,"to":"castle_knights"},{"side":"down","p":850,"to":"castle_throne"}]},
 	"castle_throne": {"name":"暗影王城·虚空王座","theme":"castle","map":Vector2i(3,5),"bounds":[0,0,1900,760],"platforms":[[380,540,200,24],[950,390,240,24],[1500,540,200,24]],"enemies":[],"boss":{"x":1320,"y":760,"sprite":"golem","name":"虚空机械君王","hp":600,"scale":2.1,"size":Vector2(140,170),"mode":"void_king","tint":Color(0.55,0.25,0.85)},"doors":[{"side":"up","p":950,"to":"castle_shaft"}]},
+
+	# ============================ 阶段10.8：七区域独立秘室 ============================
+	"secret_hub_archive": {
+		"name":"秘室·遗失档案库", "theme":"city", "region":"hub", "hidden_room":true, "map":Vector2i(0,-2), "bounds":[0,0,1500,680],
+		"platforms":[[260,540,180,24,true],[520,420,170,24,true],[800,300,190,24,true],[1080,430,170,24,true],[1320,540,160,24,true]],
+		"walls":[[720,360,44,320]], "oneways":[[980,520,150]], "enemies":[],
+		"items":[[1180,390,"chest","secret_chest_hub"]], "secrets":[[800,260,"memory","memory_hub_archive"]],
+		"start_spawn":Vector2(180,640), "doors":[{"side":"left","p":540,"to":"hub"}]},
+	"secret_mine_cache": {
+		"name":"秘室·熔脉私藏间", "theme":"mine", "region":"mine", "hidden_room":true, "map":Vector2i(2,-1), "bounds":[0,0,1700,720],
+		"pits":[[850,380,3]], "platforms":[[260,560,170,24],[540,450,160,24],[820,350,170,24],[1120,450,160,24],[1450,560,170,24]],
+		"movers":[[850,520,150,"h",150,3.0,0.0]], "hazards":[[850,680,180,20,2,"steam"]], "enemies":[[520,410,"gearbat"],[1200,410,"drillworm"]],
+		"items":[[1450,520,"chest","secret_chest_mine"]], "secrets":[[850,310,"memory","memory_mine_cache"]],
+		"start_spawn":Vector2(180,680), "doors":[{"side":"left","p":590,"to":"mine"}]},
+	"secret_factory_heat": {
+		"name":"秘室·废热回收仓", "theme":"factory", "region":"factory", "hidden_room":true, "map":Vector2i(4,0), "bounds":[0,0,1800,740],
+		"belts":[[480,720,300,24,130],[1320,720,300,24,-130]], "updrafts":[[900,500,180,420,320]],
+		"platforms":[[280,560,170,24],[620,460,160,24],[900,270,190,24],[1180,460,160,24],[1520,560,170,24]],
+		"hazards":[[720,700,100,20,2,"steam"],[1080,700,100,20,2,"gear"]], "enemies":[[480,680,"mech_soldier"],[1320,680,"steam_brute"]],
+		"items":[[900,230,"chest","secret_chest_factory"]], "secrets":[[1540,520,"memory","memory_factory_heat"]],
+		"start_spawn":Vector2(170,700), "doors":[{"side":"left","p":600,"to":"factory_works"}]},
+	"secret_water_cistern": {
+		"name":"秘室·沉没蓄水池", "theme":"water", "region":"water", "hidden_room":true, "map":Vector2i(2,3), "bounds":[0,0,1700,760],
+		"water":[[850,450,1660,620,170.0,0.0]], "platforms":[[250,360,170,24],[600,510,160,24],[980,610,180,24],[1370,430,170,24]],
+		"walls":[[820,300,44,460]], "hazards":[[1180,740,180,20,1,"poison"]], "enemies":[[620,470,"fishman"],[1220,570,"snake"]],
+		"items":[[1450,390,"chest","secret_chest_water"]], "secrets":[[980,570,"memory","memory_water_cistern"]],
+		"start_spawn":Vector2(180,700), "doors":[{"side":"left","p":620,"to":"water_channel"}]},
+	"secret_temple_orbit": {
+		"name":"秘室·星轮观测室", "theme":"temple", "region":"temple", "hidden_room":true, "map":Vector2i(-3,0), "bounds":[0,0,1600,800],
+		"platforms":[[260,650,160,24,true],[480,520,150,24,true],[720,390,160,24,true],[980,260,180,24,true],[1260,420,160,24,true],[1450,570,150,24,true]],
+		"runes":[[480,508],[980,248],[1260,408]], "hazards":[[800,780,100,20,2,"rune"]], "enemies":[[720,350,"priest"],[1280,380,"gargoyle"]],
+		"items":[[980,220,"chest","secret_chest_temple"]], "secrets":[[1450,530,"memory","memory_temple_orbit"]],
+		"start_spawn":Vector2(180,760), "doors":[{"side":"right","p":650,"to":"temple_atrium"}]},
+	"secret_void_observatory": {
+		"name":"秘室·裂隙观星台", "theme":"void", "region":"void", "hidden_room":true, "map":Vector2i(2,-2), "bounds":[0,0,1900,780],
+		"pits":[[950,620,3]], "platforms":[[260,620,170,24,true],[560,500,160,24,true],[900,340,190,24,true],[1280,460,170,24,true],[1620,590,170,24,true]],
+		"winds":[[950,450,520,520,260,-150]], "hazards":[[1480,760,120,20,2,"rune"]], "enemies":[[700,440,"void_eagle"],[1320,400,"storm_mage"]],
+		"items":[[1620,550,"chest","secret_chest_void"]], "secrets":[[900,300,"memory","memory_void_observatory"]],
+		"start_spawn":Vector2(180,740), "doors":[{"side":"left","p":650,"to":"void_hangar"}]},
+	"secret_castle_ossuary": {
+		"name":"秘室·君王遗骨库", "theme":"castle", "region":"castle", "hidden_room":true, "map":Vector2i(4,2), "bounds":[0,0,1900,820],
+		"shafts":[[950,210,220,590]], "platforms":[[280,650,180,24,true],[560,520,160,24,true],[900,380,190,24,true],[1220,500,160,24,true],[1580,640,180,24,true]],
+		"winds":[[950,520,220,500,0,-260]], "hazards":[[720,800,120,20,2,"rune"],[1320,800,120,20,2,"gear"]], "enemies":[[560,480,"soul_spear"],[1250,460,"soul_cannon"]],
+		"items":[[1580,600,"chest","secret_chest_castle"]], "secrets":[[900,340,"memory","memory_castle_ossuary"]],
+		"start_spawn":Vector2(180,780), "doors":[{"side":"left","p":680,"to":"castle_chapel"}]},
 }
 
 # 区域瓦片色调

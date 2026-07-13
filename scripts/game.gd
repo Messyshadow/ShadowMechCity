@@ -8,6 +8,7 @@ signal gear_changed            # 装备变化(刷新人物属性/背包UI)
 
 var kills: int = 0
 var weapon_index: int = 0      # 跨关卡保留当前武器
+var unlocked_weapons: Array[String] = ["sword", "hammer", "cannon"]
 var _hitstop_token: int = 0
 
 # ---- 成长系统 ----
@@ -29,6 +30,7 @@ var unlocked_doors: Dictionary = {} # "roomA>roomB" -> true (已解锁的门)
 var collected: Dictionary = {}      # secret_id -> true (已收集, 不再刷出)
 var cleared_rooms: Dictionary = {}  # 本次生命内已清空的战斗房，过门不立即刷怪
 var opened_chests: Dictionary = {}  # 本次生命内已开的普通宝箱，防反复进门刷奖励
+var permanent_chests: Dictionary = {} # 永久宝箱完成度；读档后不重复生成
 var heart_pieces: int = 0           # 生命碎片数 → 永久 +最大生命
 const HEART_TOTAL := 6              # 全图生命碎片总数(收集度统计)
 
@@ -60,9 +62,14 @@ func is_room_cleared(id: String) -> bool:
 func open_session_chest(id: String) -> void:
 	if id != "":
 		opened_chests[id] = true
+		permanent_chests[id] = true
+		map_changed.emit()
 
 func is_session_chest_open(id: String) -> bool:
 	return opened_chests.has(id)
+
+func is_chest_collected(id: String) -> bool:
+	return permanent_chests.has(id)
 
 func reset_session_encounters() -> void:
 	cleared_rooms.clear()
@@ -95,7 +102,9 @@ func save_game() -> void:
 		"skills": skills, "items": items, "unlocked_doors": unlocked_doors,
 		"visited": visited, "current_room": current_room,
 		"inventory": inventory, "equipped": equipped, "abilities": abilities,
+		"unlocked_weapons": unlocked_weapons,
 		"collected": collected, "heart_pieces": heart_pieces,
+		"permanent_chests": permanent_chests,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
@@ -121,15 +130,20 @@ func load_save() -> bool:
 	current_room = data.get("current_room", "")
 	inventory = data.get("inventory", []); equipped = data.get("equipped", {})
 	abilities = data.get("abilities", {})
+	unlocked_weapons = _migrate_weapon_unlocks(data.get("unlocked_weapons", []))
+	if weapon_index < 0 or weapon_index >= Weapons.LIST.size() or not is_weapon_unlocked(Weapons.LIST[weapon_index]["id"]):
+		weapon_index = 0
 	collected = data.get("collected", {}); heart_pieces = int(data.get("heart_pieces", 0))
+	permanent_chests = data.get("permanent_chests", {})
 	return true
 
 func reset() -> void:
 	xp = 0; level = 1; skill_points = 0; coins = 0; kills = 0
 	weapon_index = 0; player_hp = 5
 	skills = {}; items = {}; unlocked_doors = {}; visited = {}; current_room = ""
-	inventory = []; equipped = {}; abilities = {}
+	inventory = []; equipped = {}; abilities = {}; unlocked_weapons = ["sword", "hammer", "cannon"]
 	collected = {}; heart_pieces = 0
+	permanent_chests = {}
 	reset_session_encounters()
 
 func xp_needed() -> int:
@@ -223,6 +237,33 @@ func grant_ability(id: String) -> void:
 	if id == "shadow_glider":
 		abilities["glide"] = true
 	progression_changed.emit()
+
+func completion_snapshot() -> Dictionary:
+	return Completion.snapshot(Rooms.ROOMS, visited, items, permanent_chests, unlocked_weapons, collected)
+
+func unlock_weapon(id: String) -> bool:
+	if is_weapon_unlocked(id):
+		return false
+	for weapon in Weapons.LIST:
+		if weapon["id"] == id:
+			unlocked_weapons.append(id)
+			progression_changed.emit()
+			return true
+	return false
+
+func is_weapon_unlocked(id: String) -> bool:
+	return unlocked_weapons.has(id)
+
+func _migrate_weapon_unlocks(saved: Variant) -> Array[String]:
+	var result: Array[String] = ["sword", "hammer", "cannon"]
+	if saved is Array:
+		for id in saved:
+			var sid := str(id)
+			if not result.has(sid):
+				for weapon in Weapons.LIST:
+					if weapon["id"] == sid:
+						result.append(sid)
+	return result
 
 const ACTIONS := {
 	"move_left":  [KEY_A, KEY_LEFT],

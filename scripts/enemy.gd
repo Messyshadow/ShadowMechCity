@@ -17,6 +17,10 @@ var knockback_resist := 0.0   # 0~1, brute 较高
 
 const GRAVITY := 1400.0
 const PROJ := preload("res://scripts/enemy_projectile.gd")
+const CORROSION_TICK := 1.0
+var corrosion_time := 0.0
+var _corrosion_timer := CORROSION_TICK
+var _corrosion_damage := 1
 var _shoot_cd := 0.0
 var _special_cd := 1.0
 var _hit_count := 0
@@ -149,6 +153,8 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, 600.0 * delta)
 		move_and_slide()
 		return
+	_tick_corrosion(delta)
+	if dead: return
 
 	_atk_cd = maxf(0.0, _atk_cd - delta)
 	# 攻击中: 执行起手/扑击
@@ -178,6 +184,18 @@ func _physics_process(delta: float) -> void:
 
 	move_and_slide()
 	_damage_player()
+
+func apply_corrosion(duration: float = 4.0, damage: int = 1) -> void:
+	corrosion_time = maxf(corrosion_time, duration); _corrosion_damage = maxi(_corrosion_damage, damage)
+	_corrosion_timer = minf(_corrosion_timer, CORROSION_TICK)
+	Fx.popup(get_parent(), global_position + Vector2(0, -body_size.y), "腐蚀", Color(0.45, 1.0, 0.35))
+
+func _tick_corrosion(delta: float) -> void:
+	if corrosion_time <= 0.0: return
+	corrosion_time = maxf(0.0, corrosion_time - delta); _corrosion_timer -= delta
+	if _corrosion_timer <= 0.0:
+		_corrosion_timer += CORROSION_TICK
+		take_damage(_corrosion_damage, Vector2.ZERO)
 
 # 远程射手: 巡逻 + 远距离向玩家发射弹幕
 func _b_shooter(delta: float) -> void:

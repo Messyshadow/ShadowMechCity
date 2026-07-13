@@ -21,7 +21,14 @@ const TEX := {
 	"gear": "res://assets/items/shard.png",
 	"ability": "res://assets/items/orb.png",
 	"heart": "res://assets/items/shard.png",
+	"weapon": "res://assets/items/orb.png",
+	"memory": "res://assets/items/orb.png",
 }
+
+static func spawn_weapon(parent: Node, pos: Vector2, weapon_id: String) -> void:
+	if parent == null or not is_instance_valid(parent): return
+	var p := Area2D.new(); p.set_script(load("res://scripts/pickup.gd")); p.kind = "weapon"; p.item_id = weapon_id; p.position = pos
+	parent.add_child.call_deferred(p)
 
 static func spawn_ability(parent: Node, pos: Vector2, ability_id: String) -> void:
 	if parent == null or not is_instance_valid(parent):
@@ -69,6 +76,10 @@ func _ready() -> void:
 	elif kind == "heart":
 		sprite.modulate = Color(1.0, 0.85, 0.35)   # 金色生命碎片
 		sprite.scale = Vector2(1.7, 1.7)
+	elif kind == "weapon":
+		sprite.modulate = Color(0.85, 0.55, 1.0); sprite.scale = Vector2(2.0, 2.0)
+	elif kind == "memory":
+		sprite.modulate = Color(0.55, 0.9, 1.0); sprite.scale = Vector2(1.9, 1.9)
 	add_child(sprite)
 	var cs := CollisionShape2D.new()
 	var sh := CircleShape2D.new()
@@ -132,6 +143,16 @@ func _on_body(body: Node) -> void:
 			Game.shake(6.0)
 			queue_free()
 			return
+		"weapon":
+			if Game.unlock_weapon(item_id):
+				Fx.popup(get_parent(), global_position + Vector2(0, -30), "获得武器！", Color(0.9, 0.65, 1.0))
+				Fx.screen_flash(get_tree(), Color(0.65, 0.3, 1.0, 0.35)); Game.shake(7.0)
+			queue_free(); return
+		"memory":
+			Game.collect_secret(item_id, "memory")
+			Fx.popup(get_parent(), global_position + Vector2(0, -30), "记忆核心已同步", Color(0.58, 0.88, 1.0))
+			Fx.screen_flash(get_tree(), Color(0.45, 0.7, 1.0, 0.30)); Game.shake(5.0)
+			queue_free(); return
 		"heart":
 			Game.collect_secret(item_id, "heart")
 			if body.has_method("heal"):
