@@ -5,6 +5,7 @@ var target: Node2D
 var look_ahead := 0.34       # 速度前瞻系数
 var smooth := 7.0
 var y_offset := -36.0
+var dialogue_focus := Vector2.ZERO
 
 var trauma := 0.0
 var trauma_decay := 1.4
@@ -34,7 +35,7 @@ func end_shaft() -> void:
 func _process(delta: float) -> void:
 	if target and is_instance_valid(target):
 		var vx: float = clampf(target.velocity.x, -320.0, 320.0)
-		var desired := target.global_position + Vector2(vx * look_ahead, y_offset)
+		var desired := target.global_position + Vector2(vx * look_ahead, y_offset) + dialogue_focus
 		global_position = global_position.lerp(desired, 1.0 - exp(-smooth * delta))
 
 	var amt := trauma * trauma

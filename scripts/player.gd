@@ -108,6 +108,7 @@ var slash_frames: SpriteFrames
 var weapon_index := 0
 var _relic_hit_charge := 0
 var shaft_mode := false
+var input_locked := false
 var weapon: Dictionary = Weapons.get_weapon(0)
 var attack_up := false
 var fx_frames := {}      # 各武器特效帧
@@ -120,6 +121,21 @@ var hitbox_shape: CollisionShape2D
 var hitbox_rect: RectangleShape2D
 var weapon_pivot: Node2D
 var weapon_sprite: Sprite2D
+
+func set_input_locked(value: bool) -> void:
+	input_locked = value
+	if not value or state == S.DEAD:
+		return
+	state = S.NORMAL
+	attack_timer = 0.0
+	combo_window = 0.0
+	dash_timer = 0.0
+	hit_targets.clear()
+	velocity.x = 0.0
+	if is_instance_valid(hitbox):
+		hitbox.set_deferred("monitoring", false)
+	if is_instance_valid(weapon_pivot):
+		weapon_pivot.rotation = 0.0
 
 func _ready() -> void:
 	add_to_group("player")
@@ -208,6 +224,16 @@ func _physics_process(delta: float) -> void:
 	# 掉出世界 -> 死亡重生
 	if state != S.DEAD and not shaft_mode and global_position.y > KILL_Y:
 		_die()
+		return
+	if input_locked and state != S.DEAD:
+		velocity.x = move_toward(velocity.x, 0.0, GROUND_FRICTION * delta)
+		if not is_on_floor():
+			velocity.y = minf(velocity.y + GRAVITY * delta, MAX_FALL)
+		_update_timers(delta)
+		move_and_slide()
+		_update_anim()
+		_update_squash(delta)
+		_update_weapon(delta)
 		return
 
 	match state:

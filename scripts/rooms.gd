@@ -15,6 +15,13 @@ const ROOMS := {
 		"enemies": [],   # 中央车站=新手村, 安全区不刷敌人
 		"items": [[1240, 520, "coin", ""]],
 		"secrets": [[100, 138, "heart", "heart_hub"]],   # 站台高处生命碎片(需攀墙, 回到新手村探索)
+		"npcs": [
+			[400, 520, "cartographer"],
+			[610, 520, "smith"],
+			[810, 520, "alchemist"],
+			[1030, 520, "collector"],
+			[1220, 520, "bounty"],
+		],
 		"doors": [
 			{"side": "left", "p": 430, "to": "temple"},
 			{"side": "right", "p": 430, "to": "mine"},

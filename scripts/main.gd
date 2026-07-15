@@ -6,6 +6,8 @@ const ENEMY_SCRIPT := preload("res://scripts/enemy.gd")
 const THEME_BACKDROP_SCRIPT := preload("res://scripts/theme_backdrop.gd")
 const DOWNWARD_PORTAL_VISUAL := preload("res://scripts/downward_portal_visual.gd")
 const SHAFT_TRANSITION_SCRIPT := preload("res://scripts/shaft_transition.gd")
+const NPC_ACTOR_SCRIPT := preload("res://scripts/npc_actor.gd")
+const DIALOGUE_PANEL_SCRIPT := preload("res://scripts/dialogue_panel.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -69,6 +71,11 @@ var map_panel: Control
 var _bounds: Array = [0, 0, 1400, 560]   # 当前房间边界(用于攀墙越界保护)
 var _rune_total := 0                      # 当前房间符文板总数
 var _rune_lit := 0                        # 已点亮数(全亮→开符文封门)
+var _npc_actors: Dictionary = {}
+var dialogue_panel: CanvasLayer
+var _active_npc := ""
+var _active_npc_actor: Node2D
+var _dialogue_flags_changed := false
 
 # 钥匙信息: 名称 + 获取地点提示
 const KEY_INFO := {
@@ -88,6 +95,7 @@ func _ready() -> void:
 	_setup_skill_panel()
 	_setup_map_panel()
 	_setup_menus()
+	_setup_dialogue_panel()
 	_setup_boss_bar()
 	_setup_audio()
 	# 读档则从存档房间/血量开始, 否则起始房间
@@ -111,6 +119,13 @@ func _setup_menus() -> void:
 	add_child(pause)
 	pause.settings = settings
 	pause.main_ref = self
+
+func _setup_dialogue_panel() -> void:
+	dialogue_panel = CanvasLayer.new()
+	dialogue_panel.set_script(DIALOGUE_PANEL_SCRIPT)
+	add_child(dialogue_panel)
+	dialogue_panel.conversation_closed.connect(_finish_dialogue)
+	dialogue_panel.flags_emitted.connect(_on_dialogue_flags)
 
 func save_now() -> void:
 	Game.player_hp = player.health
@@ -215,12 +230,15 @@ func _process(delta: float) -> void:
 
 # ============================================================ 房间加载
 func _enter_room(id: String, from_room: String) -> void:
+	if _active_npc != "" and is_instance_valid(dialogue_panel) and dialogue_panel.is_open():
+		dialogue_panel.close_conversation()
 	_record_room_clear()
 	room_id = id
 	var room: Dictionary = Rooms.ROOMS[id]
 	door_cd = 0.45
 	# 清空旧房间
 	_locked_doors = []
+	_npc_actors = {}
 	_rune_total = 0
 	_rune_lit = 0
 	for c in world.get_children():
@@ -290,6 +308,8 @@ func _enter_room(id: String, from_room: String) -> void:
 	for sc in room.get("secrets", []):
 		if not Game.is_collected(sc[3]):
 			Pickup.spawn(world, Vector2(sc[0], sc[1]), sc[2], 1, false, sc[3])
+	for npc in room.get("npcs", []):
+		_spawn_npc(npc)
 
 	# 冲刺门 [x, top, w, h]  (冲刺相位穿越)
 	for g in room.get("gates", []):
@@ -323,6 +343,56 @@ func _enter_room(id: String, from_room: String) -> void:
 	if hud.has_method("set_area"):
 		hud.set_area(room["name"])
 	_show_banner(room["name"])
+
+func _spawn_npc(entry: Array) -> void:
+	if entry.size() < 3:
+		push_error("Invalid NPC placement in room " + room_id)
+		return
+	var id := str(entry[2])
+	var actor := Node2D.new()
+	actor.set_script(NPC_ACTOR_SCRIPT)
+	actor.position = Vector2(float(entry[0]), float(entry[1]))
+	world.add_child(actor)
+	actor.setup(id)
+	actor.interaction_requested.connect(_start_dialogue)
+	_npc_actors[id] = actor
+
+func _start_dialogue(npc_id: String, actor: Node2D, forced_node := "") -> void:
+	if _active_npc != "" or Game.menu_open > 0 or not is_instance_valid(actor):
+		return
+	_active_npc = npc_id
+	_active_npc_actor = actor
+	_dialogue_flags_changed = false
+	player.set_input_locked(true)
+	Game.menu_open += 1
+	Game.dialogue_started.emit(npc_id)
+	var flags := Game.dialogue_flags.duplicate(true)
+	flags.merge(Game.story_flags, true)
+	if forced_node == "":
+		dialogue_panel.open_conversation(npc_id, Game.narrative_snapshot(), flags)
+	else:
+		dialogue_panel.open_specific(npc_id, forced_node)
+	var focus_x := clampf((actor.global_position.x - player.global_position.x) * 0.22, -90.0, 90.0)
+	camera.create_tween().tween_property(camera, "dialogue_focus", Vector2(focus_x, -20), 0.28).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+func _on_dialogue_flags(flags: Array[String]) -> void:
+	for flag in flags:
+		var changed := Game.set_story_flag(flag) if flag.begins_with("foreshadow_") else Game.set_dialogue_flag(flag)
+		_dialogue_flags_changed = _dialogue_flags_changed or changed
+
+func _finish_dialogue() -> void:
+	if _active_npc == "":
+		return
+	var closed_id := _active_npc
+	_active_npc = ""
+	_active_npc_actor = null
+	player.set_input_locked(false)
+	Game.menu_open = maxi(0, Game.menu_open - 1)
+	Game.dialogue_ended.emit(closed_id)
+	camera.create_tween().tween_property(camera, "dialogue_focus", Vector2.ZERO, 0.24).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	if _dialogue_flags_changed:
+		save_now()
+	_dialogue_flags_changed = false
 
 func _record_room_clear() -> void:
 	if room_id == "" or not is_instance_valid(world):
@@ -1213,6 +1283,26 @@ func _auto_screenshot() -> void:
 	var rid := _qa_option("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	if _qa_option("SHOT_DIALOGUE_PROGRESS") == "1":
+		_seed_dialogue_progress_for_qa()
+	var shot_dialogue := _qa_option("SHOT_DIALOGUE")
+	if shot_dialogue != "":
+		await get_tree().process_frame
+		var actor: Node2D = _npc_actors.get(shot_dialogue)
+		if not is_instance_valid(actor):
+			push_error("SHOT_DIALOGUE NPC not found in room: " + shot_dialogue)
+		else:
+			var forced_node := "bounty_choice" if _qa_option("SHOT_DIALOGUE_CHOICE") == "1" and shot_dialogue == "bounty" else ""
+			_start_dialogue(shot_dialogue, actor, forced_node)
+	var shot_prompt := _qa_option("SHOT_NPC_PROMPT")
+	if shot_prompt != "":
+		await get_tree().process_frame
+		var prompt_actor: Node2D = _npc_actors.get(shot_prompt)
+		if not is_instance_valid(prompt_actor):
+			push_error("SHOT_NPC_PROMPT NPC not found in room: " + shot_prompt)
+		else:
+			player.global_position = prompt_actor.global_position + Vector2(-70, 0)
+			prompt_actor.force_prompt_visible(true)
 	if _qa_option("SHOT_COMPLETION") == "1":
 		for id in ["hub","mine","factory_entry","void_core","secret_void_observatory"]: Game.visited[id] = true
 		Game.items["boss_mine_boss"] = true
@@ -1272,6 +1362,17 @@ func _auto_screenshot() -> void:
 		push_error("Failed to save QA screenshot to %s: %s" % [shot_output, error_string(save_error)])
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
+
+func _seed_dialogue_progress_for_qa() -> void:
+	for id in ["hub", "mine", "factory_entry", "depths", "temple", "void_core", "castle_gate",
+		"secret_hub_archive", "secret_mine_cache", "secret_void_observatory"]:
+		Game.visited[id] = true
+	for boss_id in ["boss_mine_boss", "boss_factory_core", "boss_temple_sanctum", "boss_void_throne"]:
+		Game.items[boss_id] = true
+	for memory_id in ["memory_hub_archive", "memory_mine_cache", "memory_factory_heat", "memory_void_observatory", "memory_castle_ossuary"]:
+		Game.collected[memory_id] = true
+	for weapon in Weapons.LIST:
+		Game.unlock_weapon(str(weapon["id"]))
 
 func _shaft_capture_burst() -> void:
 	await get_tree().process_frame

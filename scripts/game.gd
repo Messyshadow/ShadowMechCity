@@ -5,6 +5,8 @@ signal enemy_killed(total: int)
 signal progression_changed     # xp/level/coins 变化
 signal skills_changed          # 技能加点变化
 signal gear_changed            # 装备变化(刷新人物属性/背包UI)
+signal dialogue_started(npc_id: String)
+signal dialogue_ended(npc_id: String)
 
 var kills: int = 0
 var weapon_index: int = 0      # 跨关卡保留当前武器
@@ -25,6 +27,8 @@ var menu_open: int = 0              # 已打开的 UI 面板数(技能/地图/�
 var visited: Dictionary = {}        # room_id -> true
 var items: Dictionary = {}          # 钥匙/能力 id -> true
 var unlocked_doors: Dictionary = {} # "roomA>roomB" -> true (已解锁的门)
+var dialogue_flags: Dictionary = {} # 首次见面/已读节点等对话状态
+var story_flags: Dictionary = {}    # 阶段12任务与阶段11伏笔共用的叙事标记
 
 # ---- 收集系统(隐藏宝藏/生命碎片, 回溯解锁) ----
 var collected: Dictionary = {}      # secret_id -> true (已收集, 不再刷出)
@@ -105,6 +109,7 @@ func save_game() -> void:
 		"unlocked_weapons": unlocked_weapons,
 		"collected": collected, "heart_pieces": heart_pieces,
 		"permanent_chests": permanent_chests,
+		"dialogue_flags": dialogue_flags, "story_flags": story_flags,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
@@ -135,6 +140,10 @@ func load_save() -> bool:
 		weapon_index = 0
 	collected = data.get("collected", {}); heart_pieces = int(data.get("heart_pieces", 0))
 	permanent_chests = data.get("permanent_chests", {})
+	var loaded_dialogue = data.get("dialogue_flags", {})
+	var loaded_story = data.get("story_flags", {})
+	dialogue_flags = loaded_dialogue if loaded_dialogue is Dictionary else {}
+	story_flags = loaded_story if loaded_story is Dictionary else {}
 	return true
 
 func reset() -> void:
@@ -144,6 +153,7 @@ func reset() -> void:
 	inventory = []; equipped = {}; abilities = {}; unlocked_weapons = ["sword", "hammer", "cannon"]
 	collected = {}; heart_pieces = 0
 	permanent_chests = {}
+	dialogue_flags = {}; story_flags = {}
 	reset_session_encounters()
 
 func xp_needed() -> int:
@@ -241,6 +251,42 @@ func grant_ability(id: String) -> void:
 func completion_snapshot() -> Dictionary:
 	return Completion.snapshot(Rooms.ROOMS, visited, items, permanent_chests, unlocked_weapons, collected)
 
+func narrative_snapshot() -> Dictionary:
+	var completion := completion_snapshot()
+	return {
+		"visited_count": visited.size(),
+		"hidden_count": int(completion.get("hidden", {}).get("done", 0)),
+		"boss_count": _boss_defeat_count(),
+		"memory_count": _memory_count(),
+		"weapon_count": unlocked_weapons.size(),
+	}
+
+func set_dialogue_flag(id: String) -> bool:
+	if id == "" or dialogue_flags.has(id):
+		return false
+	dialogue_flags[id] = true
+	return true
+
+func set_story_flag(id: String) -> bool:
+	if id == "" or story_flags.has(id):
+		return false
+	story_flags[id] = true
+	return true
+
+func _boss_defeat_count() -> int:
+	var total := 0
+	for key in items:
+		if str(key).begins_with("boss_"):
+			total += 1
+	return total
+
+func _memory_count() -> int:
+	var total := 0
+	for key in collected:
+		if str(key).begins_with("memory_"):
+			total += 1
+	return total
+
 func unlock_weapon(id: String) -> bool:
 	if is_weapon_unlocked(id):
 		return false
@@ -281,6 +327,7 @@ const ACTIONS := {
 	"bomb":       [KEY_F],
 	"ult":        [KEY_V],
 	"restart":    [KEY_R],
+	"interact":   [KEY_E, KEY_ENTER],
 }
 
 func _enter_tree() -> void:
