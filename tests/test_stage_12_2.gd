@@ -25,7 +25,7 @@ func _validate_source_contracts() -> void:
 	for marker in ["_setup_quest_ui", "SHOT_QUEST_LOG", "SHOT_QUEST_TRACKER"]:
 		_check(main_source.contains(marker), "main quest integration missing marker: " + marker)
 	_check(title_source.contains("shadow_mech_city_title.png"), "title menu must consume the generated hero bitmap")
-	_check(title_source.contains("阶段 12.2"), "title menu must expose the visible stage 12.2 build marker")
+	_check(title_source.contains("阶段 12."), "title menu must expose a visible stage 12 build marker")
 	_check(ResourceLoader.exists("res://scripts/quest_panel.gd"), "quest_panel.gd must exist")
 	_check(ResourceLoader.exists("res://scripts/quest_tracker.gd"), "quest_tracker.gd must exist")
 	for script_path in ["res://scripts/quest_panel.gd", "res://scripts/quest_tracker.gd"]:

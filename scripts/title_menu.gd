@@ -100,7 +100,7 @@ func _build_menu() -> void:
 	plate.add_child(vb)
 
 	var build_marker := Label.new()
-	build_marker.text = "阶段 12.2  ·  主线任务系统"
+	build_marker.text = "阶段 12.3  ·  支线与记忆档案"
 	build_marker.add_theme_font_size_override("font_size", 16)
 	build_marker.add_theme_color_override("font_color", Color(0.95, 0.62, 0.32))
 	build_marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

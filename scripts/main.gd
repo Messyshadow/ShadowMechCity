@@ -1328,11 +1328,15 @@ func _auto_screenshot() -> void:
 		for sid in ["heart_hub","memory_hub_archive","memory_void_observatory"]: Game.collected[sid] = true
 		Game.current_room = room_id
 		map_panel.open = true; map_panel.queue_redraw()
-	if _qa_option("SHOT_QUEST_LOG") == "1" or _qa_option("SHOT_QUEST_TRACKER") == "1":
+	if _qa_option("SHOT_QUEST_LOG") == "1" or _qa_option("SHOT_QUEST_TRACKER") == "1" or _qa_option("SHOT_SIDE_QUESTS") == "1" or _qa_option("SHOT_COLLECTIBLES") == "1":
 		_seed_quest_progress_for_qa()
 		Game.refresh_quests()
 	if _qa_option("SHOT_QUEST_LOG") == "1" and is_instance_valid(quest_panel):
 		quest_panel.force_open_for_qa()
+	if _qa_option("SHOT_SIDE_QUESTS") == "1" and is_instance_valid(quest_panel):
+		quest_panel.force_page_for_qa("side")
+	if _qa_option("SHOT_COLLECTIBLES") == "1" and is_instance_valid(quest_panel):
+		quest_panel.force_page_for_qa("collectibles")
 	if _qa_option("SHOT_SHAFT") == "1":
 		await _shaft_capture_burst()
 		return
@@ -1397,10 +1401,12 @@ func _seed_dialogue_progress_for_qa() -> void:
 		Game.unlock_weapon(str(weapon["id"]))
 
 func _seed_quest_progress_for_qa() -> void:
-	Game.dialogue_flags["met_cartographer"] = true
+	for flag in ["met_smith", "met_alchemist", "met_cartographer", "met_collector", "met_bounty"]: Game.dialogue_flags[flag] = true
 	for id in ["hub", "mine", "factory_entry", "water_tunnel", "temple"]:
 		Game.visited[id] = true
 	Game.items["boss_mine_boss"] = true
+	for memory_id in ["memory_hub_archive", "memory_mine_cache", "memory_factory_heat", "memory_water_cistern"]: Game.collected[memory_id] = true
+	for weapon in Weapons.LIST: Game.unlock_weapon(str(weapon["id"]))
 
 func _shaft_capture_burst() -> void:
 	await get_tree().process_frame

@@ -43,6 +43,23 @@ func evaluate_all(snapshot: Dictionary, persisted_flags: Dictionary = {}) -> Dic
 		previous_complete = complete
 	return result
 
+func evaluate_side(snapshot: Dictionary, persisted_flags: Dictionary = {}) -> Dictionary:
+	var result := {}
+	for quest_id in QuestData.SIDE_ORDER:
+		var quest: Dictionary = QuestData.SIDE_QUESTS.get(quest_id, {})
+		var unlocked := _dict_has_truthy(snapshot.get("dialogue_flags", {}), str(quest.get("unlock", "")))
+		var objective_states: Array[Dictionary] = []
+		var done_count := 0
+		for raw_objective in quest.get("objectives", []):
+			var objective: Dictionary = raw_objective
+			var done := _objective_done(objective, snapshot)
+			if done: done_count += 1
+			var current := int(snapshot.get(str(objective.get("field", "")), 0))
+			objective_states.append({"type":objective.get("type", ""), "field":objective.get("field", ""), "text":objective.get("text", ""), "hint":objective.get("hint", ""), "current":current, "target":int(objective.get("target", 0)), "done":done})
+		var complete := (not objective_states.is_empty() and done_count == objective_states.size()) or bool(persisted_flags.get("complete:" + quest_id, false))
+		result[quest_id] = {"id":quest_id, "title":quest.get("title", quest_id), "summary":quest.get("summary", ""), "giver":quest.get("giver", ""), "status":"complete" if complete else ("active" if unlocked else "locked"), "done":done_count, "total":objective_states.size(), "objectives":objective_states}
+	return result
+
 func pick_tracked(states: Dictionary, preferred: String = "") -> String:
 	if states.has(preferred) and str(states[preferred].get("status", "")) == "active":
 		return preferred
@@ -58,6 +75,8 @@ func pick_tracked(states: Dictionary, preferred: String = "") -> String:
 func _objective_done(objective: Dictionary, snapshot: Dictionary) -> bool:
 	var objective_id := str(objective.get("id", ""))
 	match str(objective.get("type", "")):
+		"count":
+			return int(snapshot.get(str(objective.get("field", "")), 0)) >= int(objective.get("target", 1))
 		"visited":
 			return _dict_has_truthy(snapshot.get("visited", {}), objective_id)
 		"item":

@@ -53,6 +53,7 @@ func _refresh() -> void:
 		_panel.visible = false
 		return
 	var states: Dictionary = QuestRuntime.new().evaluate_all(game.quest_snapshot(), game.get("quest_flags"))
+	states.merge(QuestRuntime.new().evaluate_side(game.quest_snapshot(), game.get("quest_flags")))
 	var state: Dictionary = states.get(str(game.get("tracked_quest_id")), {})
 	if state.is_empty():
 		_panel.visible = false
@@ -63,7 +64,8 @@ func _refresh() -> void:
 	var rows: Array[String] = []
 	for objective in state.get("objectives", []):
 		if not bool(objective.get("done", false)):
-			rows.append("○ " + str(objective.get("text", "")))
+			var progress := " (%d/%d)" % [objective.get("current", 0), objective.get("target", 0)] if objective.has("target") else ""
+			rows.append("○ " + str(objective.get("text", "")) + progress)
 			if rows.size() >= 2:
 				break
 	if rows.is_empty():

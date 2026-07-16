@@ -8,6 +8,8 @@ const QuestRuntime = preload("res://scripts/quest_runtime.gd")
 
 var open := false
 var selected_id := ""
+var page := "main"
+var _tabs: Dictionary = {}
 var _chapter_box: VBoxContainer
 var _title: Label
 var _status: Label
@@ -55,6 +57,11 @@ func set_open(value: bool) -> void:
 func force_open_for_qa() -> void:
 	set_open(true)
 
+func force_page_for_qa(target: String) -> void:
+	page = target
+	set_open(true)
+	_refresh()
+
 func _build() -> void:
 	var dim := ColorRect.new()
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -94,6 +101,17 @@ func _build() -> void:
 	line.custom_minimum_size = Vector2(0, 2)
 	line.color = Color(0.22, 0.7, 0.88, 0.72)
 	outer.add_child(line)
+
+	var tabs := HBoxContainer.new()
+	tabs.add_theme_constant_override("separation", 10)
+	outer.add_child(tabs)
+	for tab_data in [["main", "主线"], ["side", "支线"], ["collectibles", "收藏"]]:
+		var tab := Button.new()
+		tab.text = str(tab_data[1])
+		tab.custom_minimum_size = Vector2(150, 38)
+		tab.pressed.connect(_switch_page.bind(str(tab_data[0])))
+		tabs.add_child(tab)
+		_tabs[str(tab_data[0])] = tab
 
 	var columns := HBoxContainer.new()
 	columns.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -164,32 +182,66 @@ func _refresh() -> void:
 	var game: Node = _game()
 	if game == null:
 		return
-	_states = QuestRuntime.new().evaluate_all(game.quest_snapshot(), game.get("quest_flags"))
+	_states = QuestRuntime.new().evaluate_all(game.quest_snapshot(), game.get("quest_flags")) if page == "main" else QuestRuntime.new().evaluate_side(game.quest_snapshot(), game.get("quest_flags"))
+	if page == "collectibles":
+		_states = {}
+		for collectible_id in QuestData.COLLECTIBLE_ORDER:
+			var entry: Dictionary = QuestData.COLLECTIBLES.get(collectible_id, {}).duplicate(true)
+			entry["id"] = collectible_id
+			entry["found"] = game.is_collected(collectible_id)
+			_states[collectible_id] = entry
+	for tab_id in _tabs:
+		var tab: Button = _tabs[tab_id]
+		tab.disabled = tab_id == page
 	if selected_id == "" or not _states.has(selected_id):
-		selected_id = str(game.get("tracked_quest_id"))
+		selected_id = str(game.get("tracked_quest_id")) if page == "main" else ""
 	if selected_id == "" or not _states.has(selected_id):
-		selected_id = QuestData.MAIN_ORDER[0]
+		var order: Array = _page_order()
+		selected_id = str(order[0]) if not order.is_empty() else ""
 	_rebuild_chapters()
 	_refresh_detail()
 	var completed := 0
 	for quest_id in _states:
-		if _states[quest_id].get("status", "") == "complete":
+		if _states[quest_id].get("status", "") == "complete" or bool(_states[quest_id].get("found", false)):
 			completed += 1
 	var count_label := find_child("QuestCount", true, false) as Label
 	if count_label:
-		count_label.text = "主线完成  %d / %d" % [completed, QuestData.MAIN_ORDER.size()]
+		var labels := {"main":"主线完成", "side":"支线完成", "collectibles":"档案同步"}
+		count_label.text = "%s  %d / %d" % [labels.get(page, "完成"), completed, _page_order().size()]
+
+func _switch_page(target: String) -> void:
+	page = target
+	selected_id = ""
+	_refresh()
+	if not _chapter_buttons.is_empty(): _chapter_buttons[0].grab_focus()
+
+func _page_order() -> Array:
+	if page == "side": return QuestData.SIDE_ORDER
+	if page == "collectibles": return QuestData.COLLECTIBLE_ORDER
+	return QuestData.MAIN_ORDER
 
 func _rebuild_chapters() -> void:
 	var game: Node = _game()
 	for child in _chapter_box.get_children():
 		child.queue_free()
 	_chapter_buttons.clear()
-	for quest_id in QuestData.MAIN_ORDER:
+	for quest_id in _page_order():
 		var state: Dictionary = _states.get(quest_id, {})
+		if page == "collectibles":
+			var found := bool(state.get("found", false))
+			var archive_button := Button.new()
+			archive_button.text = "%s  %s\n     %s" % ["◉" if found else "○", state.get("title", "未知记忆") if found else "未同步档案", state.get("region", "未知区域")]
+			archive_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+			archive_button.custom_minimum_size = Vector2(0, 64)
+			archive_button.add_theme_font_size_override("font_size", 17)
+			archive_button.pressed.connect(_select.bind(str(quest_id)))
+			_chapter_box.add_child(archive_button); _chapter_buttons.append(archive_button)
+			continue
 		var status := str(state.get("status", "locked"))
 		var prefix := "◆" if game and str(game.get("tracked_quest_id")) == quest_id else ("✓" if status == "complete" else ("●" if status == "active" else "◇"))
 		var button := Button.new()
-		button.text = "%s  第%s章  %s\n     %d / %d" % [prefix, state.get("chapter", ""), state.get("title", ""), state.get("done", 0), state.get("total", 0)]
+		var chapter := "第%s章  " % state.get("chapter", "") if page == "main" else ""
+		button.text = "%s  %s%s\n     %d / %d" % [prefix, chapter, state.get("title", ""), state.get("done", 0), state.get("total", 0)]
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.custom_minimum_size = Vector2(0, 82)
 		button.disabled = status == "locked"
@@ -206,8 +258,20 @@ func _select(quest_id: String) -> void:
 func _refresh_detail() -> void:
 	var game: Node = _game()
 	var state: Dictionary = _states.get(selected_id, {})
+	if page == "collectibles":
+		var found := bool(state.get("found", false))
+		_title.text = str(state.get("title", "未知记忆")) if found else "加密记忆 · 尚未同步"
+		_status.text = "已归档" if found else "未发现"
+		_status.add_theme_color_override("font_color", Color(0.45, 0.9, 0.75) if found else Color(0.45, 0.5, 0.58))
+		_giver.text = "来源区域：" + str(state.get("region", "未知"))
+		_summary.text = str(state.get("lore", "")) if found else "该记录仍被区域干扰遮蔽。探索能力门后的秘室，寻找悬浮的记忆核心。"
+		for child in _objectives.get_children(): child.queue_free()
+		var archive_hint := Label.new(); archive_hint.text = "◆  七份档案彼此校验，收齐后可复原机械城覆灭前的最后证词。"; archive_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; archive_hint.add_theme_font_size_override("font_size", 18); _objectives.add_child(archive_hint)
+		_track_button.visible = false
+		return
+	_track_button.visible = true
 	var status := str(state.get("status", "locked"))
-	_title.text = "第%s章 · %s" % [state.get("chapter", ""), state.get("title", "")]
+	_title.text = ("第%s章 · " % state.get("chapter", "") if page == "main" else "支线 · ") + str(state.get("title", ""))
 	_status.text = {"active":"进行中", "complete":"已完成", "locked":"未解锁"}.get(status, status)
 	_status.add_theme_color_override("font_color", _status_color(status))
 	_giver.text = "委托记录：" + str(state.get("giver", "—"))
@@ -219,7 +283,8 @@ func _refresh_detail() -> void:
 		row.add_theme_stylebox_override("panel", _panel_style(Color(0.035, 0.06, 0.085, 0.82), Color(0.12, 0.26, 0.34, 0.8), 1, 5))
 		var label := Label.new()
 		var done := bool(objective.get("done", false))
-		label.text = "%s  %s\n      %s" % ["✓" if done else "○", objective.get("text", ""), objective.get("hint", "")]
+		var progress := "  (%d/%d)" % [objective.get("current", 0), objective.get("target", 0)] if objective.has("target") else ""
+		label.text = "%s  %s%s\n      %s" % ["✓" if done else "○", objective.get("text", ""), progress, objective.get("hint", "")]
 		label.add_theme_font_size_override("font_size", 17)
 		label.add_theme_color_override("font_color", Color(0.48, 0.9, 0.72) if done else Color(0.83, 0.88, 0.95))
 		row.add_child(label)

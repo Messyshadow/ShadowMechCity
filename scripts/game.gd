@@ -275,17 +275,26 @@ func narrative_snapshot() -> Dictionary:
 	}
 
 func quest_snapshot() -> Dictionary:
+	var narrative := narrative_snapshot()
 	return {
 		"visited": visited.duplicate(true),
 		"items": items.duplicate(true),
 		"dialogue_flags": dialogue_flags.duplicate(true),
 		"story_flags": story_flags.duplicate(true),
 		"unlocked_weapons": unlocked_weapons.duplicate(),
+		"collected": collected.duplicate(true),
+		"kills": kills,
+		"hidden_count": narrative.get("hidden_count", 0),
+		"boss_count": narrative.get("boss_count", 0),
+		"memory_count": narrative.get("memory_count", 0),
+		"weapon_count": narrative.get("weapon_count", 0),
 	}
 
 func refresh_quests(notify: bool = true) -> Dictionary:
 	var runtime = QuestRuntime.new()
 	var states: Dictionary = runtime.evaluate_all(quest_snapshot(), quest_flags)
+	var side_states: Dictionary = runtime.evaluate_side(quest_snapshot(), quest_flags)
+	states.merge(side_states)
 	var changed := false
 	for quest_id in states:
 		if str(states[quest_id].get("status", "")) == "complete":
@@ -300,6 +309,7 @@ func refresh_quests(notify: bool = true) -> Dictionary:
 
 func set_tracked_quest(id: String) -> bool:
 	var states: Dictionary = QuestRuntime.new().evaluate_all(quest_snapshot(), quest_flags)
+	states.merge(QuestRuntime.new().evaluate_side(quest_snapshot(), quest_flags))
 	if not states.has(id) or str(states[id].get("status", "")) == "locked":
 		return false
 	if tracked_quest_id == id:
