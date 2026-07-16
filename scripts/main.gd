@@ -10,6 +10,9 @@ const NPC_ACTOR_SCRIPT := preload("res://scripts/npc_actor.gd")
 const DIALOGUE_PANEL_SCRIPT := preload("res://scripts/dialogue_panel.gd")
 const QUEST_PANEL_SCRIPT := preload("res://scripts/quest_panel.gd")
 const QUEST_TRACKER_SCRIPT := preload("res://scripts/quest_tracker.gd")
+const CINEMATIC_DATA := preload("res://scripts/cinematic_data.gd")
+const CINEMATIC_PANEL_SCRIPT := preload("res://scripts/cinematic_panel.gd")
+const TUTORIAL_GUIDE_SCRIPT := preload("res://scripts/tutorial_guide.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -77,6 +80,8 @@ var _npc_actors: Dictionary = {}
 var dialogue_panel: CanvasLayer
 var quest_panel: CanvasLayer
 var quest_tracker: CanvasLayer
+var cinematic_panel: CanvasLayer
+var tutorial_guide: CanvasLayer
 var _active_npc := ""
 var _active_npc_actor: Node2D
 var _dialogue_flags_changed := false
@@ -103,6 +108,7 @@ func _ready() -> void:
 	_setup_dialogue_panel()
 	_setup_boss_bar()
 	_setup_audio()
+	_setup_story_ui()
 	# 读档则从存档房间/血量开始, 否则起始房间
 	var start_room := Rooms.START
 	var loaded: bool = Game.current_room != "" and Rooms.ROOMS.has(Game.current_room)
@@ -112,8 +118,50 @@ func _ready() -> void:
 	if loaded:
 		player.health = clampi(Game.player_hp, 1, player.max_hp())
 		player.health_changed.emit(player.health, player.max_hp())
-	if "--shot" in OS.get_cmdline_args() or "--shot" in OS.get_cmdline_user_args():
+	var qa_running := "--shot" in OS.get_cmdline_args() or "--shot" in OS.get_cmdline_user_args()
+	if qa_running:
 		_auto_screenshot()
+	else:
+		_start_story_flow.call_deferred(loaded)
+
+func _setup_story_ui() -> void:
+	cinematic_panel = CanvasLayer.new()
+	cinematic_panel.set_script(CINEMATIC_PANEL_SCRIPT)
+	add_child(cinematic_panel)
+	cinematic_panel.opened.connect(func(_mode: String):
+		Game.menu_open += 1
+		if is_instance_valid(player): player.set_input_locked(true))
+	cinematic_panel.closed.connect(func(_mode: String):
+		Game.menu_open = maxi(0, Game.menu_open - 1)
+		if is_instance_valid(player): player.set_input_locked(false))
+	cinematic_panel.sequence_finished.connect(_on_cinematic_finished)
+	cinematic_panel.return_title_requested.connect(_return_to_title_from_ending)
+	tutorial_guide = CanvasLayer.new()
+	tutorial_guide.set_script(TUTORIAL_GUIDE_SCRIPT)
+	add_child(tutorial_guide)
+
+func _start_story_flow(loaded: bool) -> void:
+	if loaded and not bool(Game.story_flags.get("intro_seen", false)):
+		Game.set_story_flag("intro_seen")
+	if not bool(Game.story_flags.get("intro_seen", false)):
+		cinematic_panel.play(CINEMATIC_DATA.INTRO, "intro")
+	else:
+		tutorial_guide.begin_if_needed(Game.visited.size())
+
+func _on_cinematic_finished(sequence_mode: String) -> void:
+	if sequence_mode == "intro":
+		Game.set_story_flag("intro_seen")
+		Game.save_game()
+		tutorial_guide.begin_if_needed(Game.visited.size())
+	elif sequence_mode == "ending":
+		Game.set_story_flag("ending_seen")
+		Game.save_game()
+
+func _return_to_title_from_ending() -> void:
+	Game.set_story_flag("ending_seen")
+	save_now()
+	Game.menu_open = 0
+	get_tree().change_scene_to_file("res://title.tscn")
 
 func _setup_menus() -> void:
 	var settings := CanvasLayer.new()
@@ -230,10 +278,8 @@ func _spawn_room_weapon_rewards(room: Dictionary, id: String, boss_just_defeated
 			Pickup.spawn_weapon(world, Vector2(reward[0], reward[1]), reward[2])
 
 func _show_ending() -> void:
-	var cl := CanvasLayer.new(); cl.layer = 80
-	var veil := ColorRect.new(); veil.set_anchors_preset(Control.PRESET_FULL_RECT); veil.color = Color(0.01,0.0,0.03,0.0); cl.add_child(veil)
-	var title := Label.new(); title.text = "光核重新点燃\n暗影机械城仍在等待黎明"; title.set_anchors_preset(Control.PRESET_CENTER); title.position=Vector2(-300,-70); title.size=Vector2(600,160); title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",34); title.add_theme_color_override("font_color",Color(0.65,0.9,1)); title.add_theme_color_override("font_outline_color",Color(0,0,0)); title.add_theme_constant_override("outline_size",8); title.modulate.a=0; cl.add_child(title); add_child(cl)
-	var tw:=veil.create_tween(); tw.tween_property(veil,"color:a",0.82,1.2); tw.tween_callback(func(): title.create_tween().tween_property(title,"modulate:a",1.0,1.0))
+	if is_instance_valid(cinematic_panel):
+		cinematic_panel.play(CINEMATIC_DATA.ENDING, "ending")
 
 func _process(delta: float) -> void:
 	if door_cd > 0.0:
@@ -1300,6 +1346,12 @@ func _auto_screenshot() -> void:
 	var rid := _qa_option("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	if _qa_option("SHOT_INTRO") == "1" and is_instance_valid(cinematic_panel):
+		cinematic_panel.play(CINEMATIC_DATA.INTRO, "intro", 1, true)
+	if _qa_option("SHOT_TUTORIAL") == "1" and is_instance_valid(tutorial_guide):
+		tutorial_guide.force_show_for_qa(2)
+	if _qa_option("SHOT_ENDING_12_4") == "1" and is_instance_valid(cinematic_panel):
+		cinematic_panel.play(CINEMATIC_DATA.ENDING, "ending", CINEMATIC_DATA.ENDING.size() - 1, true)
 	if _qa_option("SHOT_DIALOGUE_PROGRESS") == "1":
 		_seed_dialogue_progress_for_qa()
 	var shot_dialogue := _qa_option("SHOT_DIALOGUE")
