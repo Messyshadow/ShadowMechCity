@@ -8,6 +8,8 @@ const DOWNWARD_PORTAL_VISUAL := preload("res://scripts/downward_portal_visual.gd
 const SHAFT_TRANSITION_SCRIPT := preload("res://scripts/shaft_transition.gd")
 const NPC_ACTOR_SCRIPT := preload("res://scripts/npc_actor.gd")
 const DIALOGUE_PANEL_SCRIPT := preload("res://scripts/dialogue_panel.gd")
+const QUEST_PANEL_SCRIPT := preload("res://scripts/quest_panel.gd")
+const QUEST_TRACKER_SCRIPT := preload("res://scripts/quest_tracker.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -73,6 +75,8 @@ var _rune_total := 0                      # 当前房间符文板总数
 var _rune_lit := 0                        # 已点亮数(全亮→开符文封门)
 var _npc_actors: Dictionary = {}
 var dialogue_panel: CanvasLayer
+var quest_panel: CanvasLayer
+var quest_tracker: CanvasLayer
 var _active_npc := ""
 var _active_npc_actor: Node2D
 var _dialogue_flags_changed := false
@@ -94,6 +98,7 @@ func _ready() -> void:
 	_setup_hud()
 	_setup_skill_panel()
 	_setup_map_panel()
+	_setup_quest_ui()
 	_setup_menus()
 	_setup_dialogue_panel()
 	_setup_boss_bar()
@@ -126,6 +131,18 @@ func _setup_dialogue_panel() -> void:
 	add_child(dialogue_panel)
 	dialogue_panel.conversation_closed.connect(_finish_dialogue)
 	dialogue_panel.flags_emitted.connect(_on_dialogue_flags)
+
+func _setup_quest_ui() -> void:
+	quest_tracker = CanvasLayer.new()
+	quest_tracker.set_script(QUEST_TRACKER_SCRIPT)
+	add_child(quest_tracker)
+	quest_panel = CanvasLayer.new()
+	quest_panel.set_script(QUEST_PANEL_SCRIPT)
+	add_child(quest_panel)
+	quest_panel.open_changed.connect(func(is_open: bool):
+		if is_instance_valid(player):
+			player.set_input_locked(is_open))
+	Game.refresh_quests(false)
 
 func save_now() -> void:
 	Game.player_hp = player.health
@@ -1311,6 +1328,11 @@ func _auto_screenshot() -> void:
 		for sid in ["heart_hub","memory_hub_archive","memory_void_observatory"]: Game.collected[sid] = true
 		Game.current_room = room_id
 		map_panel.open = true; map_panel.queue_redraw()
+	if _qa_option("SHOT_QUEST_LOG") == "1" or _qa_option("SHOT_QUEST_TRACKER") == "1":
+		_seed_quest_progress_for_qa()
+		Game.refresh_quests()
+	if _qa_option("SHOT_QUEST_LOG") == "1" and is_instance_valid(quest_panel):
+		quest_panel.force_open_for_qa()
 	if _qa_option("SHOT_SHAFT") == "1":
 		await _shaft_capture_burst()
 		return
@@ -1373,6 +1395,12 @@ func _seed_dialogue_progress_for_qa() -> void:
 		Game.collected[memory_id] = true
 	for weapon in Weapons.LIST:
 		Game.unlock_weapon(str(weapon["id"]))
+
+func _seed_quest_progress_for_qa() -> void:
+	Game.dialogue_flags["met_cartographer"] = true
+	for id in ["hub", "mine", "factory_entry", "water_tunnel", "temple"]:
+		Game.visited[id] = true
+	Game.items["boss_mine_boss"] = true
 
 func _shaft_capture_burst() -> void:
 	await get_tree().process_frame

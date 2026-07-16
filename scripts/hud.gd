@@ -72,7 +72,7 @@ func _build_control_chips() -> void:
 	var skill_box := HBoxContainer.new()
 	skill_box.add_theme_constant_override("separation", 6)
 	skill_box.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
-	skill_box.offset_right = -20; skill_box.offset_left = -560
+	skill_box.offset_right = -20; skill_box.offset_left = -650
 	skill_box.offset_top = -64; skill_box.offset_bottom = -16
 	skill_box.alignment = BoxContainer.ALIGNMENT_END
 	add_child(skill_box)
@@ -82,6 +82,7 @@ func _build_control_chips() -> void:
 	_chip(skill_box, "Q", "换武器", Color(0.9, 0.8, 1.0))
 	_chip(skill_box, "T", "加点", Color(1.0, 0.85, 0.4))
 	_chip(skill_box, "U", "背包", Color(0.7, 0.9, 0.7))
+	_chip(skill_box, "N", "任务", Color(0.55, 0.9, 1.0))
 	skill_box.modulate.a = 0.6
 
 # 单个按键图标(半透明)

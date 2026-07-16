@@ -7,6 +7,9 @@ signal skills_changed          # 技能加点变化
 signal gear_changed            # 装备变化(刷新人物属性/背包UI)
 signal dialogue_started(npc_id: String)
 signal dialogue_ended(npc_id: String)
+signal quest_changed(states: Dictionary)
+
+const QuestRuntime = preload("res://scripts/quest_runtime.gd")
 
 var kills: int = 0
 var weapon_index: int = 0      # 跨关卡保留当前武器
@@ -29,6 +32,8 @@ var items: Dictionary = {}          # 钥匙/能力 id -> true
 var unlocked_doors: Dictionary = {} # "roomA>roomB" -> true (已解锁的门)
 var dialogue_flags: Dictionary = {} # 首次见面/已读节点等对话状态
 var story_flags: Dictionary = {}    # 阶段12任务与阶段11伏笔共用的叙事标记
+var quest_flags: Dictionary = {}    # complete:<quest_id> -> true，兼容事实回算
+var tracked_quest_id: String = "echo_coordinates"
 
 # ---- 收集系统(隐藏宝藏/生命碎片, 回溯解锁) ----
 var collected: Dictionary = {}      # secret_id -> true (已收集, 不再刷出)
@@ -55,6 +60,7 @@ func visit_room(id: String) -> void:
 	if not visited.has(id):
 		visited[id] = true
 	map_changed.emit()
+	refresh_quests()
 
 func mark_room_cleared(id: String) -> void:
 	if id != "":
@@ -82,6 +88,7 @@ func reset_session_encounters() -> void:
 func give_item(id: String) -> void:
 	items[id] = true
 	map_changed.emit()
+	refresh_quests()
 
 func has_item(id: String) -> bool:
 	return items.has(id)
@@ -110,6 +117,7 @@ func save_game() -> void:
 		"collected": collected, "heart_pieces": heart_pieces,
 		"permanent_chests": permanent_chests,
 		"dialogue_flags": dialogue_flags, "story_flags": story_flags,
+		"quest_flags": quest_flags, "tracked_quest_id": tracked_quest_id,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
@@ -144,6 +152,10 @@ func load_save() -> bool:
 	var loaded_story = data.get("story_flags", {})
 	dialogue_flags = loaded_dialogue if loaded_dialogue is Dictionary else {}
 	story_flags = loaded_story if loaded_story is Dictionary else {}
+	var loaded_quests = data.get("quest_flags", {})
+	quest_flags = loaded_quests if loaded_quests is Dictionary else {}
+	tracked_quest_id = str(data.get("tracked_quest_id", ""))
+	refresh_quests(false)
 	return true
 
 func reset() -> void:
@@ -153,8 +165,9 @@ func reset() -> void:
 	inventory = []; equipped = {}; abilities = {}; unlocked_weapons = ["sword", "hammer", "cannon"]
 	collected = {}; heart_pieces = 0
 	permanent_chests = {}
-	dialogue_flags = {}; story_flags = {}
+	dialogue_flags = {}; story_flags = {}; quest_flags = {}; tracked_quest_id = "echo_coordinates"
 	reset_session_encounters()
+	refresh_quests(false)
 
 func xp_needed() -> int:
 	return 4 + level * 3
@@ -261,16 +274,52 @@ func narrative_snapshot() -> Dictionary:
 		"weapon_count": unlocked_weapons.size(),
 	}
 
+func quest_snapshot() -> Dictionary:
+	return {
+		"visited": visited.duplicate(true),
+		"items": items.duplicate(true),
+		"dialogue_flags": dialogue_flags.duplicate(true),
+		"story_flags": story_flags.duplicate(true),
+		"unlocked_weapons": unlocked_weapons.duplicate(),
+	}
+
+func refresh_quests(notify: bool = true) -> Dictionary:
+	var runtime = QuestRuntime.new()
+	var states: Dictionary = runtime.evaluate_all(quest_snapshot(), quest_flags)
+	var changed := false
+	for quest_id in states:
+		if str(states[quest_id].get("status", "")) == "complete":
+			var flag := "complete:" + str(quest_id)
+			if not quest_flags.has(flag):
+				quest_flags[flag] = true
+				changed = true
+	tracked_quest_id = runtime.pick_tracked(states, tracked_quest_id)
+	if notify:
+		quest_changed.emit(states)
+	return {"states": states, "changed": changed, "tracked": tracked_quest_id}
+
+func set_tracked_quest(id: String) -> bool:
+	var states: Dictionary = QuestRuntime.new().evaluate_all(quest_snapshot(), quest_flags)
+	if not states.has(id) or str(states[id].get("status", "")) == "locked":
+		return false
+	if tracked_quest_id == id:
+		return true
+	tracked_quest_id = id
+	quest_changed.emit(states)
+	return true
+
 func set_dialogue_flag(id: String) -> bool:
 	if id == "" or dialogue_flags.has(id):
 		return false
 	dialogue_flags[id] = true
+	refresh_quests()
 	return true
 
 func set_story_flag(id: String) -> bool:
 	if id == "" or story_flags.has(id):
 		return false
 	story_flags[id] = true
+	refresh_quests()
 	return true
 
 func _boss_defeat_count() -> int:
@@ -324,6 +373,7 @@ const ACTIONS := {
 	"skill_menu": [KEY_T],
 	"map_menu":   [KEY_M],
 	"inv_menu":   [KEY_U, KEY_I],
+	"quest_menu": [KEY_N],
 	"bomb":       [KEY_F],
 	"ult":        [KEY_V],
 	"restart":    [KEY_R],

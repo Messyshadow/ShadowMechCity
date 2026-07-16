@@ -22,7 +22,7 @@ func _init() -> void:
 		_check(main_source.contains('"%s"' % enemy), "missing castle enemy: " + enemy)
 	_check(main_source.contains("_make_shaft"), "main must build detailed shafts")
 	_check(main_source.contains("_play_shaft_transition"), "down doors need a shaft camera transition")
-	_check(main_source.contains("camera.target=player"), "shaft transition must restore camera follow")
+	_check(main_source.replace(" ", "").contains("camera.target=player"), "shaft transition must restore camera follow")
 	_check(main_source.contains("_has_required_abilities"), "castle entrance needs all-ability gating")
 	_check(main_source.contains("_arena_block_for_door"), "boss arenas need four-direction door blockers")
 	_check(main_source.contains("soul_knights_boss.gd"), "main must dispatch the knight council boss")

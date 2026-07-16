@@ -44,35 +44,71 @@ func _qa_option(env_name: String) -> String:
 	return ""
 
 func _build_bg() -> void:
-	var sky := TextureRect.new()
-	sky.texture = load("res://assets/bg/city/sky.png")
-	sky.set_anchors_preset(Control.PRESET_FULL_RECT)
-	sky.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	sky.stretch_mode = TextureRect.STRETCH_SCALE
-	add_child(sky)
-	var hills := TextureRect.new()
-	hills.texture = load("res://assets/bg/city/near.png")
-	hills.set_anchors_preset(Control.PRESET_FULL_RECT)
-	hills.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	hills.stretch_mode = TextureRect.STRETCH_SCALE
-	hills.modulate = Color(1, 1, 1, 0.85)
-	add_child(hills)
+	var fallback := ColorRect.new()
+	fallback.color = Color(0.012, 0.022, 0.04)
+	fallback.set_anchors_preset(Control.PRESET_FULL_RECT)
+	add_child(fallback)
+	var hero_path := "res://assets/bg/title/shadow_mech_city_title.png"
+	if ResourceLoader.exists(hero_path):
+		var hero := TextureRect.new()
+		hero.texture = load(hero_path)
+		hero.set_anchors_preset(Control.PRESET_FULL_RECT)
+		hero.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		hero.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		hero.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		add_child(hero)
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0.03, 0.45)
+	dim.color = Color(0.005, 0.012, 0.03, 0.14)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
+	var left_veil := ColorRect.new()
+	left_veil.color = Color(0.004, 0.01, 0.025, 0.42)
+	left_veil.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	left_veil.offset_right = 590
+	add_child(left_veil)
+	# 上下电影遮幅兼作暗角，避免标题与背景高光互相争抢。
+	for top in [true, false]:
+		var band := ColorRect.new()
+		band.color = Color(0.002, 0.006, 0.018, 0.58)
+		band.set_anchors_preset(Control.PRESET_TOP_WIDE if top else Control.PRESET_BOTTOM_WIDE)
+		if top:
+			band.offset_bottom = 34
+		else:
+			band.offset_top = -30
+		add_child(band)
 
 func _build_menu() -> void:
+	var plate := PanelContainer.new()
+	plate.set_anchors_preset(Control.PRESET_CENTER_LEFT)
+	plate.offset_left = 66
+	plate.offset_right = 516
+	plate.offset_top = -306
+	plate.offset_bottom = 306
+	var plate_style := StyleBoxFlat.new()
+	plate_style.bg_color = Color(0.018, 0.035, 0.06, 0.84)
+	plate_style.border_color = Color(0.24, 0.7, 0.88, 0.72)
+	plate_style.set_border_width_all(1)
+	plate_style.set_corner_radius_all(12)
+	plate_style.content_margin_left = 34
+	plate_style.content_margin_right = 34
+	plate_style.content_margin_top = 24
+	plate_style.content_margin_bottom = 24
+	plate.add_theme_stylebox_override("panel", plate_style)
+	add_child(plate)
 	var vb := VBoxContainer.new()
-	vb.set_anchors_preset(Control.PRESET_CENTER)
-	vb.position = Vector2(-160, -170)
-	vb.custom_minimum_size = Vector2(320, 0)
-	vb.add_theme_constant_override("separation", 16)
-	add_child(vb)
+	vb.add_theme_constant_override("separation", 13)
+	plate.add_child(vb)
+
+	var build_marker := Label.new()
+	build_marker.text = "阶段 12.2  ·  主线任务系统"
+	build_marker.add_theme_font_size_override("font_size", 16)
+	build_marker.add_theme_color_override("font_color", Color(0.95, 0.62, 0.32))
+	build_marker.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vb.add_child(build_marker)
 
 	var title := Label.new()
 	title.text = "暗影机械城"
-	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_font_size_override("font_size", 58)
 	title.add_theme_color_override("font_color", Color(0.7, 0.95, 1.0))
 	title.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 	title.add_theme_constant_override("outline_size", 10)
@@ -80,14 +116,14 @@ func _build_menu() -> void:
 	vb.add_child(title)
 
 	var sub := Label.new()
-	sub.text = "SHADOW MECH CITY  ·  横版动作"
-	sub.add_theme_font_size_override("font_size", 20)
+	sub.text = "SHADOW MECH CITY\n暗黑机械 · 虚空侵蚀 · 横版动作"
+	sub.add_theme_font_size_override("font_size", 17)
 	sub.add_theme_color_override("font_color", Color(1, 0.6, 0.3))
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vb.add_child(sub)
 
 	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 30)
+	spacer.custom_minimum_size = Vector2(0, 18)
 	vb.add_child(spacer)
 
 	var newb := _btn(vb, "新游戏", _new_game)
@@ -100,7 +136,7 @@ func _build_menu() -> void:
 func _btn(parent: Node, text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(320, 50)
+	b.custom_minimum_size = Vector2(0, 50)
 	b.add_theme_font_size_override("font_size", 24)
 	b.pressed.connect(cb)
 	parent.add_child(b)
