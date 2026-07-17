@@ -6,6 +6,8 @@ const ENEMY_SCRIPT := preload("res://scripts/enemy.gd")
 const THEME_BACKDROP_SCRIPT := preload("res://scripts/theme_backdrop.gd")
 const DOWNWARD_PORTAL_VISUAL := preload("res://scripts/downward_portal_visual.gd")
 const SHAFT_TRANSITION_SCRIPT := preload("res://scripts/shaft_transition.gd")
+const PORTAL_INTERACTION_SCRIPT := preload("res://scripts/portal_interaction.gd")
+const PORTAL_VISUAL_SCRIPT := preload("res://scripts/portal_visual.gd")
 const NPC_ACTOR_SCRIPT := preload("res://scripts/npc_actor.gd")
 const DIALOGUE_PANEL_SCRIPT := preload("res://scripts/dialogue_panel.gd")
 const QUEST_PANEL_SCRIPT := preload("res://scripts/quest_panel.gd")
@@ -68,6 +70,7 @@ var room_id := ""
 var door_cd := 0.0
 var _sfx := {}
 var _locked_doors: Array = []   # 当前房间的锁门交互区
+var _interactive_portals: Array = []
 var _door_hint: Node = null
 var boss_bar: CanvasLayer
 var _boss: Node = null
@@ -301,6 +304,7 @@ func _enter_room(id: String, from_room: String) -> void:
 	door_cd = 0.45
 	# 清空旧房间
 	_locked_doors = []
+	_interactive_portals = []
 	_npc_actors = {}
 	_rune_total = 0
 	_rune_lit = 0
@@ -478,7 +482,13 @@ func _spawn_for(room: Dictionary, from_room: String) -> Vector2:
 				"left":  return Vector2(b[0] + 90, b[3] - 30)
 				"right": return Vector2(b[2] - 90, b[3] - 30)
 				"down":  return Vector2(d["p"] + DOWN_PORTAL_HALF_WIDTH + 55.0, b[3] - 30)   # 从下方上来, 站到井口旁
-				"up":    return Vector2(d["p"], b[1] + 90)          # 从上方落下
+				"up":
+					if d.get("hidden", false):
+						return Vector2(d["p"], b[1] + 90)
+					var landing_x: float = float(d["p"]) + 145.0
+					if landing_x > float(b[2]) - 80.0:
+						landing_x = float(d["p"]) - 145.0
+					return Vector2(landing_x, b[3] - 30)
 	return room.get("start_spawn", Vector2((b[0] + b[2]) * 0.5, b[3] - 40))
 
 # ============================================================ 几何
@@ -492,7 +502,9 @@ func _build_geometry(room: Dictionary, tint: Color) -> void:
 	for d in room["doors"]:
 		match d["side"]:
 			"down": down_xs.append(d["p"])
-			"up": up_xs.append(d["p"])
+			"up":
+				if d.get("hidden", false):
+					up_xs.append(d["p"])
 			"left": left_door = d
 			"right": right_door = d
 	# 地面(底), 留下行门缺口 + 坑(pit/熔铁河)缺口
@@ -821,21 +833,24 @@ func _make_oneway(x: float, y: float, w: float, tint: Color = Color.WHITE) -> vo
 # ============================================================ 门
 func _make_door(room: Dictionary, d: Dictionary) -> void:
 	var b = room["bounds"]
-	var pos: Vector2
+	var pos: Vector2 = PORTAL_INTERACTION_SCRIPT.anchor_position(d, b)
 	var size: Vector2
+	var requires_interact := bool(PORTAL_INTERACTION_SCRIPT.requires_interaction(d))
 	match d["side"]:
-		"left":  pos = Vector2(b[0] + 12, (d["p"] + b[3]) * 0.5); size = Vector2(46, b[3] - d["p"])
-		"right": pos = Vector2(b[2] - 12, (d["p"] + b[3]) * 0.5); size = Vector2(46, b[3] - d["p"])
-		"down":  pos = Vector2(d["p"], b[3] + 36); size = Vector2(DOWN_PORTAL_HALF_WIDTH * 2.0, 60)
-		"up":    pos = Vector2(d["p"], b[1] + 16); size = Vector2(110, 60)
+		"left":  size = Vector2(46, b[3] - d["p"])
+		"right": size = Vector2(46, b[3] - d["p"])
+		"down":  size = Vector2(DOWN_PORTAL_HALF_WIDTH * 2.0, 176)
+		"up":    size = Vector2(170, 132) if d.get("hidden", false) else Vector2(240, 150)
 	if d["side"] == "down":
 		_make_downward_portal(room, d)
+		if requires_interact:
+			_make_shaft_safety_floor(float(d["p"]), float(b[3]), DOWN_PORTAL_HALF_WIDTH * 2.0)
 	var locked: String = d.get("locked", "")
 	var is_hidden: bool = d.get("hidden", false)
 	var tag := "%s>%s" % [room_id, d["to"]]
 	var is_locked := locked != "" and not Game.is_door_unlocked(tag)
 
-	var area := Area2D.new()
+	var area: Area2D = PORTAL_INTERACTION_SCRIPT.new() if requires_interact else Area2D.new()
 	area.collision_layer = 0
 	area.collision_mask = 0b00010
 	area.position = pos
@@ -844,35 +859,42 @@ func _make_door(room: Dictionary, d: Dictionary) -> void:
 	sh.size = size
 	cs.shape = sh
 	area.add_child(cs)
-	# 门视觉
-	var glow := Line2D.new()
-	glow.width = 5.0
-	glow.closed = true
-	glow.default_color = Color(1.0, 0.5, 0.3) if is_locked else (Color(0.72, 0.38, 1.0, 0.72) if is_hidden else Color(0.5, 0.95, 1.0))
-	var pts := PackedVector2Array()
-	var rw: float = size.x * 0.5 + 6
-	var rh: float = min(size.y * 0.5, 70.0)
-	for i in range(18):
-		var a := TAU * i / 18.0
-		pts.append(Vector2(cos(a) * rw, sin(a) * rh))
-	glow.points = pts
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	glow.material = mat
-	area.add_child(glow)
-	if is_hidden:
-		var echo := Label.new()
-		echo.text = "◆ 隐藏回响"
-		echo.position = Vector2(-72, -minf(size.y * 0.5, 70.0) - 34)
-		echo.add_theme_font_size_override("font_size", 16)
-		echo.add_theme_color_override("font_color", Color(0.78, 0.56, 1.0, 0.82))
-		echo.add_theme_color_override("font_outline_color", Color(0.02, 0.0, 0.05))
-		echo.add_theme_constant_override("outline_size", 5)
-		area.add_child(echo)
-	var tw := glow.create_tween().set_loops()
-	tw.tween_property(glow, "modulate:a", 0.4, 0.7)
-	tw.tween_property(glow, "modulate:a", 1.0, 0.7)
-	area.body_entered.connect(func(body): _on_door(body, d, tag, locked))
+	# 门视觉：特殊入口使用分层机械阵，普通横向门保留轻量轮廓。
+	var visual: Node2D = null
+	if requires_interact:
+		visual = PORTAL_VISUAL_SCRIPT.new()
+		visual.setup(is_hidden, is_locked or not _missing_required_abilities(d.get("requires", [])).is_empty(), str(d["side"]))
+		area.add_child(visual)
+	else:
+		var glow := Line2D.new()
+		glow.width = 5.0
+		glow.closed = true
+		glow.default_color = Color(1.0, 0.5, 0.3) if is_locked else Color(0.5, 0.95, 1.0)
+		var pts := PackedVector2Array()
+		var rw: float = size.x * 0.5 + 6
+		var rh: float = min(size.y * 0.5, 70.0)
+		for i in range(18):
+			var a := TAU * i / 18.0
+			pts.append(Vector2(cos(a) * rw, sin(a) * rh))
+		glow.points = pts
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		glow.material = mat
+		area.add_child(glow)
+		var tw := glow.create_tween().set_loops()
+		tw.tween_property(glow, "modulate:a", 0.4, 0.7)
+		tw.tween_property(glow, "modulate:a", 1.0, 0.7)
+	if requires_interact:
+		var portal = area
+		var target_name := str(Rooms.ROOMS.get(d["to"], {}).get("name", d["to"]))
+		var missing := _missing_required_abilities(d.get("requires", []))
+		portal.configure(d, target_name, Game.visited.has(d["to"]), missing)
+		portal.travel_requested.connect(func(_door): _request_portal_travel(portal, d, tag, locked))
+		portal.travel_blocked.connect(func(names): _on_portal_blocked(pos, names))
+		portal.focus_changed.connect(visual.set_focused)
+		_interactive_portals.append(portal)
+	else:
+		area.body_entered.connect(func(body): _on_door(body, d, tag, locked))
 	world.add_child(area)
 
 	# 锁门: 在门洞放一块挡板
@@ -957,9 +979,7 @@ func _on_door(body: Node, d: Dictionary, tag: String, locked: String) -> void:
 		return
 	var required: Array = d.get("requires", [])
 	if not _has_required_abilities(required):
-		var missing: Array[String] = []
-		for ability in required:
-			if ability != "dash" and not Game.has_ability(ability): missing.append(Game.ABILITY_NAME.get(ability, ability))
+		var missing := _missing_required_abilities(required)
 		var gate_name := "隐藏回响需要: " if d.get("hidden", false) else "终章封印缺少: "
 		Fx.popup(world, player.global_position + Vector2(0,-95), gate_name + " / ".join(missing), Color(0.75,0.55,1))
 		door_cd=0.8; return
@@ -988,9 +1008,36 @@ func _on_door(body: Node, d: Dictionary, tag: String, locked: String) -> void:
 		_enter_room.call_deferred(d["to"], room_id)
 
 func _has_required_abilities(required: Array) -> bool:
+	return _missing_required_abilities(required).is_empty()
+
+func _missing_required_abilities(required: Array) -> Array[String]:
+	var missing: Array[String] = []
 	for ability in required:
-		if ability != "dash" and not Game.has_ability(ability): return false
-	return true
+		if ability != "dash" and not Game.has_ability(ability):
+			missing.append(str(Game.ABILITY_NAME.get(ability, ability)))
+	return missing
+
+func _request_portal_travel(portal: Node, d: Dictionary, tag: String, locked: String) -> void:
+	if door_cd > 0.0:
+		portal.reset_request()
+		return
+	_on_door(player, d, tag, locked)
+
+func _on_portal_blocked(pos: Vector2, missing: Array[String]) -> void:
+	_show_door_hint(pos, "封印尚未共鸣\n需要：" + " / ".join(missing), Color(0.78, 0.58, 1.0))
+	play_sfx("ui", -7.0)
+
+func _make_shaft_safety_floor(center_x: float, floor_y: float, width: float) -> void:
+	var cover := StaticBody2D.new()
+	cover.name = "ShaftSafetyFloor"
+	cover.collision_layer = 0b00001
+	cover.position = Vector2(center_x, floor_y + 3.0)
+	var collision := CollisionShape2D.new()
+	var shape := RectangleShape2D.new()
+	shape.size = Vector2(width, 12.0)
+	collision.shape = shape
+	cover.add_child(collision)
+	world.add_child(cover)
 
 func _play_shaft_transition(to_room: String) -> void:
 	door_cd = 99.0
@@ -1343,9 +1390,15 @@ func play_sfx(key: String, db: float = 0.0) -> void:
 			p.queue_free())
 
 func _auto_screenshot() -> void:
+	if _qa_option("SHOT_UNLOCK_ABILITIES") == "1":
+		for ability_id in Game.ABILITY_NAME:
+			Game.grant_ability(str(ability_id))
 	var rid := _qa_option("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	var portal_kind := _qa_option("SHOT_PORTAL_PROMPT")
+	if portal_kind != "":
+		await _prepare_portal_capture(portal_kind, _qa_option("SHOT_PORTAL_TRAVEL") == "1")
 	if _qa_option("SHOT_INTRO") == "1" and is_instance_valid(cinematic_panel):
 		cinematic_panel.play(CINEMATIC_DATA.INTRO, "intro", 1, true)
 	if _qa_option("SHOT_TUTORIAL") == "1" and is_instance_valid(tutorial_guide):
@@ -1440,6 +1493,39 @@ func _auto_screenshot() -> void:
 		push_error("Failed to save QA screenshot to %s: %s" % [shot_output, error_string(save_error)])
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
+
+func _prepare_portal_capture(kind: String, trigger_travel: bool) -> void:
+	await get_tree().process_frame
+	var selected = null
+	for portal in _interactive_portals:
+		if not is_instance_valid(portal):
+			continue
+		var data: Dictionary = portal.get("door_data")
+		var matches := bool(data.get("hidden", false)) if kind == "hidden" else str(data.get("side", "")) == kind and not bool(data.get("hidden", false))
+		if matches:
+			selected = portal
+			break
+	if not is_instance_valid(selected):
+		push_error("SHOT_PORTAL_PROMPT found no %s portal in room %s" % [kind, room_id])
+		return
+	var selected_data: Dictionary = selected.get("door_data")
+	selected.set_missing(_missing_required_abilities(selected_data.get("requires", [])))
+	selected.force_prompt_visible(true)
+	var player_offset := Vector2.ZERO
+	match str(selected_data.get("side", "")):
+		"left": player_offset = Vector2(75, 0)
+		"right": player_offset = Vector2(-75, 0)
+		"up": player_offset = Vector2(0, 58) if selected_data.get("hidden", false) else Vector2(-95, 0)
+		"down": player_offset = Vector2(0, 34)
+	player.global_position = selected.global_position + player_offset
+	player.velocity = Vector2.ZERO
+	player.process_mode = Node.PROCESS_MODE_DISABLED
+	camera.target = null
+	camera.global_position = selected.global_position
+	if trigger_travel:
+		await get_tree().create_timer(0.55).timeout
+		selected.attempt_interaction()
+		await get_tree().create_timer(0.3).timeout
 
 func _seed_dialogue_progress_for_qa() -> void:
 	for id in ["hub", "mine", "factory_entry", "depths", "temple", "void_core", "castle_gate",

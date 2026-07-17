@@ -22,6 +22,22 @@ static func requires_interaction(door: Dictionary) -> bool:
 		return false
 	return bool(door.get("hidden", false)) or str(door.get("side", "")) in ["up", "down"]
 
+static func anchor_position(door: Dictionary, bounds: Array) -> Vector2:
+	var side := str(door.get("side", ""))
+	var p := float(door.get("p", 0.0))
+	match side:
+		"left":
+			return Vector2(float(bounds[0]) + 12.0, (p + float(bounds[3])) * 0.5)
+		"right":
+			return Vector2(float(bounds[2]) - 12.0, (p + float(bounds[3])) * 0.5)
+		"down":
+			return Vector2(p, float(bounds[3]) - 34.0)
+		"up":
+			if bool(door.get("hidden", false)):
+				return Vector2(p, float(bounds[1]) + 54.0)
+			return Vector2(p, float(bounds[3]) - 30.0)
+	return Vector2.ZERO
+
 static func prompt_text(door: Dictionary, target_name: String, visited: bool, missing: Array) -> String:
 	if not missing.is_empty():
 		return "需要：" + " / ".join(missing)
@@ -101,7 +117,7 @@ func _build_prompt() -> void:
 func _prompt_position() -> Vector2:
 	var side := str(door_data.get("side", ""))
 	if side == "up":
-		return Vector2(-190, 62)
+		return Vector2(-190, 62) if bool(door_data.get("hidden", false)) else Vector2(-190, -142)
 	if side == "down":
 		return Vector2(-190, -152)
 	return Vector2(-190, -132)

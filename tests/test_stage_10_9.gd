@@ -25,6 +25,12 @@ func _init() -> void:
 		_check(portal.prompt_text({"side":"left", "hidden":true}, "遗失档案库", false, []).contains("隐藏回响"), "unvisited secret stays unnamed")
 		_check(portal.prompt_text({"side":"left", "hidden":true}, "遗失档案库", true, []).contains("遗失档案库"), "visited secret shows target name")
 		_check(portal.prompt_text({"side":"up"}, "破碎甲板", false, ["暗影滑翔翼"]).contains("需要：暗影滑翔翼"), "locked prompt lists missing abilities")
+		var up_anchor: Vector2 = portal.anchor_position({"side":"up", "p":700}, [0, 0, 1400, 560])
+		_check(up_anchor == Vector2(700, 530), "up teleport array must be anchored on the room floor")
+		var hidden_anchor: Vector2 = portal.anchor_position({"side":"up", "p":1120, "hidden":true}, [0, 0, 1400, 560])
+		_check(hidden_anchor == Vector2(1120, 54), "hidden up entrance must remain discoverable on the high route")
+		var down_anchor: Vector2 = portal.anchor_position({"side":"down", "p":950}, [0, 0, 1900, 760])
+		_check(down_anchor == Vector2(950, 726), "down interaction must align with the shaft mouth")
 		var node := Area2D.new()
 		node.set_script(portal)
 		get_root().add_child(node)
@@ -42,8 +48,34 @@ func _init() -> void:
 		node.attempt_interaction()
 		_check(counts["blocked"] == 1, "missing ability blocks travel")
 		node.queue_free()
+	_check_main_integration()
+	_check_visual_contract()
 	_check_hidden_links()
 	_finish()
+
+func _check_main_integration() -> void:
+	var source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	for marker in [
+		"const PORTAL_INTERACTION_SCRIPT",
+		"PORTAL_INTERACTION_SCRIPT.requires_interaction",
+		"travel_requested.connect",
+		"travel_blocked.connect",
+		"_make_shaft_safety_floor",
+	]:
+		_check(source.contains(marker), "main portal integration missing: " + marker)
+
+func _check_visual_contract() -> void:
+	var visual_path := "res://scripts/portal_visual.gd"
+	_check(FileAccess.file_exists(visual_path), "portal visual script must exist")
+	if FileAccess.file_exists(visual_path):
+		var source := FileAccess.get_file_as_string(visual_path)
+		for marker in ["func setup(", "func set_focused(", "draw_polyline", "CPUParticles2D"]:
+			_check(source.contains(marker), "portal visual missing: " + marker)
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	_check(main_source.contains("PORTAL_VISUAL_SCRIPT"), "main must preload portal visual")
+	_check(main_source.contains("visual.setup("), "main must configure portal visual")
+	_check(main_source.contains("SHOT_PORTAL_PROMPT"), "main must expose deterministic portal prompt capture")
+	_check(main_source.contains("SHOT_UNLOCK_ABILITIES"), "portal capture must support unlocked hidden entrances")
 
 func _check_hidden_links() -> void:
 	var rooms: Dictionary = load("res://scripts/rooms.gd").ROOMS
