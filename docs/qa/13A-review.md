@@ -36,6 +36,14 @@
 - 图形截图、13A 契约、编辑器解析和动态主场景实例化均扫描全部 `ERROR` / `SCRIPT ERROR`。动态退出只出现 Godot 已知的 `ObjectDB instances` / `resources still in use` 缓存噪声，按项目 Playbook 过滤，不计为运行错误。
 - 本批次没有下载或生成新第三方素材；角色、武器与场景预览复用仓库已有资源，既有来源与许可证记录不变。新增的节点环、连线、面板、机械圆环和背景线条均为 Godot 程序化绘制，无新增外部许可义务。
 
+## 最终回归与发布证明
+
+- 提交后的新鲜全量运行结果为 `TOTAL=14 FAILED=`；全项目编辑器解析 `EDITOR_EXIT=0`，动态主场景 `MAIN_EXIT=0`，无有效 `ERROR` / `SCRIPT ERROR`。
+- 使用源码编译 `Godot Engine v4.7.rc.custom_build.df6235838` 与项目自定义 Windows release 模板导出，`EXPORT_EXIT=0`。
+- `E:\Godot\release\暗影机械城\ShadowMechCity.exe`：68,143,616 bytes，2026-07-20 01:05:19，SHA-256 `1529C04A88DAAAD7C2683259388EBBE1B730F10F9DC9FE9A1EA81C0CE7619B0F`。EXE 是稳定的源码编译 release 模板，因此哈希可与前版相同。
+- `E:\Godot\release\暗影机械城\ShadowMechCity.pck`：10,852,780 bytes，2026-07-20 01:05:22，SHA-256 `69E63B126F2031354F55FF752533E53428AE3112968A1E5C60A57472862F20F`；新内容哈希变化发生在该包。
+- 直接启动发布目录 `ShadowMechCity.exe --shot`，由发布 PCK 生成 `screenshots/13A/release-skill-tree.png` 与 `screenshots/13A/release-inventory.png`。两图已实际打开检查，分别与最终刀剑组合树、防具对比界面一致，证明 13A 已进入发布包。
+
 ## 诚实边界
 
 - 自动截图能证明 1280×720 布局、选择状态、数据对应和预览画面，不能替代真实玩家长时间用鼠标/WASD/方向键操作后的导航手感评价。
