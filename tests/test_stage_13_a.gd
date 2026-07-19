@@ -49,6 +49,11 @@ func _init() -> void:
 	var game_source := FileAccess.get_file_as_string("res://scripts/game.gd")
 	for marker in ["save_version", "ProgressionMigration.migrate", "attribute_snapshot", "StatResolver.resolve"]:
 		_check(game_source.contains(marker), "Game integration missing: " + marker)
+	for ui_path in ["res://scripts/skill_node_control.gd", "res://scripts/skill_preview.gd"]:
+		_check(FileAccess.file_exists(ui_path), "skill UI helper missing: " + ui_path)
+	var skill_panel_source := FileAccess.get_file_as_string("res://scripts/skill_panel.gd")
+	for marker in ["SubViewportContainer", "SkillGraph.nearest_in_direction", "usage", "input", "基础", "身法", "战斗", "探索", "_select_family", "open_for_qa"]:
+		_check(skill_panel_source.contains(marker), "skill panel surface missing: " + marker)
 	_finish()
 
 func _check(ok: bool, message: String) -> void:
