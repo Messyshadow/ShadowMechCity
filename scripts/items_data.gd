@@ -12,6 +12,7 @@ const SLOTS := {
 	"ring":   {"name": "戒指", "stats": ["atk", "ls"]},
 }
 const SLOT_ORDER := ["helmet", "armor", "gloves", "boots", "amulet", "ring"]
+const CATEGORIES := ["武器", "防具", "饰品", "消耗品", "材料", "任务"]
 
 # 稀有度: 名称 / 颜色 / 词条数 / 数值倍率
 const RARITY := [
@@ -37,6 +38,17 @@ static func stat_text(stat: String, val) -> String:
 	if stat == "crit" or stat == "spd":
 		return "%s +%d%%" % [STAT_NAME[stat], int(round(val * 100.0))]
 	return "%s +%d" % [STAT_NAME[stat], int(round(val))]
+
+static func category(item: Dictionary) -> String:
+	if item.get("kind", "") == "weapon":
+		return "武器"
+	if item.get("kind", "") == "consumable":
+		return "消耗品"
+	if item.get("kind", "") == "material":
+		return "材料"
+	if item.get("kind", "") == "quest":
+		return "任务"
+	return "饰品" if str(item.get("slot", "")) in ["amulet", "ring"] else "防具"
 
 ## 随机生成一件装备. rarity 不传则按权重随机.
 static func generate(rarity: int = -1) -> Dictionary:
@@ -78,6 +90,7 @@ static func equipment_modifiers(equipped: Dictionary) -> Dictionary:
 		"armor": 0.0,
 		"max_health": 0.0,
 		"crit_chance": 0.0,
+		"lifesteal": 0.0,
 		"move_speed_percent": 0.0,
 	}
 	for slot in equipped:
@@ -86,6 +99,7 @@ static func equipment_modifiers(equipped: Dictionary) -> Dictionary:
 		out["armor"] += value(item, "def")
 		out["max_health"] += value(item, "hp")
 		out["crit_chance"] += value(item, "crit")
+		out["lifesteal"] += value(item, "ls")
 		out["move_speed_percent"] += value(item, "spd")
 	return out
 

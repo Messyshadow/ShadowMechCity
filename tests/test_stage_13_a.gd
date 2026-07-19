@@ -54,6 +54,23 @@ func _init() -> void:
 	var skill_panel_source := FileAccess.get_file_as_string("res://scripts/skill_panel.gd")
 	for marker in ["SubViewportContainer", "SkillGraph.nearest_in_direction", "usage", "input", "基础", "身法", "战斗", "探索", "_select_family", "open_for_qa"]:
 		_check(skill_panel_source.contains(marker), "skill panel surface missing: " + marker)
+	var items_data = load("res://scripts/items_data.gd")
+	var items_source := FileAccess.get_file_as_string("res://scripts/items_data.gd")
+	_check(items_source.contains("const CATEGORIES"), "inventory categories must exist")
+	if items_source.contains("const CATEGORIES"):
+		_check(items_data.CATEGORIES == ["武器", "防具", "饰品", "消耗品", "材料", "任务"], "inventory categories must stay ordered")
+	var gear_mods: Dictionary = items_data.equipment_modifiers({"ring":{"atk":2.0,"def":1.0,"hp":3.0,"crit":0.1,"ls":1.0,"spd":0.04,"lv":0}})
+	_check(is_equal_approx(gear_mods.get("attack_flat", 0.0), 2.0), "legacy attack gear must map into unified stats")
+	_check(is_equal_approx(gear_mods.get("armor", 0.0), 1.0), "legacy defense gear must map into unified stats")
+	var compare_script = load("res://scripts/item_compare.gd") if FileAccess.file_exists("res://scripts/item_compare.gd") else null
+	_check(compare_script != null, "item comparison helper must exist")
+	if compare_script:
+		var rows: Array = compare_script.compare({"atk":3.0}, {"atk":1.0})
+		_check(rows[0]["delta"] == 2.0 and rows[0]["tone"] == "gain", "item comparison must return signed gains")
+	_check(FileAccess.file_exists("res://scripts/character_equipment_preview.gd"), "character equipment preview must exist")
+	var inventory_source := FileAccess.get_file_as_string("res://scripts/inventory_panel.gd")
+	for marker in ["open_for_qa", "source_index", "_sort_filtered", "GridContainer", "CATEGORIES"]:
+		_check(inventory_source.contains(marker), "inventory panel surface missing: " + marker)
 	_finish()
 
 func _check(ok: bool, message: String) -> void:
