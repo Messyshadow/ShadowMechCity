@@ -31,6 +31,24 @@ func _init() -> void:
 		for node in data.TREE:
 			for field in ["id", "name", "page", "pos", "type", "usage", "desc", "max", "cost", "req"]:
 				_check(node.has(field), "skill node missing field %s: %s" % [field, node.get("id", "?")])
+	var migration = load("res://scripts/progression_migration.gd") if FileAccess.file_exists("res://scripts/progression_migration.gd") else null
+	_check(migration != null, "progression migration must exist")
+	if migration:
+		var old := {
+			"skills":{"hp":2,"spin":1},
+			"inventory":[{"slot":"helmet","rarity":1,"lv":2}],
+			"equipped":{},
+			"abilities":{"wall_climb":true},
+			"unlocked_weapons":["sword","hammer","cannon"],
+		}
+		var once: Dictionary = migration.migrate(old)
+		var twice: Dictionary = migration.migrate(once)
+		_check(once == twice, "save migration must be idempotent")
+		_check(once["skills"] == old["skills"], "legacy skill levels must survive")
+		_check(once["inventory"].size() == 1 and once["abilities"].has("wall_climb"), "inventory and abilities must survive")
+	var game_source := FileAccess.get_file_as_string("res://scripts/game.gd")
+	for marker in ["save_version", "ProgressionMigration.migrate", "attribute_snapshot", "StatResolver.resolve"]:
+		_check(game_source.contains(marker), "Game integration missing: " + marker)
 	_finish()
 
 func _check(ok: bool, message: String) -> void:

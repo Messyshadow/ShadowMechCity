@@ -10,6 +10,8 @@ signal dialogue_ended(npc_id: String)
 signal quest_changed(states: Dictionary)
 
 const QuestRuntime = preload("res://scripts/quest_runtime.gd")
+const StatResolver = preload("res://scripts/stat_resolver.gd")
+const ProgressionMigration = preload("res://scripts/progression_migration.gd")
 
 var kills: int = 0
 var weapon_index: int = 0      # 跨关卡保留当前武器
@@ -108,6 +110,7 @@ func has_save() -> bool:
 
 func save_game() -> void:
 	var data := {
+		"save_version": ProgressionMigration.CURRENT_VERSION,
 		"xp": xp, "level": level, "skill_points": skill_points, "coins": coins,
 		"kills": kills, "weapon_index": weapon_index, "player_hp": player_hp,
 		"skills": skills, "items": items, "unlocked_doors": unlocked_doors,
@@ -134,6 +137,7 @@ func load_save() -> bool:
 	f.close()
 	if typeof(data) != TYPE_DICTIONARY:
 		return false
+	data = ProgressionMigration.migrate(data)
 	xp = int(data.get("xp", 0)); level = int(data.get("level", 1))
 	skill_points = int(data.get("skill_points", 0)); coins = int(data.get("coins", 0))
 	kills = int(data.get("kills", 0)); weapon_index = int(data.get("weapon_index", 0))
@@ -188,6 +192,14 @@ func skill_lv(id: String) -> int:
 	return skills.get(id, 0)
 
 func can_upgrade(node: Dictionary) -> bool:
+	if int(node.get("max", 0)) <= 0:
+		return false
+	var weapon_required := str(node.get("weapon_required", ""))
+	if weapon_required != "" and not is_weapon_unlocked(weapon_required):
+		return false
+	var ability_required := str(node.get("ability_required", ""))
+	if ability_required != "" and not has_ability(ability_required):
+		return false
 	if skill_lv(node["id"]) >= node["max"]:
 		return false
 	if skill_points < node["cost"]:
@@ -246,6 +258,9 @@ func equip_bonus(stat: String) -> float:
 	for slot in equipped:
 		total += ItemsData.value(equipped[slot], stat)
 	return total
+
+func attribute_snapshot(base: Dictionary, temporary: Dictionary = {}) -> Dictionary:
+	return StatResolver.resolve(base, SkillsData.modifiers(skills), ItemsData.equipment_modifiers(equipped), temporary)
 
 # ---- 能力(银河城: 找到才解锁, 用于能力门) ----
 var abilities: Dictionary = {}     # ability_id -> true

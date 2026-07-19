@@ -71,6 +71,24 @@ static func value(item: Dictionary, stat: String) -> float:
 		return 0.0
 	return float(item[stat]) * (1.0 + 0.12 * int(item.get("lv", 0)))
 
+## 将旧装备词条映射到 13A 统一属性键；不改变物品存档结构。
+static func equipment_modifiers(equipped: Dictionary) -> Dictionary:
+	var out := {
+		"attack_flat": 0.0,
+		"armor": 0.0,
+		"max_health": 0.0,
+		"crit_chance": 0.0,
+		"move_speed_percent": 0.0,
+	}
+	for slot in equipped:
+		var item: Dictionary = equipped[slot]
+		out["attack_flat"] += value(item, "atk")
+		out["armor"] += value(item, "def")
+		out["max_health"] += value(item, "hp")
+		out["crit_chance"] += value(item, "crit")
+		out["move_speed_percent"] += value(item, "spd")
+	return out
+
 ## 强化花费
 static func enhance_cost(item: Dictionary) -> int:
 	return (int(item["rarity"]) + 1) * 25 * (int(item.get("lv", 0)) + 1)
