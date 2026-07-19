@@ -74,6 +74,7 @@ var _interactive_portals: Array = []
 var _door_hint: Node = null
 var boss_bar: CanvasLayer
 var _boss: Node = null
+var skill_panel: CanvasLayer
 var inv_panel: CanvasLayer
 var map_panel: Control
 var _bounds: Array = [0, 0, 1400, 560]   # 当前房间边界(用于攀墙越界保护)
@@ -1321,9 +1322,9 @@ func _setup_hud() -> void:
 	hud.set_progress()
 
 func _setup_skill_panel() -> void:
-	var sp := CanvasLayer.new()
-	sp.set_script(load("res://scripts/skill_panel.gd"))
-	add_child(sp)
+	skill_panel = CanvasLayer.new()
+	skill_panel.set_script(load("res://scripts/skill_panel.gd"))
+	add_child(skill_panel)
 
 func _setup_map_panel() -> void:
 	var cl := CanvasLayer.new()
@@ -1468,15 +1469,28 @@ func _auto_screenshot() -> void:
 		var z := cam_zoom.to_float()
 		if z > 0.0:
 			camera.zoom = Vector2(z, z)
-	if OS.get_environment("SHOT_INV") == "1":
-		Game.add_item(ItemsData.generate(3))
-		Game.add_item(ItemsData.generate(2))
-		Game.add_item(ItemsData.generate(1))
-		Game.add_item(ItemsData.generate(0))
-		Game.equip_item(0)
-		Game.coins = 500
-		if inv_panel and inv_panel.has_method("_toggle"):
-			inv_panel._toggle()
+	var progression_ui_opened := false
+	if _qa_option("SHOT_SKILL_TREE") == "1" and is_instance_valid(skill_panel):
+		_seed_progression_ui_for_qa()
+		var skill_page := _qa_option("SHOT_SKILL_PAGE")
+		if skill_page == "": skill_page = "基础"
+		var skill_family := _qa_option("SHOT_SKILL_FAMILY")
+		if skill_family == "": skill_family = "刀剑"
+		var skill_node := _qa_option("SHOT_SKILL_NODE")
+		if skill_node == "": skill_node = "hp"
+		skill_panel.call("open_for_qa", skill_page, skill_family, skill_node)
+		progression_ui_opened = true
+	var inventory_category := _qa_option("SHOT_INVENTORY_CATEGORY")
+	if OS.get_environment("SHOT_INV") == "1" and inventory_category == "":
+		inventory_category = "防具"
+	if inventory_category != "" and is_instance_valid(inv_panel):
+		_seed_inventory_for_qa()
+		var inventory_index := maxi(0, _qa_option("SHOT_INVENTORY_INDEX").to_int())
+		inv_panel.call("open_for_qa", inventory_category, inventory_index)
+		progression_ui_opened = true
+	if progression_ui_opened:
+		await get_tree().process_frame
+		await get_tree().process_frame
 	if OS.get_environment("SHOT_SWITCH") == "1":
 		player._switch_weapon()
 	if OS.get_environment("SHOT_END") == "1" and is_instance_valid(_boss):
@@ -1493,6 +1507,36 @@ func _auto_screenshot() -> void:
 		push_error("Failed to save QA screenshot to %s: %s" % [shot_output, error_string(save_error)])
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
+
+func _seed_progression_ui_for_qa() -> void:
+	# 仅 --shot 进程内使用，不调用 save_game，不污染玩家存档。
+	Game.level = maxi(Game.level, 8)
+	Game.skill_points = maxi(Game.skill_points, 9)
+	Game.coins = maxi(Game.coins, 860)
+	Game.skills = {"hp": 1, "power": 1, "speed": 1, "atk": 1, "crit": 1, "spin": 1}
+	for weapon_id in ["sword", "hammer", "cannon"]:
+		if not Game.unlocked_weapons.has(weapon_id):
+			Game.unlocked_weapons.append(weapon_id)
+	Game.skills_changed.emit()
+	Game.progression_changed.emit()
+
+func _seed_inventory_for_qa() -> void:
+	# 固定物品避免随机词条导致截图对比不稳定；字典仍沿用旧存档格式。
+	Game.coins = maxi(Game.coins, 860)
+	Game.equipped = {
+		"armor": {"name":"稀有·铆钉胸甲", "slot":"armor", "rarity":1, "lv":1, "atk":0.0, "def":2.0, "hp":1.0, "crit":0.0, "ls":0.0, "spd":0.0, "source":"中央车站工坊"},
+		"ring": {"name":"普通·余烬戒指", "slot":"ring", "rarity":0, "lv":0, "atk":1.0, "def":0.0, "hp":0.0, "crit":0.02, "ls":0.0, "spd":0.0, "source":"废弃矿坑"},
+		"boots": {"name":"稀有·涡轮战靴", "slot":"boots", "rarity":1, "lv":1, "atk":0.0, "def":1.0, "hp":0.0, "crit":0.0, "ls":0.0, "spd":0.05, "source":"机械工坊"},
+	}
+	Game.inventory = [
+		{"name":"传奇·虚空壁垒", "slot":"armor", "rarity":3, "lv":2, "atk":0.0, "def":5.0, "hp":3.0, "crit":0.0, "ls":0.0, "spd":0.0, "source":"虚空要塞宝库", "description":"以虚空合金重铸的胸甲，显著提高防御与生命。"},
+		{"name":"史诗·雷鸣护手", "slot":"gloves", "rarity":2, "lv":1, "atk":3.0, "def":1.0, "hp":0.0, "crit":0.08, "ls":0.0, "spd":0.0, "source":"风暴法师掉落"},
+		{"name":"稀有·巡夜头盔", "slot":"helmet", "rarity":1, "lv":0, "atk":0.0, "def":2.0, "hp":2.0, "crit":0.0, "ls":0.0, "spd":0.0, "source":"城防仓库"},
+		{"name":"史诗·天龙指环", "slot":"ring", "rarity":2, "lv":2, "atk":2.0, "def":0.0, "hp":0.0, "crit":0.12, "ls":1.0, "spd":0.0, "source":"虚空天龙机甲"},
+		{"name":"稀有·暗翼护符", "slot":"amulet", "rarity":1, "lv":1, "atk":0.0, "def":0.0, "hp":1.0, "crit":0.06, "ls":1.0, "spd":0.03, "source":"上升气流密室"},
+	]
+	Game.gear_changed.emit()
+	Game.progression_changed.emit()
 
 func _prepare_portal_capture(kind: String, trigger_travel: bool) -> void:
 	await get_tree().process_frame

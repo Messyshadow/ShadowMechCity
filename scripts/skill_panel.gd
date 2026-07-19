@@ -25,6 +25,8 @@ var current_family := "刀剑"
 var selected_id := ""
 var visible_nodes: Array = []
 var node_controls: Dictionary = {}
+var page_buttons: Dictionary = {}
+var family_buttons: Dictionary = {}
 
 func _ready() -> void:
 	layer = 20
@@ -87,10 +89,12 @@ func _build() -> void:
 	for page in SkillsData.PAGES:
 		var button := Button.new()
 		button.text = page
+		button.toggle_mode = true
 		button.custom_minimum_size = Vector2(126, 34)
 		button.pressed.connect(_select_page.bind(page))
 		UI.style_button(button)
 		page_row.add_child(button)
+		page_buttons[page] = button
 	family_row = HBoxContainer.new()
 	family_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	family_row.add_theme_constant_override("separation", 5)
@@ -98,10 +102,12 @@ func _build() -> void:
 	for family in SkillsData.FAMILIES:
 		var button := Button.new()
 		button.text = family
+		button.toggle_mode = true
 		button.custom_minimum_size = Vector2(104, 28)
 		button.pressed.connect(_select_family.bind(family))
 		UI.style_button(button)
 		family_row.add_child(button)
+		family_buttons[family] = button
 	var content := HBoxContainer.new()
 	content.add_theme_constant_override("separation", 10)
 	content.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -138,7 +144,7 @@ func _build() -> void:
 	detail_body.fit_content = false
 	detail_body.custom_minimum_size = Vector2(390, 165)
 	detail_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	detail_body.add_theme_font_size_override("normal_font_size", 16)
+	detail_body.add_theme_font_size_override("normal_font_size", 14)
 	detail_v.add_child(detail_body)
 	upgrade_button = Button.new()
 	upgrade_button.custom_minimum_size.y = 38
@@ -158,12 +164,16 @@ func _select_page(page: String) -> void:
 		return
 	current_page = page
 	family_row.visible = page == "战斗"
+	for page_name in page_buttons:
+		page_buttons[page_name].button_pressed = page_name == current_page
 	_rebuild_graph()
 
 func _select_family(family: String) -> void:
 	if not SkillsData.FAMILIES.has(family):
 		return
 	current_family = family
+	for family_name in family_buttons:
+		family_buttons[family_name].button_pressed = family_name == current_family
 	if current_page == "战斗":
 		_rebuild_graph()
 
@@ -182,11 +192,11 @@ func _rebuild_graph() -> void:
 			var line := Line2D.new()
 			line.width = 3.0
 			line.default_color = Color(PAGE_COLORS[current_page], 0.38)
-			line.points = PackedVector2Array([Vector2(by_id[req]["pos"]) + Vector2(37,37), Vector2(node["pos"]) + Vector2(37,37)])
+			line.points = PackedVector2Array([_graph_position(by_id[req]) + Vector2(37,37), _graph_position(node) + Vector2(37,37)])
 			graph_canvas.add_child(line)
 	for node in visible_nodes:
 		var control := SkillNodeControl.new()
-		control.position = Vector2(node["pos"])
+		control.position = _graph_position(node)
 		graph_canvas.add_child(control)
 		control.setup(node, Game.skill_lv(str(node["id"])), Game.can_upgrade(node))
 		control.chosen.connect(_on_node_chosen)
@@ -195,6 +205,10 @@ func _rebuild_graph() -> void:
 	if selected_id == "" or not node_controls.has(selected_id):
 		selected_id = str(visible_nodes[0]["id"]) if not visible_nodes.is_empty() else ""
 	_select_node(selected_id)
+
+func _graph_position(node: Dictionary) -> Vector2:
+	var authored := Vector2(node["pos"])
+	return Vector2(clampf(authored.x, 8.0, 600.0), clampf(authored.y, 8.0, 380.0))
 
 func _on_node_chosen(id: String) -> void:
 	_select_node(id)
@@ -232,8 +246,9 @@ func _refresh_detail() -> void:
 		for candidate in SkillsData.TREE:
 			if candidate["id"] == req:
 				req_names.append(str(candidate["name"]))
-	detail_body.text = "[color=#78dfff]按键 / 触发[/color]\n%s\n\n[color=#ffd56a]如何使用[/color]\n%s\n\n[color=#a9b9ca]效果[/color]\n%s\n[color=#8395a8]前置：%s[/color]" % [
+	detail_body.text = "[color=#78dfff]按键 / 触发[/color]\n%s\n[color=#ffd56a]如何使用[/color]\n%s\n[color=#a9b9ca]效果[/color]\n%s\n[color=#8de8ae]成长：%s[/color]\n[color=#8395a8]前置：%s[/color]" % [
 		node.get("input", "自动生效"), node.get("usage", ""), node.get("desc", ""),
+		_effect_progress(node, level),
 		"无" if req_names.is_empty() else "、".join(req_names),
 	]
 	var weapon := Weapons.get_weapon(Game.weapon_index)
@@ -247,6 +262,17 @@ func _refresh_detail() -> void:
 	else:
 		upgrade_button.text = "升级至 %d 级  ·  消耗 %d 技能点" % [level + 1, int(node["cost"])]
 		upgrade_button.disabled = not Game.can_upgrade(node)
+
+func _effect_progress(node: Dictionary, level: int) -> String:
+	var max_level := int(node.get("max", 0))
+	if max_level <= 0:
+		var ability := str(node.get("ability_required", ""))
+		var weapon_id := str(node.get("weapon_required", ""))
+		var unlocked := Game.has_ability(ability) if ability != "" else Game.is_weapon_unlocked(weapon_id)
+		return "已获取 · 等待分支" if unlocked else "未获取 · 分支锁定"
+	if level >= max_level:
+		return "已达到最高等级"
+	return "%d级 → %d级：%s" % [level, level + 1, node.get("desc", "解锁效果")]
 
 func _upgrade_selected() -> void:
 	var node := _selected_node()

@@ -2,7 +2,7 @@ class_name SkillPreview
 extends SubViewportContainer
 ## 独立技能教学预览：只播放表现，不生成 Area2D 或消耗 Game 资源。
 
-const PREVIEW_SIZE := Vector2i(410, 178)
+const PREVIEW_SIZE := Vector2i(410, 150)
 
 var viewport: SubViewport
 var actor: AnimatedSprite2D
@@ -30,21 +30,21 @@ func _build_preview() -> void:
 		var line := Line2D.new()
 		line.width = 1.0
 		line.default_color = Color(0.16, 0.48, 0.62, 0.24)
-		line.points = PackedVector2Array([Vector2(18 + index * 74, 22), Vector2(58 + index * 74, 156)])
+		line.points = PackedVector2Array([Vector2(18 + index * 74, 18), Vector2(58 + index * 74, 128)])
 		viewport.add_child(line)
 	var floor_line := Line2D.new()
 	floor_line.width = 3.0
 	floor_line.default_color = Color(0.22, 0.82, 0.98, 0.55)
-	floor_line.points = PackedVector2Array([Vector2(20, 146), Vector2(390, 146)])
+	floor_line.points = PackedVector2Array([Vector2(20, 122), Vector2(390, 122)])
 	viewport.add_child(floor_line)
 	actor = AnimatedSprite2D.new()
 	actor.sprite_frames = AnimLoader.build_player()
-	actor.position = Vector2(205, 130)
-	actor.scale = Vector2(1.35, 1.35)
+	actor.position = Vector2(205, 108)
+	actor.scale = Vector2(1.2, 1.2)
 	actor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	viewport.add_child(actor)
 	weapon_sprite = Sprite2D.new()
-	weapon_sprite.position = Vector2(219, 102)
+	weapon_sprite.position = Vector2(219, 82)
 	weapon_sprite.scale = Vector2(0.58, 0.58)
 	weapon_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	viewport.add_child(weapon_sprite)
@@ -55,7 +55,7 @@ func play_node(node: Dictionary, weapon: Dictionary = {}) -> void:
 		return
 	if current_tween and current_tween.is_valid():
 		current_tween.kill()
-	actor.position = Vector2(205, 130)
+	actor.position = Vector2(205, 108)
 	actor.rotation = 0.0
 	actor.modulate = Color.WHITE
 	weapon_sprite.rotation = float(weapon.get("rest_rot", -0.5))

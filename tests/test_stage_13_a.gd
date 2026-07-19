@@ -89,6 +89,9 @@ func _init() -> void:
 	_check(is_equal_approx(expected_snapshot["crit_chance"], 0.17), "legacy crit modifiers must survive snapshot resolution")
 	_check(is_equal_approx(expected_snapshot["max_mp"], 120.0), "legacy MP modifiers must survive snapshot resolution")
 	_check(is_equal_approx(expected_snapshot["cooldown_rate"], 0.85), "legacy cooldown modifiers must survive snapshot resolution")
+	var main_source := FileAccess.get_file_as_string("res://scripts/main.gd")
+	for marker in ["SHOT_SKILL_TREE", "SHOT_SKILL_PAGE", "SHOT_SKILL_FAMILY", "SHOT_SKILL_NODE", "SHOT_INVENTORY_CATEGORY", "SHOT_INVENTORY_INDEX"]:
+		_check(main_source.contains(marker), "deterministic capture hook missing: " + marker)
 	_finish()
 
 func _check(ok: bool, message: String) -> void:
