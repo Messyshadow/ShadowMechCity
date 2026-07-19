@@ -71,6 +71,24 @@ func _init() -> void:
 	var inventory_source := FileAccess.get_file_as_string("res://scripts/inventory_panel.gd")
 	for marker in ["open_for_qa", "source_index", "_sort_filtered", "GridContainer", "CATEGORIES"]:
 		_check(inventory_source.contains(marker), "inventory panel surface missing: " + marker)
+	var player_source := FileAccess.get_file_as_string("res://scripts/player.gd")
+	for marker in ["func _base_attributes()", "func _attributes()", "Game.attribute_snapshot"]:
+		_check(player_source.contains(marker), "player snapshot integration missing: " + marker)
+	for function_name in ["max_hp", "max_mp", "_run_speed", "_skill_dmg"]:
+		var start := player_source.find("func %s(" % function_name)
+		var finish := player_source.find("\nfunc ", start + 6) if start >= 0 else -1
+		var block := player_source.substr(start, finish - start) if start >= 0 and finish > start else ""
+		_check(not block.contains("Game.equip_bonus"), "%s must consume the unified snapshot" % function_name)
+	var expected_snapshot: Dictionary = load("res://scripts/stat_resolver.gd").resolve(
+		{"attack":4.0,"max_health":6.0,"move_speed":270.0,"crit_chance":0.0,"max_mp":100.0,"skill_damage":1.0,"cooldown_rate":1.0},
+		load("res://scripts/skills_data.gd").modifiers({"atk":1,"power":2,"hp":2,"crit":1,"speed":1,"mp_max":1,"skill_dmg":1,"skill_cd":1}),
+		load("res://scripts/items_data.gd").equipment_modifiers({"ring":{"atk":3.0,"hp":1.0,"crit":0.05,"spd":0.04,"lv":0}}), {})
+	_check(is_equal_approx(expected_snapshot["attack"], 10.0), "legacy attack modifiers must survive snapshot resolution")
+	_check(is_equal_approx(expected_snapshot["max_health"], 9.0), "legacy health modifiers must survive snapshot resolution")
+	_check(is_equal_approx(expected_snapshot["move_speed"], 302.4), "legacy speed modifiers must survive snapshot resolution")
+	_check(is_equal_approx(expected_snapshot["crit_chance"], 0.17), "legacy crit modifiers must survive snapshot resolution")
+	_check(is_equal_approx(expected_snapshot["max_mp"], 120.0), "legacy MP modifiers must survive snapshot resolution")
+	_check(is_equal_approx(expected_snapshot["cooldown_rate"], 0.85), "legacy cooldown modifiers must survive snapshot resolution")
 	_finish()
 
 func _check(ok: bool, message: String) -> void:

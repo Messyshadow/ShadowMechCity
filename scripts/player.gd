@@ -158,22 +158,45 @@ func _ready() -> void:
 	health_changed.emit(health, max_hp())
 
 # ---- 技能加成 ----
+func _base_attributes() -> Dictionary:
+	return {
+		"attack": float(weapon["damage"]),
+		"max_health": float(MAX_HEALTH + Game.heart_pieces),
+		"armor": 0.0,
+		"crit_chance": float(weapon.get("crit_bonus", 0.0)),
+		"crit_damage": 1.5,
+		"lifesteal": 0.0,
+		"move_speed": RUN_SPEED,
+		"stagger_power": 1.0,
+		"skill_damage": 1.0,
+		"cooldown_rate": 1.0,
+		"max_mp": MAX_MP,
+		"mp_regen": MP_REGEN,
+	}
+
+func _attributes() -> Dictionary:
+	return Game.attribute_snapshot(_base_attributes())
+
 func max_hp() -> int:
-	return MAX_HEALTH + Game.skill_lv("hp") + int(round(Game.equip_bonus("hp"))) + Game.heart_pieces
+	return int(round(float(_attributes()["max_health"])))
 func max_mp() -> float:
-	return MAX_MP + 20.0 * Game.skill_lv("mp_max")   # 机械超频:技力强化
+	return float(_attributes()["max_mp"])
 func _max_air_jumps() -> int:
 	return MAX_AIR_JUMPS + Game.skill_lv("triple")
 func _run_speed() -> float:
-	return RUN_SPEED * (1.0 + 0.08 * Game.skill_lv("speed") + Game.equip_bonus("spd"))
+	return float(_attributes()["move_speed"])
 func _on_skills_changed() -> void:
 	# 加点后回满血作为奖励
 	health = max_hp()
+	mp = minf(mp, max_mp())
 	health_changed.emit(health, max_hp())
+	resource_changed.emit(mp, max_mp(), rage, MAX_RAGE)
 func _on_gear_changed() -> void:
-	# 装备变化: 钳制血量到新上限并刷新显示
+	# 装备变化: 钳制生命/技力到新上限并刷新显示
 	health = clampi(health, 1, max_hp())
+	mp = minf(mp, max_mp())
 	health_changed.emit(health, max_hp())
+	resource_changed.emit(mp, max_mp(), rage, MAX_RAGE)
 
 func heal(n: int) -> void:
 	health = mini(health + n, max_hp())
@@ -269,9 +292,10 @@ func _update_timers(delta: float) -> void:
 	if wall_lock > 0.0:
 		wall_lock -= delta
 	# 主动技能资源: 技力回复 / 各招冷却 / 搓招窗口
-	var mmax := max_mp()
+	var attributes := _attributes()
+	var mmax := float(attributes["max_mp"])
 	if mp < mmax:
-		mp = minf(mp + (MP_REGEN + 3.0 * Game.skill_lv("mp_regen")) * delta, mmax)
+		mp = minf(mp + float(attributes["mp_regen"]) * delta, mmax)
 	for k in _skill_cds:
 		if _skill_cds[k] > 0.0:
 			_skill_cds[k] -= delta
@@ -544,9 +568,8 @@ func gain_rage(n: float) -> void:
 	rage = minf(rage + n, MAX_RAGE)
 
 func _skill_dmg(mult: float) -> int:
-	var base: int = int(weapon["damage"]) + Game.skill_lv("atk") + Game.skill_lv("power") + int(round(Game.equip_bonus("atk")))
-	var oc := 1.0 + 0.15 * Game.skill_lv("skill_dmg")   # 机械超频:过载输出
-	return int(round(float(base) * mult * oc))
+	var attributes := _attributes()
+	return int(round(float(attributes["attack"]) * mult * float(attributes["skill_damage"])))
 
 func _try_skill() -> void:
 	# 优先级: ↑上挑 > 双击↓环身爆发 > (双击同向且仍按住)突进 > 地面波
@@ -572,7 +595,7 @@ func _cast(arch: String) -> void:
 		return
 	_aim_facing()
 	mp -= float(d["mp"])
-	_skill_cds[arch] = float(d["cd"]) * (1.0 - 0.15 * Game.skill_lv("skill_cd"))   # 机械超频:招式精通
+	_skill_cds[arch] = float(d["cd"]) * float(_attributes()["cooldown_rate"])
 	gain_rage(4.0)
 	Fx.cast_ring(get_parent(), global_position + Vector2(0, -30), weapon["color"])
 	match arch:
