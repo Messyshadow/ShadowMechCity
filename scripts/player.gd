@@ -568,6 +568,9 @@ func _fire_skill() -> void:
 	match weapon["id"]:
 		"hammer": _heavy_hammer()
 		"cannon": _heavy_cannon()
+		"dual_blades": _dual_blades_heavy()
+		"spear": _spear_heavy()
+		"crossbow": _crossbow_heavy()
 		_:        _heavy_sword()
 
 # ---- 主动技能分派(v2): K + 方向搓招 ----
@@ -629,6 +632,17 @@ func _aoe_hit(center: Vector2, radius: float, dmg: int, kb_scale: float, kb_up: 
 			e.take_damage(dmg, Vector2(kd * kb_scale, kb_up))
 			Fx.hit_spark(get_parent(), ep)
 			Fx.hit_ring(get_parent(), ep, weapon["color"])
+
+func _line_hit(length: float, half_height: float, dmg: int, kb_scale: float, kb_up: float) -> void:
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(enemy) or not enemy.has_method("take_damage"):
+			continue
+		var offset: Vector2 = (enemy as Node2D).global_position - global_position
+		if offset.x * facing < 0.0 or absf(offset.x) > length or absf(offset.y + 34.0) > half_height:
+			continue
+		enemy.take_damage(dmg, Vector2(facing * kb_scale, kb_up))
+		Fx.hit_spark(get_parent(), (enemy as Node2D).global_position)
+		Fx.hit_ring(get_parent(), (enemy as Node2D).global_position, weapon["color"])
 
 # 任意角度飞弹(全向弹幕/防空齐射用)
 func _spawn_proj_vel(scale: float, tint: Color, dmg: int, v: Vector2, life: float, pierce: int = 2) -> void:
@@ -828,6 +842,37 @@ func _heavy_hammer() -> void:
 	_play_sfx("atk_hammer", -1.0)
 	_squash(Vector2(1.4, 0.7))   # 后坐力
 
+func _dual_blades_heavy() -> void:
+	var center := global_position + Vector2(facing * 64, -34)
+	Fx.play_slash(get_parent(), center + Vector2(0, -10), facing, slash_frames, 1.15, weapon["color"])
+	Fx.play_slash(get_parent(), center + Vector2(0, 12), -facing, slash_frames, 1.05, Color(0.75, 0.45, 1.0))
+	_line_hit(126.0, 76.0, _skill_dmg(1.55), 280.0, -160.0)
+	velocity.x = facing * 210.0
+	Game.shake(6.0)
+	Game.hitstop(0.06, 0.04)
+	_play_sfx("attack", -1.0)
+	_squash(Vector2(1.35, 0.72))
+
+func _spear_heavy() -> void:
+	var tip := global_position + Vector2(facing * 128, -34)
+	Fx.speed_lines(get_parent(), global_position + Vector2(0, -34), facing, weapon["color"])
+	Fx.play_slash(get_parent(), tip, facing, fx_frames["bolt"], 1.15, weapon["color"])
+	_line_hit(240.0, 48.0, _skill_dmg(1.9), 430.0, -90.0)
+	velocity.x = facing * 150.0
+	Game.shake(8.0)
+	Game.hitstop(0.075, 0.04)
+	_play_sfx("attack", -1.0)
+	_squash(Vector2(1.45, 0.68))
+
+func _crossbow_heavy() -> void:
+	_spawn_projectile(fx_frames["bolt2"], 1.55, weapon["color"], _skill_dmg(1.8), 1080.0, 2.4, 6)
+	Fx.shockwave(get_parent(), global_position + Vector2(facing * 52, -34), weapon["color"])
+	Fx.screen_flash(get_tree(), Color(1.0, 0.35, 0.2, 0.15))
+	velocity.x = -facing * 130.0
+	Game.shake(7.0)
+	_play_sfx("atk_cannon", -1.0)
+	_squash(Vector2(1.3, 0.76))
+
 # ------------------------------------------------------------- 空中下砸
 func _start_dive() -> void:
 	state = S.DIVE
@@ -926,7 +971,10 @@ func _start_attack() -> void:
 
 	if weapon["type"] == "ranged":
 		_aim_facing()
-		_fire_weapon()
+		if weapon["id"] == "crossbow":
+			_fire_crossbow()
+		else:
+			_fire_weapon()
 		return
 
 	# 近战: 判定框 + 可见挥砍
@@ -956,11 +1004,31 @@ func _start_attack() -> void:
 	if weapon["id"] == "hammer":   # 重锤: 额外冲击波 + 闪光
 		Fx.shockwave(get_parent(), fpos + Vector2(0, 28), weapon["color"])
 		Fx.screen_flash(get_tree(), Color(1.0, 0.55, 0.2, 0.12))
+	elif weapon["id"] == "dual_blades":
+		_dual_blades_attack_fx(fpos)
+	elif weapon["id"] == "spear":
+		_spear_attack_fx(fpos)
 	_play_sfx(weapon["sfx"], -3.0)
 	if is_on_floor() and not attack_up:
 		# 默认原地攻击；只有明确按住左右方向才踏步，避免自动推进伤害区。
 		var attack_move := Input.get_axis("move_left", "move_right")
-		velocity.x = attack_move * (110.0 if attack_index < combo_max else 230.0)
+		var step_speed := 110.0 if attack_index < combo_max else 230.0
+		if weapon["id"] == "dual_blades":
+			step_speed *= 1.35
+		elif weapon["id"] == "spear":
+			step_speed *= 0.75
+		velocity.x = attack_move * step_speed
+
+func _dual_blades_attack_fx(origin: Vector2) -> void:
+	Fx.play_slash(get_parent(), origin + Vector2(facing * 10, 10), -facing, slash_frames, 0.72 + attack_index * 0.08, Color(0.72, 0.42, 1.0))
+	if attack_index >= int(weapon["combo"]):
+		Fx.hit_ring(get_parent(), origin, weapon["color"])
+		Game.shake(6.0)
+
+func _spear_attack_fx(origin: Vector2) -> void:
+	Fx.speed_lines(get_parent(), origin - Vector2(facing * 48, 0), facing, weapon["color"])
+	if attack_index >= int(weapon["combo"]):
+		Fx.shockwave(get_parent(), origin + Vector2(facing * 34, 0), weapon["color"])
 
 func _swing_weapon() -> void:
 	if weapon_pivot == null:
@@ -1000,6 +1068,15 @@ func _fire_weapon() -> void:
 	if is_on_floor():
 		velocity.x = -facing * 100.0
 
+func _fire_crossbow() -> void:
+	var yoff := -40.0 if attack_index % 2 == 0 else -30.0
+	_spawn_projectile(fx_frames["bolt2"], 0.72, weapon["color"], int(round(float(_attributes()["attack"]))), 940.0, 1.8, 2, yoff)
+	Fx.hit_spark(get_parent(), global_position + Vector2(facing * 54, yoff))
+	weapon_pivot.rotation = -0.08 * facing
+	velocity.x = -facing * 45.0
+	Game.shake(weapon["shake"])
+	_play_sfx("atk_cannon", -3.0)
+
 func _do_attack_state(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y = min(velocity.y + GRAVITY * delta, MAX_FALL)
@@ -1032,11 +1109,12 @@ func _land_hit(enemy: Node2D) -> void:
 	var combo_max: int = weapon["combo"]
 	var is_finisher: bool = attack_index >= combo_max
 	# 基础伤害 + 近战强化 + 终结技加成
-	var dmg: int = weapon["damage"] + Game.skill_lv("atk") + int(round(Game.equip_bonus("atk"))) + (1 if is_finisher else 0)
+	var attributes := _attributes()
+	var dmg: int = int(round(float(attributes["attack"]))) + (1 if is_finisher else 0)
 	if Game.skill_lv("ultimate") > 0:
 		dmg += 1
 	# 暴击 (技能 + 装备)
-	var is_crit := randf() < (0.12 * Game.skill_lv("crit") + Game.equip_bonus("crit") + float(weapon.get("crit_bonus", 0.0)))
+	var is_crit := randf() < float(attributes["crit_chance"])
 	if is_crit:
 		dmg *= 2
 	var kb := Vector2(facing * (240.0 if not is_finisher else 440.0), -120.0)
