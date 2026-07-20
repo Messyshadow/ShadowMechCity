@@ -51,6 +51,30 @@ const LIST := [
 		"hand": Vector2(3, -34), "rest_rot": -0.75, "fx": "bolt", "fx_scale": 1.35,
 		"fx_tint": Color(0.46, 1.0, 0.38), "sfx": "atk_hammer",
 	},
+	{
+		"id": "dual_blades", "name": "影铸双刃", "type": "melee", "family": "双刀",
+		"damage": 5, "combo": 4, "atk_time": 0.18, "hit_size": Vector2(112, 104), "reach": 54,
+		"color": Color(0.42, 0.92, 1.0), "shake": 4.5,
+		"sprite": "res://assets/weapons/dual_blades.svg", "hand": Vector2(7, -34), "rest_rot": -0.38,
+		"fx": "slash", "fx_scale": 0.86, "fx_tint": Color(0.48, 0.9, 1.0), "sfx": "attack",
+		"acquisition": "熔炉区秘室·废热回收井", "combo_skill": "dual_execution",
+	},
+	{
+		"id": "spear", "name": "天穹齿轮枪", "type": "melee", "family": "长枪",
+		"damage": 7, "combo": 3, "atk_time": 0.34, "hit_size": Vector2(190, 76), "reach": 92,
+		"color": Color(0.95, 0.78, 0.28), "shake": 6.5,
+		"sprite": "res://assets/weapons/spear.svg", "hand": Vector2(9, -33), "rest_rot": -0.16,
+		"fx": "bolt", "fx_scale": 1.08, "fx_tint": Color(0.98, 0.78, 0.28), "sfx": "attack",
+		"acquisition": "遗迹圣殿秘室·星轨祭坛", "combo_skill": "spear_dragon",
+	},
+	{
+		"id": "crossbow", "name": "裂隙连发弩", "type": "ranged", "family": "弓弩",
+		"damage": 6, "combo": 2, "atk_time": 0.30, "hit_size": Vector2.ZERO, "reach": 48,
+		"color": Color(1.0, 0.44, 0.3), "shake": 5.5,
+		"sprite": "res://assets/weapons/crossbow.svg", "hand": Vector2(12, -34), "rest_rot": 0.0,
+		"fx": "bolt", "fx_scale": 0.82, "fx_tint": Color(1.0, 0.5, 0.3), "sfx": "atk_cannon",
+		"acquisition": "虚空要塞秘室·裂隙观星台", "combo_skill": "crossbow_barrage",
+	},
 ]
 
 static func get_weapon(idx: int) -> Dictionary:
