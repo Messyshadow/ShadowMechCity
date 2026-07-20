@@ -3,6 +3,7 @@ extends Node2D
 
 const PLAYER_SCRIPT := preload("res://scripts/player.gd")
 const ENEMY_SCRIPT := preload("res://scripts/enemy.gd")
+const ENEMY_COMBAT_DIRECTOR := preload("res://scripts/enemy_combat_director.gd")
 const THEME_BACKDROP_SCRIPT := preload("res://scripts/theme_backdrop.gd")
 const DOWNWARD_PORTAL_VISUAL := preload("res://scripts/downward_portal_visual.gd")
 const SHAFT_TRANSITION_SCRIPT := preload("res://scripts/shaft_transition.gd")
@@ -48,19 +49,20 @@ const ENEMY_DEFS := {
 	"moltenslime": {"sprite": "slime", "frames": 6, "fps": 6.7, "scale": 0.66, "hp": 9, "speed": 60.0, "size": Vector2(56, 58), "tint": Color(1.0, 0.6, 0.3), "behavior": "charger", "dmg": 2, "kbr": 0.1},
 	"drill_brute": {"sprite": "golem", "frames": 6, "fps": 9.0, "scale": 1.06, "hp": 48, "speed": 52.0, "size": Vector2(102, 112), "tint": Color(0.78, 0.65, 0.45), "behavior": "charger", "dmg": 3, "kbr": 0.75},
 	# 虚空要塞专属敌种(阶段10.5)
-	"void_eagle": {"sprite": "bat", "frames": 4, "fps": 9.0, "scale": 0.82, "hp": 11, "speed": 150.0, "size": Vector2(62, 54), "tint": Color(0.58, 0.8, 1.0), "behavior": "diver", "dmg": 2, "kbr": 0.15},
-	"void_wyvern": {"sprite": "bat", "frames": 4, "fps": 8.5, "scale": 1.0, "hp": 16, "speed": 92.0, "size": Vector2(82, 66), "tint": Color(0.72, 0.42, 1.0), "behavior": "teleflyer", "dmg": 2, "kbr": 0.25},
-	"storm_mage": {"sprite": "jelly", "frames": 6, "fps": 7.2, "scale": 0.78, "hp": 14, "speed": 38.0, "size": Vector2(62, 64), "tint": Color(0.55, 0.7, 1.0), "behavior": "storm_mage", "dmg": 2, "kbr": 0.2},
+	"void_eagle": {"sprite": "bat", "frames": 4, "fps": 9.0, "scale": 0.82, "hp": 11, "speed": 150.0, "size": Vector2(62, 54), "tint": Color(0.58, 0.8, 1.0), "behavior": "diver", "role": "harrier", "dmg": 2, "kbr": 0.15},
+	"void_wyvern": {"sprite": "bat", "frames": 4, "fps": 8.5, "scale": 1.0, "hp": 16, "speed": 92.0, "size": Vector2(82, 66), "tint": Color(0.72, 0.42, 1.0), "behavior": "teleflyer", "role": "ambusher", "dmg": 2, "kbr": 0.25},
+	"storm_mage": {"sprite": "jelly", "frames": 6, "fps": 7.2, "scale": 0.78, "hp": 14, "speed": 38.0, "size": Vector2(62, 64), "tint": Color(0.55, 0.7, 1.0), "behavior": "storm_mage", "role": "controller", "dmg": 2, "kbr": 0.2},
 	# 暗影王城精英(阶段10.6)
-	"soul_shield": {"sprite": "golem", "frames": 6, "fps": 8.0, "scale": 0.98, "hp": 34, "speed": 42.0, "size": Vector2(92, 108), "tint": Color(0.5, 0.68, 0.9), "behavior": "charger", "dmg": 3, "kbr": 0.8},
-	"soul_spear": {"sprite": "beast", "frames": 6, "fps": 6.5, "scale": 0.82, "hp": 26, "speed": 92.0, "size": Vector2(66, 78), "tint": Color(0.82, 0.35, 0.65), "behavior": "charger", "dmg": 3, "kbr": 0.45},
-	"soul_cannon": {"sprite": "golem", "frames": 6, "fps": 8.0, "scale": 0.72, "hp": 24, "speed": 34.0, "size": Vector2(76, 88), "tint": Color(0.55, 0.4, 1.0), "behavior": "storm_mage", "dmg": 3, "kbr": 0.35},
+	"soul_shield": {"sprite": "golem", "frames": 6, "fps": 8.0, "scale": 0.98, "hp": 34, "speed": 42.0, "size": Vector2(92, 108), "tint": Color(0.5, 0.68, 0.9), "behavior": "charger", "role": "vanguard", "dmg": 3, "kbr": 0.8},
+	"soul_spear": {"sprite": "beast", "frames": 6, "fps": 6.5, "scale": 0.82, "hp": 26, "speed": 92.0, "size": Vector2(66, 78), "tint": Color(0.82, 0.35, 0.65), "behavior": "charger", "role": "lancer", "dmg": 3, "kbr": 0.45},
+	"soul_cannon": {"sprite": "golem", "frames": 6, "fps": 8.0, "scale": 0.72, "hp": 24, "speed": 34.0, "size": Vector2(76, 88), "tint": Color(0.55, 0.4, 1.0), "behavior": "storm_mage", "role": "artillery", "dmg": 3, "kbr": 0.35},
 }
 
 const WALL := 40
 const DOWN_PORTAL_HALF_WIDTH := 90.0
 
 var world: Node2D
+var combat_director: Node
 var pbg: ParallaxBackground
 var camera: Camera2D
 var hud: CanvasLayer
@@ -311,6 +313,9 @@ func _enter_room(id: String, from_room: String) -> void:
 	_rune_lit = 0
 	for c in world.get_children():
 		c.queue_free()
+	combat_director = ENEMY_COMBAT_DIRECTOR.new()
+	combat_director.name = "EnemyCombatDirector"
+	world.add_child(combat_director)
 	_build_parallax(room["theme"])
 	_make_theme_backdrop(room)
 	var tint: Color = Rooms.THEME_TINT.get(room["theme"], Color.WHITE)
@@ -1172,6 +1177,11 @@ func _spawn_enemy(x: float, y: float, type: String) -> void:
 	en.max_hp = def["hp"]; en.move_speed = def["speed"]; en.body_size = def["size"]
 	en.tint = def["tint"]; en.behavior = def["behavior"]
 	en.contact_damage = def["dmg"]; en.knockback_resist = def["kbr"]
+	en.enemy_type = type
+	en.combat_role = str(def.get("role", ""))
+	en.combat_director = combat_director
+	var bounds: Array = Rooms.ROOMS[room_id]["bounds"]
+	en.room_bounds = Rect2(Vector2(bounds[0], bounds[1]), Vector2(bounds[2] - bounds[0], bounds[3] - bounds[1]))
 	en.position = Vector2(x, y - 6)
 	world.add_child(en)
 

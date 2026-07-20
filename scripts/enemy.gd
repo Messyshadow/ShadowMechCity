@@ -14,6 +14,10 @@ var contact_damage := 1
 var body_size := Vector2(46, 46)
 var tint := Color(1, 1, 1)
 var knockback_resist := 0.0   # 0~1, brute 较高
+var enemy_type := ""
+var combat_role := ""
+var combat_director: Node
+var room_bounds := Rect2()
 
 const GRAVITY := 1400.0
 const PROJ := preload("res://scripts/enemy_projectile.gd")
@@ -62,6 +66,12 @@ func _ready() -> void:
 	collision_mask = 0b00001    # world
 	_base_y = global_position.y
 	_build()
+	if not combat_role.is_empty() and is_instance_valid(combat_director):
+		combat_director.register_enemy(self, combat_role)
+
+func _exit_tree() -> void:
+	if is_instance_valid(combat_director):
+		combat_director.unregister_enemy(self)
 
 func _build() -> void:
 	var col := CollisionShape2D.new()
@@ -401,6 +411,8 @@ func _flash() -> void:
 
 func _die() -> void:
 	dead = true
+	if is_instance_valid(combat_director):
+		combat_director.unregister_enemy(self)
 	Game.add_kill()
 	Game.hitstop(0.08, 0.04)
 	Game.shake(6.0)

@@ -37,13 +37,21 @@ func _init() -> void:
 
 	for marker in STRATEGY_MARKERS:
 		_expect(enemy_src.contains("func %s" % marker), "enemy strategy exists: %s" % marker)
+	for marker in ["var enemy_type", "var combat_role", "var combat_director", "var room_bounds"]:
+		_expect(enemy_src.contains(marker), "enemy wiring marker exists: %s" % marker)
 	_expect(enemy_src.contains("request_action"), "enemy strategies request coordinated actions")
 	_expect(enemy_src.contains("formation_offset"), "enemy strategies consume formation slots")
+	_expect(main_src.contains("ENEMY_COMBAT_DIRECTOR"), "main preloads combat director")
+	_expect(main_src.contains("combat_director ="), "main assigns combat director to enemies")
+	_expect(main_src.contains("combat_role ="), "main assigns combat role to enemies")
+	_expect(main_src.contains("room_bounds ="), "main passes safe movement bounds")
 	_expect(main_src.contains("SHOT_ENEMY_SQUAD"), "squad capture hook exists")
 
 	var rooms = load("res://scripts/rooms.gd").ROOMS
 	_expect(_room_has_types(rooms, "void_hangar", ["void_eagle", "void_wyvern", "storm_mage"]), "void hangar contains full coordinated trio")
 	_expect(_room_has_types(rooms, "castle_gallery", ["soul_shield", "soul_spear", "soul_cannon"]), "castle gallery contains full coordinated trio")
+	_expect(_room_spawn_gap(rooms, "void_hangar", ["void_eagle", "void_wyvern", "storm_mage"]) >= 180.0, "void trio starts with readable separation")
+	_expect(_room_spawn_gap(rooms, "castle_gallery", ["soul_shield", "soul_spear", "soul_cannon"]) >= 180.0, "castle trio starts with readable separation")
 
 	if failures.is_empty():
 		print("STAGE_13_C_PASS")
@@ -70,6 +78,17 @@ func _room_has_types(rooms: Dictionary, room_id: String, required: Array) -> boo
 		if not found.has(str(enemy_id)):
 			return false
 	return true
+
+func _room_spawn_gap(rooms: Dictionary, room_id: String, required: Array) -> float:
+	var xs: Array[float] = []
+	for spawn in rooms[room_id].get("enemies", []):
+		if spawn.size() >= 3 and required.has(str(spawn[2])):
+			xs.append(float(spawn[0]))
+	xs.sort()
+	var gap := INF
+	for i in range(1, xs.size()):
+		gap = minf(gap, xs[i] - xs[i - 1])
+	return gap if xs.size() >= required.size() else 0.0
 
 func _test_director_runtime(path: String) -> void:
 	var director = load(path).new()
