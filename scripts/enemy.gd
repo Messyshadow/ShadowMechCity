@@ -42,6 +42,14 @@ var _atk_state := 0      # 0 无 / 1 起手 / 2 扑击
 var _atk_timer := 0.0
 var _atk_cd := 0.0
 const ATTACK_RANGE := 86.0
+const ROLE_WARN_TIME := 0.30
+const FRONTAL_SHIELD_RATIO := 0.55
+var _role_state := ""
+var _role_timer := 0.0
+var _role_channel := ""
+var _role_target := Vector2.ZERO
+var _role_warning: Line2D
+var _role_alternate := false
 
 var anim: AnimatedSprite2D
 var touch: Area2D
@@ -165,6 +173,11 @@ func _physics_process(delta: float) -> void:
 		return
 	_tick_corrosion(delta)
 	if dead: return
+	if not combat_role.is_empty():
+		_tick_role_behavior(delta)
+		move_and_slide()
+		_damage_player()
+		return
 
 	_atk_cd = maxf(0.0, _atk_cd - delta)
 	# 攻击中: 执行起手/扑击
@@ -206,6 +219,335 @@ func _tick_corrosion(delta: float) -> void:
 	if _corrosion_timer <= 0.0:
 		_corrosion_timer += CORROSION_TICK
 		take_damage(_corrosion_damage, Vector2.ZERO)
+
+# --------------------------------------------------- 13C 房间协同角色
+func _tick_role_behavior(delta: float) -> void:
+	_role_timer = maxf(0.0, _role_timer - delta)
+	match combat_role:
+		"harrier": _b_harrier(delta)
+		"ambusher": _b_ambusher(delta)
+		"controller": _b_controller(delta)
+		"vanguard": _b_vanguard(delta)
+		"lancer": _b_lancer(delta)
+		"artillery": _b_artillery(delta)
+		_: _b_walker(delta)
+
+func _request_role_action(channel: String, duration: float) -> bool:
+	if not is_instance_valid(combat_director):
+		_role_channel = channel
+		return true
+	if combat_director.request_action(self, channel, duration):
+		_role_channel = channel
+		return true
+	return false
+
+func _finish_role_action(channel: String = "") -> void:
+	var released := channel if not channel.is_empty() else _role_channel
+	if is_instance_valid(combat_director) and not released.is_empty():
+		combat_director.notify_action_finished(self, released)
+	_role_channel = ""
+	_role_state = ""
+	_clear_role_warning()
+
+func _formation_target() -> Vector2:
+	if not player or not is_instance_valid(player):
+		return global_position
+	if is_instance_valid(combat_director):
+		return player.global_position + combat_director.formation_offset(self, combat_role)
+	return player.global_position + Vector2(-180.0, -120.0 if _is_flying_behavior() else 0.0)
+
+func _steer_to(target: Vector2, max_speed: float, acceleration: float, delta: float) -> void:
+	var desired := target - global_position
+	if desired.length() > 8.0:
+		desired = desired.normalized() * max_speed
+	else:
+		desired = Vector2.ZERO
+	velocity = velocity.move_toward(desired, acceleration * delta)
+
+func _set_role_warning(points: PackedVector2Array, color: Color, width: float = 4.0, closed: bool = false) -> void:
+	_clear_role_warning()
+	_role_warning = Line2D.new()
+	_role_warning.name = "RoleWarning"
+	_role_warning.points = points
+	_role_warning.width = width
+	_role_warning.default_color = color
+	_role_warning.closed = closed
+	_role_warning.z_index = 20
+	add_child(_role_warning)
+
+func _warning_ring(radius: float, color: Color) -> void:
+	var points := PackedVector2Array()
+	for i in range(20):
+		var angle := TAU * float(i) / 20.0
+		points.append(Vector2(cos(angle), sin(angle)) * radius + Vector2(0, -body_size.y * 0.5))
+	_set_role_warning(points, color, 4.0, true)
+
+func _clear_role_warning() -> void:
+	if is_instance_valid(_role_warning):
+		_role_warning.queue_free()
+	_role_warning = null
+
+func _spawn_role_projectile(direction: Vector2, speed: float, color: Color) -> void:
+	if direction.length_squared() <= 0.001:
+		return
+	var projectile := Area2D.new()
+	projectile.set_script(PROJ)
+	projectile.global_position = global_position + Vector2(0, -body_size.y * 0.55)
+	get_parent().add_child(projectile)
+	projectile.setup(direction.normalized() * speed, contact_damage, color)
+
+func _role_aim() -> Vector2:
+	if not player or not is_instance_valid(player):
+		return Vector2(dir, 0)
+	return player.global_position + Vector2(0, -36) - (global_position + Vector2(0, -body_size.y * 0.55))
+
+func _clamp_role_target(target: Vector2, margin := Vector2(70, 90)) -> Vector2:
+	if room_bounds.size == Vector2.ZERO:
+		return target
+	return Vector2(
+		clampf(target.x, room_bounds.position.x + margin.x, room_bounds.end.x - margin.x),
+		clampf(target.y, room_bounds.position.y + margin.y, room_bounds.end.y - margin.y))
+
+func _b_harrier(delta: float) -> void:
+	if not player or not is_instance_valid(player):
+		_b_flyer(delta)
+		return
+	dir = 1 if player.global_position.x > global_position.x else -1
+	anim.flip_h = dir > 0
+	_special_cd -= delta
+	match _role_state:
+		"harrier_warn":
+			velocity = velocity.move_toward(Vector2.ZERO, 520.0 * delta)
+			_role_target = _clamp_role_target(player.global_position + Vector2(dir * 80, -24))
+			if is_instance_valid(_role_warning):
+				_role_warning.points = PackedVector2Array([Vector2(0, -body_size.y * 0.5), to_local(_role_target)])
+			if _role_timer <= 0.0:
+				_role_state = "harrier_strike"
+				_role_timer = 0.38
+				_clear_role_warning()
+				velocity = (_role_target - global_position).normalized() * 620.0
+		"harrier_strike":
+			if _role_timer <= 0.0:
+				_role_state = "harrier_recover"
+				_role_timer = 0.58
+		"harrier_recover":
+			_steer_to(_formation_target(), move_speed * 1.35, 620.0, delta)
+			if _role_timer <= 0.0 or global_position.distance_to(_formation_target()) < 34.0:
+				_finish_role_action("melee")
+				_special_cd = 1.25
+		_:
+			_steer_to(_formation_target(), move_speed, 320.0, delta)
+			if _special_cd <= 0.0 and global_position.distance_to(player.global_position) < 620.0 and _request_role_action("melee", 1.35):
+				_role_state = "harrier_warn"
+				_role_timer = ROLE_WARN_TIME
+				_role_target = player.global_position
+				_set_role_warning(PackedVector2Array([Vector2(0, -body_size.y * 0.5), to_local(_role_target)]), Color(0.25, 0.92, 1.0, 0.92), 5.0)
+
+func _b_ambusher(delta: float) -> void:
+	if not player or not is_instance_valid(player):
+		_b_flyer(delta)
+		return
+	dir = 1 if player.global_position.x > global_position.x else -1
+	anim.flip_h = dir > 0
+	_special_cd -= delta
+	match _role_state:
+		"ambusher_teleport":
+			velocity = velocity.move_toward(Vector2.ZERO, 420.0 * delta)
+			if _role_timer <= 0.0:
+				for i in range(3):
+					_ghost()
+				_role_target = _clamp_role_target(player.global_position + Vector2(-dir * 210.0, -145.0))
+				global_position = _role_target
+				_base_y = global_position.y
+				_finish_role_action("mobility")
+				if _request_role_action("ranged", 0.75):
+					_role_state = "ambusher_volley"
+					_role_timer = ROLE_WARN_TIME
+					_set_role_warning(PackedVector2Array([Vector2(0, -body_size.y * 0.5), _role_aim()]), Color(0.78, 0.36, 1.0, 0.95), 5.0)
+				else:
+					_role_state = "ambusher_recover"
+					_role_timer = 0.45
+		"ambusher_volley":
+			velocity = velocity.move_toward(Vector2.ZERO, 420.0 * delta)
+			if _role_timer <= 0.0:
+				var aim := _role_aim().normalized()
+				_spawn_role_projectile(aim.rotated(-0.14), 390.0, Color(0.78, 0.36, 1.0))
+				_spawn_role_projectile(aim.rotated(0.14), 390.0, Color(0.5, 0.78, 1.0))
+				_finish_role_action("ranged")
+				_role_state = "ambusher_recover"
+				_role_timer = 0.62
+		"ambusher_recover":
+			_steer_to(_formation_target(), move_speed, 360.0, delta)
+			if _role_timer <= 0.0:
+				_role_state = ""
+				_special_cd = 1.7
+		_:
+			_steer_to(_formation_target(), move_speed, 280.0, delta)
+			if _special_cd <= 0.0 and _request_role_action("mobility", 0.7):
+				_role_state = "ambusher_teleport"
+				_role_timer = ROLE_WARN_TIME
+				_warning_ring(46.0, Color(0.72, 0.32, 1.0, 0.95))
+
+func _controller_tier() -> int:
+	return mini(2, _hit_count / 3)
+
+func _b_controller(delta: float) -> void:
+	if not player or not is_instance_valid(player):
+		velocity = velocity.move_toward(Vector2.ZERO, 160.0 * delta)
+		return
+	dir = 1 if player.global_position.x > global_position.x else -1
+	anim.flip_h = dir > 0
+	_shoot_cd -= delta
+	match _role_state:
+		"controller_cast":
+			velocity = velocity.move_toward(Vector2.ZERO, 240.0 * delta)
+			if _role_timer <= 0.0:
+				var tier := _controller_tier()
+				var spreads := [[0.0], [-0.24, 0.0, 0.24], [-0.46, -0.23, 0.0, 0.23, 0.46]]
+				var aim := _role_aim().normalized()
+				var spell_color: Color = [Color(0.4, 0.8, 1.0), Color(0.65, 0.45, 1.0), Color(0.95, 0.32, 0.85)][tier]
+				for angle in spreads[tier]:
+					_spawn_role_projectile(aim.rotated(float(angle)), 350.0, spell_color)
+				Fx.shockwave(get_parent(), global_position + Vector2(0, -body_size.y * 0.5), spell_color)
+				_finish_role_action("ranged")
+				_role_state = "controller_recover"
+				_role_timer = 0.28
+		"controller_recover":
+			_steer_to(_formation_target(), move_speed, 180.0, delta)
+			if _role_timer <= 0.0:
+				_role_state = ""
+				_shoot_cd = 0.9
+		_:
+			_steer_to(_formation_target(), move_speed, 180.0, delta)
+			if _shoot_cd <= 0.0 and _request_role_action("ranged", 0.72):
+				_role_state = "controller_cast"
+				_role_timer = ROLE_WARN_TIME
+				var colors := [Color(0.4, 0.8, 1.0), Color(0.65, 0.45, 1.0), Color(0.95, 0.32, 0.85)]
+				_warning_ring(38.0 + _controller_tier() * 7.0, colors[_controller_tier()])
+
+func _ground_role_motion(delta: float) -> void:
+	if not is_on_floor():
+		velocity.y = minf(velocity.y + GRAVITY * delta, 700.0)
+	else:
+		velocity.y = 0.0
+
+func _ground_steer_x(target_x: float, max_speed: float, acceleration: float, delta: float) -> void:
+	var desired_x := clampf(target_x - global_position.x, -1.0, 1.0) * max_speed
+	if absf(target_x - global_position.x) < 12.0:
+		desired_x = 0.0
+	velocity.x = move_toward(velocity.x, desired_x, acceleration * delta)
+
+func _b_vanguard(delta: float) -> void:
+	_ground_role_motion(delta)
+	if not player or not is_instance_valid(player):
+		velocity.x = move_toward(velocity.x, 0.0, 300.0 * delta)
+		return
+	dir = 1 if player.global_position.x > global_position.x else -1
+	anim.flip_h = dir > 0
+	_special_cd -= delta
+	match _role_state:
+		"vanguard_warn":
+			velocity.x = move_toward(velocity.x, 0.0, 720.0 * delta)
+			if _role_timer <= 0.0:
+				_role_state = "vanguard_bash"
+				_role_timer = 0.28
+				_clear_role_warning()
+				velocity.x = dir * 310.0
+		"vanguard_bash":
+			velocity.x = move_toward(velocity.x, dir * 230.0, 360.0 * delta)
+			if _role_timer <= 0.0:
+				_role_state = "vanguard_recover"
+				_role_timer = 0.42
+		"vanguard_recover":
+			velocity.x = move_toward(velocity.x, 0.0, 620.0 * delta)
+			if _role_timer <= 0.0:
+				_finish_role_action("melee")
+				_special_cd = 1.15
+		_:
+			_ground_steer_x(_formation_target().x, move_speed, 320.0, delta)
+			if _special_cd <= 0.0 and absf(player.global_position.x - global_position.x) < 190.0 and _request_role_action("melee", 1.05):
+				_role_state = "vanguard_warn"
+				_role_timer = ROLE_WARN_TIME
+				_set_role_warning(PackedVector2Array([Vector2(0, -body_size.y * 0.45), Vector2(dir * 105.0, -body_size.y * 0.45)]), Color(0.32, 0.82, 1.0, 0.95), 8.0)
+
+func _b_lancer(delta: float) -> void:
+	_ground_role_motion(delta)
+	if not player or not is_instance_valid(player):
+		velocity.x = move_toward(velocity.x, 0.0, 300.0 * delta)
+		return
+	dir = 1 if player.global_position.x > global_position.x else -1
+	anim.flip_h = dir > 0
+	_special_cd -= delta
+	match _role_state:
+		"lancer_warn":
+			velocity.x = move_toward(velocity.x, 0.0, 780.0 * delta)
+			if _role_timer <= 0.0:
+				_role_state = "lancer_thrust"
+				_role_timer = 0.34
+				_clear_role_warning()
+				velocity.x = dir * 560.0
+		"lancer_thrust":
+			velocity.x = move_toward(velocity.x, dir * 420.0, 420.0 * delta)
+			if _role_timer <= 0.0:
+				_role_state = "lancer_recover"
+				_role_timer = 0.48
+		"lancer_recover":
+			velocity.x = move_toward(velocity.x, 0.0, 680.0 * delta)
+			if _role_timer <= 0.0:
+				_finish_role_action("melee")
+				_special_cd = 1.3
+		_:
+			_ground_steer_x(_formation_target().x, move_speed, 380.0, delta)
+			var distance_x := absf(player.global_position.x - global_position.x)
+			if _special_cd <= 0.0 and distance_x > 95.0 and distance_x < 430.0 and _request_role_action("melee", 1.2):
+				_role_state = "lancer_warn"
+				_role_timer = 0.32
+				_set_role_warning(PackedVector2Array([Vector2(0, -body_size.y * 0.48), Vector2(dir * 285.0, -body_size.y * 0.48)]), Color(1.0, 0.3, 0.72, 0.95), 5.0)
+
+func _b_artillery(delta: float) -> void:
+	_ground_role_motion(delta)
+	if not player or not is_instance_valid(player):
+		velocity.x = move_toward(velocity.x, 0.0, 260.0 * delta)
+		return
+	dir = 1 if player.global_position.x > global_position.x else -1
+	anim.flip_h = dir > 0
+	_shoot_cd -= delta
+	match _role_state:
+		"artillery_charge":
+			velocity.x = move_toward(velocity.x, 0.0, 600.0 * delta)
+			if _role_timer <= 0.0:
+				_role_state = "artillery_volley"
+				_role_timer = 0.12
+				_clear_role_warning()
+				var aim := _role_aim().normalized()
+				var angles := [-0.18, 0.0, 0.18] if _role_alternate else [0.0]
+				for angle in angles:
+					_spawn_role_projectile(aim.rotated(float(angle)), 360.0, Color(0.68, 0.42, 1.0))
+				_role_alternate = not _role_alternate
+				_finish_role_action("ranged")
+				_role_state = "artillery_recover"
+				_role_timer = 0.36
+		"artillery_recover":
+			velocity.x = move_toward(velocity.x, 0.0, 420.0 * delta)
+			if _role_timer <= 0.0:
+				_role_state = ""
+				_shoot_cd = 1.15
+		_:
+			var distance_x := absf(player.global_position.x - global_position.x)
+			if distance_x < 260.0:
+				_ground_steer_x(global_position.x - dir * 180.0, move_speed * 1.15, 360.0, delta)
+			elif distance_x > 520.0:
+				_ground_steer_x(player.global_position.x - dir * 430.0, move_speed, 300.0, delta)
+			else:
+				velocity.x = move_toward(velocity.x, 0.0, 360.0 * delta)
+			if _shoot_cd <= 0.0 and distance_x < 650.0 and _request_role_action("ranged", 0.78):
+				_role_state = "artillery_charge"
+				_role_timer = 0.35
+				_set_role_warning(PackedVector2Array([Vector2(0, -body_size.y * 0.72), _role_aim()]), Color(0.72, 0.42, 1.0, 0.95), 7.0)
+
+func _shield_spark() -> void:
+	Fx.hit_ring(get_parent(), global_position + Vector2(dir * body_size.x * 0.45, -body_size.y * 0.55), Color(0.4, 0.85, 1.0))
+	Fx.popup(get_parent(), global_position + Vector2(0, -body_size.y - 8), "格挡", Color(0.55, 0.9, 1.0))
 
 # 远程射手: 巡逻 + 远距离向玩家发射弹幕
 func _b_shooter(delta: float) -> void:
@@ -386,6 +728,12 @@ func _damage_player() -> void:
 func take_damage(amount: int, knockback: Vector2) -> void:
 	if dead:
 		return
+	if combat_role == "vanguard" and _role_state.is_empty() and player and is_instance_valid(player):
+		var incoming_side := signf(player.global_position.x - global_position.x)
+		if incoming_side == float(dir):
+			amount = maxi(1, ceili(float(amount) * FRONTAL_SHIELD_RATIO))
+			knockback *= 0.25
+			_shield_spark()
 	hp -= amount
 	_hit_count += 1
 	velocity = knockback * (1.0 - knockback_resist)

@@ -37,6 +37,12 @@ func _init() -> void:
 
 	for marker in STRATEGY_MARKERS:
 		_expect(enemy_src.contains("func %s" % marker), "enemy strategy exists: %s" % marker)
+	for marker in ["ROLE_WARN_TIME", "_role_state", "_role_timer", "_role_warning", "_request_role_action", "_finish_role_action", "_spawn_role_projectile"]:
+		_expect(enemy_src.contains(marker), "role combat primitive exists: %s" % marker)
+	for marker in ["harrier_warn", "harrier_strike", "harrier_recover", "ambusher_teleport", "ambusher_volley", "controller_tier", "controller_cast"]:
+		_expect(enemy_src.contains(marker), "void role phase exists: %s" % marker)
+	for marker in ["FRONTAL_SHIELD_RATIO", "shield_spark", "vanguard_bash", "lancer_warn", "lancer_thrust", "artillery_charge", "artillery_volley"]:
+		_expect(enemy_src.contains(marker), "castle role phase exists: %s" % marker)
 	for marker in ["var enemy_type", "var combat_role", "var combat_director", "var room_bounds"]:
 		_expect(enemy_src.contains(marker), "enemy wiring marker exists: %s" % marker)
 	_expect(enemy_src.contains("request_action"), "enemy strategies request coordinated actions")
