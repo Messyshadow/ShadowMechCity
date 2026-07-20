@@ -68,11 +68,11 @@ func play_node(node: Dictionary, weapon: Dictionary = {}) -> void:
 		animation = "jump"
 	elif preview in ["dash"]:
 		animation = "dash"
-	elif preview in ["attack_1", "hammer_attack", "cannon_attack"]:
+	elif preview in ["attack_1", "hammer_attack", "cannon_attack", "dual_attack", "spear_attack", "crossbow_attack"]:
 		animation = "attack1"
-	elif preview in ["attack_2", "spin", "skill_wave"]:
+	elif preview in ["attack_2", "spin", "skill_wave", "dual_heavy", "spear_heavy", "crossbow_heavy"]:
 		animation = "attack2"
-	elif preview in ["ultimate", "skill_cast", "bomb"]:
+	elif preview in ["ultimate", "skill_cast", "bomb", "dual_combo", "spear_combo", "crossbow_combo"]:
 		animation = "attack3"
 	actor.play(animation)
 	current_tween = create_tween().set_loops()

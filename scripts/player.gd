@@ -661,6 +661,23 @@ func _skill_upper() -> void:
 	var col: Color = weapon["color"]
 	var center := global_position + Vector2(facing * 34, -46)
 	match weapon["id"]:
+		"crossbow": # 防空弩：三枚短矢封锁上方扇区
+			for angle in [-1.82, -1.57, -1.32]:
+				_spawn_proj_vel(0.82, col, _skill_dmg(0.95), Vector2(cos(angle), sin(angle)) * 860.0, 1.0, 2)
+			Fx.shockwave(get_parent(), center, col)
+			_play_sfx("atk_cannon", -2.0)
+		"dual_blades": # 上挑轮舞：双刃交错挑空并随敌升空
+			velocity.y = -340.0
+			Fx.play_slash(get_parent(), center, facing, slash_frames, 1.05, col)
+			Fx.play_slash(get_parent(), center + Vector2(-facing * 16, -18), -facing, slash_frames, 0.9, Color(0.74, 0.42, 1.0))
+			_aoe_hit(center, 112.0, _skill_dmg(1.45), 110.0, -610.0)
+			_play_sfx("attack", -2.0)
+		"spear": # 升龙挑：窄幅高击飞，为空连创造窗口
+			velocity.y = -250.0
+			Fx.speed_lines(get_parent(), center + Vector2(0, 20), facing, col)
+			Fx.play_slash(get_parent(), center + Vector2(0, -30), facing, fx_frames["bolt"], 1.25, col)
+			_aoe_hit(center + Vector2(0, -35), 105.0, _skill_dmg(1.85), 90.0, -690.0)
+			_play_sfx("attack", -2.0)
 		"cannon":   # 防空齐射: 不跳, 向上扇形 3 弹
 			for a in [-1.75, -1.57, -1.39]:   # 朝上 ±扇形(弧度)
 				_spawn_proj_vel(1.3, col, _skill_dmg(1.0), Vector2(cos(a), sin(a)) * 760.0, 1.0)
@@ -691,6 +708,29 @@ func _skill_upper() -> void:
 func _skill_dash_atk() -> void:
 	var col: Color = weapon["color"]
 	match weapon["id"]:
+		"crossbow": # 后跃三连：脱离包围并压制追兵
+			velocity = Vector2(-facing * 470.0, -190.0)
+			for angle_y in [-0.16, 0.0, 0.16]:
+				_spawn_proj_vel(0.86, col, _skill_dmg(1.05), Vector2(facing, angle_y) * 980.0, 1.5, 3)
+			Fx.speed_lines(get_parent(), global_position, -facing, col)
+			_play_sfx("atk_cannon", -2.0)
+		"dual_blades": # 影步追击：穿身连斩
+			velocity = Vector2(facing * 760.0, -40.0)
+			iframes = maxf(iframes, 0.3)
+			for i in range(4):
+				_spawn_ghost()
+			Fx.speed_lines(get_parent(), global_position + Vector2(0, -30), facing, col)
+			Fx.play_slash(get_parent(), global_position + Vector2(facing * 75, -34), facing, slash_frames, 1.2, col)
+			Fx.play_slash(get_parent(), global_position + Vector2(facing * 110, -26), -facing, slash_frames, 0.95, Color(0.75, 0.4, 1.0))
+			_line_hit(210.0, 82.0, _skill_dmg(1.5 + 0.2 * Game.skill_lv("dual_execution")), 260.0, -150.0)
+			_play_sfx("dash", -2.0)
+		"spear": # 冲锋贯穿：长距离直线控制
+			velocity = Vector2(facing * 580.0, 0.0)
+			iframes = maxf(iframes, 0.18)
+			Fx.speed_lines(get_parent(), global_position + Vector2(0, -30), facing, col)
+			Fx.play_slash(get_parent(), global_position + Vector2(facing * 138, -34), facing, fx_frames["bolt"], 1.3, col)
+			_line_hit(270.0, 52.0, _skill_dmg(2.0 + 0.25 * Game.skill_lv("spear_dragon")), 480.0, -110.0)
+			_play_sfx("attack", -2.0)
 		"cannon":   # 后跃齐射: 向后跃 + 向前扇形 3 弹(拉开距离)
 			velocity = Vector2(-facing * 520.0, -200.0)
 			for i in range(3):
@@ -728,6 +768,24 @@ func _skill_burst() -> void:
 	var col: Color = weapon["color"]
 	var center := global_position + Vector2(0, -30)
 	match weapon["id"]:
+		"crossbow": # 环射钉阵：十方向弹幕控制近身空间
+			for i in range(10):
+				var crossbow_angle := TAU * i / 10.0
+				_spawn_proj_vel(0.78, col, _skill_dmg(0.9 + 0.15 * Game.skill_lv("crossbow_barrage")), Vector2.from_angle(crossbow_angle) * 720.0, 1.3, 2)
+			Fx.shockwave(get_parent(), center, col)
+			_play_sfx("atk_cannon", -1.0)
+		"dual_blades": # 刃环：高速六向斩击
+			velocity.y = -120.0
+			for i in range(6):
+				var blade_angle := TAU * i / 6.0
+				Fx.play_slash(get_parent(), center + Vector2.from_angle(blade_angle) * 62.0, facing if i % 2 == 0 else -facing, slash_frames, 0.94, col)
+			_aoe_hit(center, 150.0, _skill_dmg(1.55), 260.0, -170.0)
+			_play_sfx("attack", -1.0)
+		"spear": # 回马环扫：牺牲纵深换取周身控制
+			Fx.play_slash(get_parent(), center, facing, fx_frames["spin"], 1.28, col)
+			Fx.shockwave(get_parent(), center, col)
+			_aoe_hit(center, 182.0, _skill_dmg(1.7), 390.0, -120.0)
+			_play_sfx("attack", -1.0)
 		"cannon":   # 全向弹幕: 360° 8 弹
 			for i in range(8):
 				var a := TAU * i / 8.0
@@ -769,6 +827,21 @@ func _cast_ult() -> void:
 	Fx.cast_ring(get_parent(), global_position + Vector2(0, -30), col)
 	Fx.cast_ring(get_parent(), global_position + Vector2(0, -48), Color(1, 1, 1))
 	match weapon["id"]:
+		"dual_blades": # 暗影交叉处决：高速交叉刃幕
+			for offset in [-52.0, -24.0, 8.0, 40.0]:
+				Fx.play_slash(get_parent(), global_position + Vector2(facing * 76, offset), facing, slash_frames, 1.25, col)
+				Fx.play_slash(get_parent(), global_position + Vector2(facing * 76, offset), -facing, slash_frames, 1.08, Color(0.76, 0.45, 1.0))
+			_line_hit(250.0, 132.0, _skill_dmg(2.8), 430.0, -260.0)
+		"spear": # 天穹龙贯：贯穿整条战线
+			for yoff in [-22.0, -38.0, -54.0]:
+				_spawn_projectile(fx_frames["bolt"], 1.5, col, _skill_dmg(1.15), 1180.0, 1.6, 99, yoff)
+			_line_hit(360.0, 92.0, _skill_dmg(2.5), 560.0, -180.0)
+			Fx.speed_lines(get_parent(), global_position, facing, col)
+		"crossbow": # 裂隙箭雨：三层扇面贯穿弹
+			for i in range(9):
+				var spread := -0.32 + i * 0.08
+				_spawn_proj_vel(1.05, col, _skill_dmg(1.1), Vector2(facing, spread) * 1080.0, 2.0, 9)
+			Fx.explosion(get_parent(), global_position + Vector2(facing * 90, -34), 135.0)
 		"hammer":   # 陨星重击: 巨型砸地, 超大范围
 			velocity.y = -120.0
 			var gp := global_position + Vector2(0, 4)
@@ -846,7 +919,7 @@ func _dual_blades_heavy() -> void:
 	var center := global_position + Vector2(facing * 64, -34)
 	Fx.play_slash(get_parent(), center + Vector2(0, -10), facing, slash_frames, 1.15, weapon["color"])
 	Fx.play_slash(get_parent(), center + Vector2(0, 12), -facing, slash_frames, 1.05, Color(0.75, 0.45, 1.0))
-	_line_hit(126.0, 76.0, _skill_dmg(1.55), 280.0, -160.0)
+	_line_hit(126.0, 76.0, _skill_dmg(1.55 + 0.12 * Game.skill_lv("dual_cross")), 280.0, -160.0)
 	velocity.x = facing * 210.0
 	Game.shake(6.0)
 	Game.hitstop(0.06, 0.04)
@@ -857,7 +930,7 @@ func _spear_heavy() -> void:
 	var tip := global_position + Vector2(facing * 128, -34)
 	Fx.speed_lines(get_parent(), global_position + Vector2(0, -34), facing, weapon["color"])
 	Fx.play_slash(get_parent(), tip, facing, fx_frames["bolt"], 1.15, weapon["color"])
-	_line_hit(240.0, 48.0, _skill_dmg(1.9), 430.0, -90.0)
+	_line_hit(240.0, 48.0, _skill_dmg(1.9 + 0.14 * Game.skill_lv("spear_charge")), 430.0, -90.0)
 	velocity.x = facing * 150.0
 	Game.shake(8.0)
 	Game.hitstop(0.075, 0.04)
@@ -865,7 +938,7 @@ func _spear_heavy() -> void:
 	_squash(Vector2(1.45, 0.68))
 
 func _crossbow_heavy() -> void:
-	_spawn_projectile(fx_frames["bolt2"], 1.55, weapon["color"], _skill_dmg(1.8), 1080.0, 2.4, 6)
+	_spawn_projectile(fx_frames["bolt2"], 1.55, weapon["color"], _skill_dmg(1.8 + 0.14 * Game.skill_lv("crossbow_burst")), 1080.0, 2.4, 6)
 	Fx.shockwave(get_parent(), global_position + Vector2(facing * 52, -34), weapon["color"])
 	Fx.screen_flash(get_tree(), Color(1.0, 0.35, 0.2, 0.15))
 	velocity.x = -facing * 130.0
@@ -1070,7 +1143,8 @@ func _fire_weapon() -> void:
 
 func _fire_crossbow() -> void:
 	var yoff := -40.0 if attack_index % 2 == 0 else -30.0
-	_spawn_projectile(fx_frames["bolt2"], 0.72, weapon["color"], int(round(float(_attributes()["attack"]))), 940.0, 1.8, 2, yoff)
+	var damage := int(round(float(_attributes()["attack"]))) + Game.skill_lv("crossbow_focus")
+	_spawn_projectile(fx_frames["bolt2"], 0.72, weapon["color"], damage, 940.0, 1.8, 2, yoff)
 	Fx.hit_spark(get_parent(), global_position + Vector2(facing * 54, yoff))
 	weapon_pivot.rotation = -0.08 * facing
 	velocity.x = -facing * 45.0
@@ -1111,6 +1185,12 @@ func _land_hit(enemy: Node2D) -> void:
 	# 基础伤害 + 近战强化 + 终结技加成
 	var attributes := _attributes()
 	var dmg: int = int(round(float(attributes["attack"]))) + (1 if is_finisher else 0)
+	if weapon["id"] == "dual_blades":
+		dmg += Game.skill_lv("dual_edge")
+		if is_finisher and Game.skill_lv("dual_execution") > 0:
+			dmg += 2
+	elif weapon["id"] == "spear":
+		dmg += Game.skill_lv("spear_mastery")
 	if Game.skill_lv("ultimate") > 0:
 		dmg += 1
 	# 暴击 (技能 + 装备)

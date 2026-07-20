@@ -252,6 +252,12 @@ func _refresh_detail() -> void:
 		"无" if req_names.is_empty() else "、".join(req_names),
 	]
 	var weapon := Weapons.get_weapon(Game.weapon_index)
+	var required_weapon := str(node.get("weapon_required", ""))
+	if required_weapon != "":
+		for candidate in Weapons.LIST:
+			if str(candidate["id"]) == required_weapon:
+				weapon = candidate
+				break
 	(preview as SkillPreview).play_node(node, weapon)
 	if max_level <= 0:
 		upgrade_button.text = "分支入口 · 后续开放"
