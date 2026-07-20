@@ -50,6 +50,17 @@ static func category(item: Dictionary) -> String:
 		return "任务"
 	return "饰品" if str(item.get("slot", "")) in ["amulet", "ring"] else "防具"
 
+static func weapon_item(weapon: Dictionary, weapon_index: int) -> Dictionary:
+	return {
+		"kind": "weapon", "weapon_index": weapon_index, "weapon_id": str(weapon.get("id", "")),
+		"name": str(weapon.get("name", "未知武器")), "rarity": 3, "lv": 0,
+		"atk": float(weapon.get("damage", 0)), "source": str(weapon.get("acquisition", "机械城探索")),
+		"description": "%s家族 · %d段攻击\n组合技：%s" % [
+			str(weapon.get("family", "旧式武器")), int(weapon.get("combo", 1)),
+			str(weapon.get("combo_skill", "基础武器协议")),
+		],
+	}
+
 ## 随机生成一件装备. rarity 不传则按权重随机.
 static func generate(rarity: int = -1) -> Dictionary:
 	if rarity < 0:

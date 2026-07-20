@@ -5,6 +5,7 @@ signal enemy_killed(total: int)
 signal progression_changed     # xp/level/coins 变化
 signal skills_changed          # 技能加点变化
 signal gear_changed            # 装备变化(刷新人物属性/背包UI)
+signal weapon_equipped(index: int)
 signal dialogue_started(npc_id: String)
 signal dialogue_ended(npc_id: String)
 signal quest_changed(states: Dictionary)
@@ -373,6 +374,17 @@ func unlock_weapon(id: String) -> bool:
 
 func is_weapon_unlocked(id: String) -> bool:
 	return unlocked_weapons.has(id)
+
+func equip_weapon(id: String) -> bool:
+	if not is_weapon_unlocked(id):
+		return false
+	for index in range(Weapons.LIST.size()):
+		if str(Weapons.LIST[index]["id"]) == id:
+			weapon_index = index
+			weapon_equipped.emit(index)
+			progression_changed.emit()
+			return true
+	return false
 
 func _migrate_weapon_unlocks(saved: Variant) -> Array[String]:
 	var result: Array[String] = ["sword", "hammer", "cannon"]

@@ -475,6 +475,7 @@ const ROOMS := {
 		"platforms":[[280,560,170,24],[620,460,160,24],[900,270,190,24],[1180,460,160,24],[1520,560,170,24]],
 		"hazards":[[720,700,100,20,2,"steam"],[1080,700,100,20,2,"gear"]], "enemies":[[480,680,"mech_soldier"],[1320,680,"steam_brute"]],
 		"items":[[900,230,"chest","secret_chest_factory"]], "secrets":[[1540,520,"memory","memory_factory_heat"]],
+		"weapons":[[900,420,"dual_blades"]],
 		"start_spawn":Vector2(170,700), "doors":[{"side":"left","p":600,"to":"factory_works"}]},
 	"secret_water_cistern": {
 		"name":"秘室·沉没蓄水池", "theme":"water", "region":"water", "hidden_room":true, "map":Vector2i(2,3), "bounds":[0,0,1700,760],
@@ -487,12 +488,14 @@ const ROOMS := {
 		"platforms":[[260,650,160,24,true],[480,520,150,24,true],[720,390,160,24,true],[980,260,180,24,true],[1260,420,160,24,true],[1450,570,150,24,true]],
 		"runes":[[480,508],[980,248],[1260,408]], "hazards":[[800,780,100,20,2,"rune"]], "enemies":[[720,350,"priest"],[1280,380,"gargoyle"]],
 		"items":[[980,220,"chest","secret_chest_temple"]], "secrets":[[1450,530,"memory","memory_temple_orbit"]],
+		"weapons":[[980,180,"spear"]],
 		"start_spawn":Vector2(180,760), "doors":[{"side":"right","p":650,"to":"temple_atrium"}]},
 	"secret_void_observatory": {
 		"name":"秘室·裂隙观星台", "theme":"void", "region":"void", "hidden_room":true, "map":Vector2i(2,-2), "bounds":[0,0,1900,780],
 		"pits":[[950,620,3]], "platforms":[[260,620,170,24,true],[560,500,160,24,true],[900,340,190,24,true],[1280,460,170,24,true],[1620,590,170,24,true]],
 		"winds":[[950,450,520,520,260,-150]], "hazards":[[1480,760,120,20,2,"rune"]], "enemies":[[700,440,"void_eagle"],[1320,400,"storm_mage"]],
 		"items":[[1620,550,"chest","secret_chest_void"]], "secrets":[[900,300,"memory","memory_void_observatory"]],
+		"weapons":[[1280,420,"crossbow"]],
 		"start_spawn":Vector2(180,740), "doors":[{"side":"left","p":650,"to":"void_hangar"}]},
 	"secret_castle_ossuary": {
 		"name":"秘室·君王遗骨库", "theme":"castle", "region":"castle", "hidden_room":true, "map":Vector2i(4,2), "bounds":[0,0,1900,820],

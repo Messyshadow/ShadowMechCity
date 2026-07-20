@@ -7,7 +7,7 @@ func _init() -> void:
 	var ids: Array[String] = []
 	for weapon in weapons_script.LIST:
 		ids.append(weapon["id"])
-	_check(weapons_script.LIST.size() == 6, "stage 10.7 needs exactly six demo weapons")
+	_check(weapons_script.LIST.size() >= 6, "stage 10.7 original six weapons must remain available")
 	for required in ["relic_blade", "void_blade", "corrupt_scythe"]:
 		_check(ids.has(required), "missing stage 10.7 weapon: " + required)
 	var expected_traits := {"relic_blade":"rune_wave", "void_blade":"void_harvest", "corrupt_scythe":"corrosion"}

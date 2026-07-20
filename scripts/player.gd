@@ -155,6 +155,7 @@ func _ready() -> void:
 	health = max_hp()
 	Game.skills_changed.connect(_on_skills_changed)
 	Game.gear_changed.connect(_on_gear_changed)
+	Game.weapon_equipped.connect(_on_weapon_equipped)
 	health_changed.emit(health, max_hp())
 
 # ---- 技能加成 ----
@@ -197,6 +198,15 @@ func _on_gear_changed() -> void:
 	mp = minf(mp, max_mp())
 	health_changed.emit(health, max_hp())
 	resource_changed.emit(mp, max_mp(), rage, MAX_RAGE)
+
+func _on_weapon_equipped(index: int) -> void:
+	if index < 0 or index >= Weapons.LIST.size():
+		return
+	weapon_index = index
+	weapon = Weapons.get_weapon(index)
+	_apply_weapon()
+	weapon_changed.emit(weapon["name"], weapon["color"])
+	Fx.weapon_switch(get_parent(), global_position + Vector2(0, -34), weapon["color"], weapon["id"])
 
 func heal(n: int) -> void:
 	health = mini(health + n, max_hp())

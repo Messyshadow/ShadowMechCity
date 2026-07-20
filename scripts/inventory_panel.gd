@@ -237,6 +237,11 @@ func _refresh_grid() -> void:
 	for child in grid.get_children():
 		child.queue_free()
 	filtered_entries.clear()
+	if current_category == "武器":
+		for weapon_index in range(Weapons.LIST.size()):
+			var weapon: Dictionary = Weapons.LIST[weapon_index]
+			if Game.is_weapon_unlocked(str(weapon["id"])):
+				filtered_entries.append({"source_index": -(weapon_index + 1), "item": ItemsData.weapon_item(weapon, weapon_index)})
 	for source_index in range(Game.inventory.size()):
 		var item: Dictionary = Game.inventory[source_index]
 		if ItemsData.category(item) == current_category:
@@ -275,7 +280,10 @@ func _item_button(entry: Dictionary) -> Button:
 	frame.set_border_width_all(2)
 	frame.set_corner_radius_all(7)
 	button.add_theme_stylebox_override("normal", frame)
-	button.pressed.connect(_select_inventory.bind(source_index))
+	if source_index < 0:
+		button.pressed.connect(_select_weapon.bind(-source_index - 1))
+	else:
+		button.pressed.connect(_select_inventory.bind(source_index))
 	UI.style_button(button)
 	return button
 
@@ -290,7 +298,7 @@ func _item_glyph(item: Dictionary) -> String:
 
 func _empty_message(category_name: String) -> String:
 	var messages := {
-		"武器":"武器由角色装备栏管理。\n双刀、长枪与弓弩将在 13B 加入掉落。",
+		"武器":"尚未取得可切换武器。\n在区域秘室与 Boss 奖励处寻找武器核心。",
 		"消耗品":"暂未携带消耗品。\n快捷栏已为后续战斗药剂预留。",
 		"材料":"尚未取得强化材料。\n探索精英房与隐藏区域可获得。",
 		"任务":"当前没有可放入仓库的任务道具。",
@@ -311,6 +319,14 @@ func _select_inventory(source_index: int) -> void:
 	selected_slot = ""
 	_refresh_detail()
 
+func _select_weapon(weapon_index: int) -> void:
+	if weapon_index < 0 or weapon_index >= Weapons.LIST.size():
+		return
+	selected_kind = "weapon"
+	selected_source_index = weapon_index
+	selected_slot = ""
+	_refresh_detail()
+
 func _select_equipped(slot: String) -> void:
 	if not Game.equipped.has(slot):
 		return
@@ -320,6 +336,8 @@ func _select_equipped(slot: String) -> void:
 	_refresh_detail()
 
 func _current_item() -> Dictionary:
+	if selected_kind == "weapon" and selected_source_index >= 0 and selected_source_index < Weapons.LIST.size():
+		return ItemsData.weapon_item(Weapons.LIST[selected_source_index], selected_source_index)
 	if selected_kind == "inventory" and selected_source_index >= 0 and selected_source_index < Game.inventory.size():
 		return Game.inventory[selected_source_index]
 	if selected_kind == "equipped" and Game.equipped.has(selected_slot):
@@ -362,7 +380,15 @@ func _refresh_detail() -> void:
 		lines.append("[color=#718596]暂无战斗属性[/color]")
 	lines.append("\n[color=#ffd36e]说明[/color]\n%s" % item.get("description", "可装备并强化的机械城遗物。"))
 	detail_text.text = "\n".join(lines)
-	if selected_kind == "inventory" and item.has("slot"):
+	if selected_kind == "weapon":
+		var weapon_button := Button.new()
+		weapon_button.text = "设为当前武器" if int(item.get("weapon_index", -1)) != Game.weapon_index else "当前已装备"
+		weapon_button.disabled = int(item.get("weapon_index", -1)) == Game.weapon_index
+		weapon_button.custom_minimum_size.y = 38
+		weapon_button.pressed.connect(_equip_selected_weapon)
+		UI.style_button(weapon_button)
+		action_box.add_child(weapon_button)
+	elif selected_kind == "inventory" and item.has("slot"):
 		var equip_button := Button.new()
 		equip_button.text = "装备到 %s" % slot_name
 		equip_button.custom_minimum_size.y = 38
@@ -403,6 +429,12 @@ func _equip_selected() -> void:
 	selected_kind = ""
 	selected_source_index = -1
 	Game.equip_item(source_index)
+	_refresh()
+
+func _equip_selected_weapon() -> void:
+	if selected_source_index < 0 or selected_source_index >= Weapons.LIST.size():
+		return
+	Game.equip_weapon(str(Weapons.LIST[selected_source_index]["id"]))
 	_refresh()
 
 func _unequip_selected() -> void:
