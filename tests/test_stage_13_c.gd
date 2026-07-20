@@ -27,6 +27,8 @@ func _init() -> void:
 	_expect(FileAccess.file_exists(director_path), "room combat director exists")
 	for api in ["register_enemy", "unregister_enemy", "request_action", "notify_action_finished", "formation_offset"]:
 		_expect(director_src.contains("func %s" % api), "director exposes %s" % api)
+	if FileAccess.file_exists(director_path):
+		_test_director_runtime(director_path)
 
 	for enemy_id in ROLE_BY_ID:
 		var definition_line := _definition_line(main_src, enemy_id)
@@ -68,6 +70,39 @@ func _room_has_types(rooms: Dictionary, room_id: String, required: Array) -> boo
 		if not found.has(str(enemy_id)):
 			return false
 	return true
+
+func _test_director_runtime(path: String) -> void:
+	var director = load(path).new()
+	var first := Node2D.new()
+	var second := Node2D.new()
+	var third := Node2D.new()
+	director.register_enemy(first, "vanguard")
+	director.register_enemy(second, "lancer")
+	director.register_enemy(third, "artillery")
+	_expect(director.request_action(first, "melee", 0.4), "first melee action receives token")
+	_expect(not director.request_action(second, "melee", 0.4), "second melee action is mutually excluded")
+	_expect(not director.request_action(first, "ranged", 0.4), "one enemy cannot own overlapping channels")
+	director.notify_action_finished(first, "melee")
+	_expect(director.request_action(second, "melee", 0.4), "released melee token can rotate")
+	director._process(0.5)
+	_expect(director.request_action(first, "melee", 0.2), "expired melee token is reclaimed")
+	director.notify_action_finished(first)
+	director.notify_action_finished(second)
+	_expect(director.request_action(first, "ranged", 0.2), "first ranged action receives token")
+	director.notify_action_finished(first, "ranged")
+	_expect(not director.request_action(second, "ranged", 0.2), "ranged actions respect stagger gap")
+	director._process(0.5)
+	_expect(director.request_action(second, "ranged", 0.2), "ranged action opens after stagger gap")
+	var first_slot: Vector2 = director.formation_offset(first, "vanguard")
+	var second_slot: Vector2 = director.formation_offset(second, "lancer")
+	_expect(first_slot != second_slot, "formation slots are distinct and stable")
+	director.unregister_enemy(first)
+	director.unregister_enemy(second)
+	director.unregister_enemy(third)
+	first.free()
+	second.free()
+	third.free()
+	director.free()
 
 func _expect(condition: bool, message: String) -> void:
 	if not condition:
