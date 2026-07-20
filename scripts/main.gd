@@ -1353,6 +1353,8 @@ func _setup_map_panel() -> void:
 
 func _show_banner(text: String) -> void:
 	var cl := CanvasLayer.new()
+	cl.name = "RoomBanner"
+	cl.add_to_group("room_banner")
 	cl.layer = 11
 	var l := Label.new()
 	l.text = text
@@ -1453,6 +1455,10 @@ func _auto_screenshot() -> void:
 		quest_panel.force_page_for_qa("side")
 	if _qa_option("SHOT_COLLECTIBLES") == "1" and is_instance_valid(quest_panel):
 		quest_panel.force_page_for_qa("collectibles")
+	var enemy_squad := _qa_option("SHOT_ENEMY_SQUAD")
+	if enemy_squad != "":
+		await _enemy_squad_capture(enemy_squad)
+		return
 	if _qa_option("SHOT_SHAFT") == "1":
 		await _shaft_capture_burst()
 		return
@@ -1635,6 +1641,83 @@ func _shaft_capture_burst() -> void:
 			push_error("Failed shaft frame %d: %s" % [i, error_string(save_error)])
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
+
+func _enemy_squad_capture(kind: String) -> void:
+	seed(1303)
+	var target_room := "void_bridge" if kind == "void" else "castle_gate"
+	if kind not in ["void", "castle"]:
+		push_error("SHOT_ENEMY_SQUAD must be void or castle: " + kind)
+		get_tree().quit(1)
+		return
+	Game.cleared_rooms.erase(target_room)
+	_enter_room(target_room, "")
+	await get_tree().process_frame
+	await get_tree().physics_frame
+	for banner in get_tree().get_nodes_in_group("room_banner"):
+		banner.queue_free()
+	player.iframes = 99
+	player.health = player.max_hp()
+	player.velocity = Vector2.ZERO
+	if kind == "void":
+		player.global_position = Vector2(1100, 700)
+		camera.global_position = Vector2(1100, 360)
+	else:
+		player.global_position = Vector2(1300, 720)
+		camera.global_position = Vector2(1280, 430)
+	player.set_physics_process(false)
+	# Freezing physics must not freeze iframe blinking on an invisible frame.
+	player.anim.visible = true
+	player.set_input_locked(true)
+	_prepare_squad_roles(kind)
+	camera.target = null
+	camera.zoom = Vector2(0.72, 0.72)
+	var out_dir := _qa_option("SHOT_OUTPUT")
+	if out_dir == "":
+		out_dir = ProjectSettings.globalize_path("res://screenshots/13C/%s-squad" % kind)
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	for i in range(8):
+		await get_tree().create_timer(0.32).timeout
+		await RenderingServer.frame_post_draw
+		var states: Array[String] = []
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			if is_instance_valid(enemy) and not str(enemy.combat_role).is_empty():
+				states.append("%s:%s@%s" % [enemy.combat_role, enemy._role_state, enemy.global_position.round()])
+		print("SQUAD_FRAME %s %d %s" % [kind, i, " | ".join(states)])
+		var save_error := get_viewport().get_texture().get_image().save_png("%s/frame_%d.png" % [out_dir, i])
+		if save_error != OK:
+			push_error("Failed squad frame %d: %s" % [i, error_string(save_error)])
+	await get_tree().create_timer(0.1).timeout
+	get_tree().quit()
+
+func _prepare_squad_roles(kind: String) -> void:
+	var slots := {
+		"void": {
+			"harrier": Vector2(850, 230),
+			"ambusher": Vector2(1320, 235),
+			"controller": Vector2(1550, 320),
+		},
+		"castle": {
+			"lancer": Vector2(850, 720),
+			"vanguard": Vector2(1480, 720),
+			"artillery": Vector2(1770, 720),
+		},
+	}
+	var order := 0
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if not is_instance_valid(enemy) or str(enemy.combat_role).is_empty():
+			continue
+		combat_director.notify_action_finished(enemy)
+		enemy._clear_role_warning()
+		enemy._role_state = ""
+		enemy._role_channel = ""
+		enemy._role_timer = 0.0
+		enemy._special_cd = 0.42 + order * 0.18
+		enemy._shoot_cd = 0.42 + order * 0.18
+		enemy.velocity = Vector2.ZERO
+		if slots[kind].has(enemy.combat_role):
+			enemy.global_position = slots[kind][enemy.combat_role]
+			enemy._base_y = enemy.global_position.y
+		order += 1
 
 func _qa_option(env_name: String) -> String:
 	var value := OS.get_environment(env_name)

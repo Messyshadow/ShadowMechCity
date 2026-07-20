@@ -52,6 +52,8 @@ func _init() -> void:
 	_expect(main_src.contains("combat_role ="), "main assigns combat role to enemies")
 	_expect(main_src.contains("room_bounds ="), "main passes safe movement bounds")
 	_expect(main_src.contains("SHOT_ENEMY_SQUAD"), "squad capture hook exists")
+	for marker in ["func _enemy_squad_capture", "func _prepare_squad_roles", "seed(1303)", "player.iframes = 99", "Vector2(1100, 700)", "player.set_physics_process(false)", "player.anim.visible = true", "range(8)", "SQUAD_FRAME", "RoomBanner", '"void_bridge"', '"castle_gate"']:
+		_expect(main_src.contains(marker), "deterministic squad capture marker exists: %s" % marker)
 
 	var rooms = load("res://scripts/rooms.gd").ROOMS
 	_expect(_room_has_types(rooms, "void_hangar", ["void_eagle", "void_wyvern", "storm_mage"]), "void hangar contains full coordinated trio")
