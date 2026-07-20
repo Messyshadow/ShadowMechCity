@@ -1014,6 +1014,8 @@ func _next_unlocked_weapon(from_index: int) -> int:
 func _apply_weapon() -> void:
 	if weapon_sprite:
 		weapon_sprite.texture = load(weapon["sprite"])
+		var visual_scale := float(weapon.get("visual_scale", 1.4))
+		weapon_sprite.scale = Vector2(visual_scale, visual_scale)
 	if weapon_pivot:
 		weapon_pivot.position = weapon["hand"]
 

@@ -472,4 +472,8 @@ func open_for_qa(category: String, index: int) -> void:
 		_toggle()
 	_select_category(category)
 	if index >= 0 and index < filtered_entries.size():
-		_select_inventory(int(filtered_entries[index]["source_index"]))
+		var source_index := int(filtered_entries[index]["source_index"])
+		if source_index < 0:
+			_select_weapon(-source_index - 1)
+		else:
+			_select_inventory(source_index)

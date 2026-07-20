@@ -495,7 +495,7 @@ const ROOMS := {
 		"pits":[[950,620,3]], "platforms":[[260,620,170,24,true],[560,500,160,24,true],[900,340,190,24,true],[1280,460,170,24,true],[1620,590,170,24,true]],
 		"winds":[[950,450,520,520,260,-150]], "hazards":[[1480,760,120,20,2,"rune"]], "enemies":[[700,440,"void_eagle"],[1320,400,"storm_mage"]],
 		"items":[[1620,550,"chest","secret_chest_void"]], "secrets":[[900,300,"memory","memory_void_observatory"]],
-		"weapons":[[1280,420,"crossbow"]],
+		"weapons":[[260,580,"crossbow"]],
 		"start_spawn":Vector2(180,740), "doors":[{"side":"left","p":650,"to":"void_hangar"}]},
 	"secret_castle_ossuary": {
 		"name":"秘室·君王遗骨库", "theme":"castle", "region":"castle", "hidden_room":true, "map":Vector2i(4,2), "bounds":[0,0,1900,820],

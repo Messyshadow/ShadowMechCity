@@ -77,10 +77,17 @@ func _ready() -> void:
 		sprite.modulate = Color(1.0, 0.85, 0.35)   # 金色生命碎片
 		sprite.scale = Vector2(1.7, 1.7)
 	elif kind == "weapon":
-		sprite.modulate = Color(0.85, 0.55, 1.0); sprite.scale = Vector2(2.0, 2.0)
+		var weapon := _weapon_data()
+		if not weapon.is_empty():
+			sprite.texture = load(str(weapon["sprite"]))
+			sprite.modulate = Color.WHITE
+			var pickup_scale := minf(float(weapon.get("visual_scale", 0.7)), 0.68)
+			sprite.scale = Vector2(pickup_scale, pickup_scale)
 	elif kind == "memory":
 		sprite.modulate = Color(0.55, 0.9, 1.0); sprite.scale = Vector2(1.9, 1.9)
 	add_child(sprite)
+	if kind == "weapon":
+		_build_weapon_presentation(_weapon_data())
 	var cs := CollisionShape2D.new()
 	var sh := CircleShape2D.new()
 	sh.radius = 26.0
@@ -90,6 +97,42 @@ func _ready() -> void:
 	# 宝箱有发光底圈
 	if kind == "chest":
 		sprite.z_index = 9
+
+func _weapon_data() -> Dictionary:
+	for weapon in Weapons.LIST:
+		if str(weapon["id"]) == item_id:
+			return weapon
+	return {}
+
+func _build_weapon_presentation(weapon: Dictionary) -> void:
+	if weapon.is_empty():
+		return
+	var color: Color = weapon.get("color", Color(0.65, 0.4, 1.0))
+	var ring := Line2D.new()
+	var points := PackedVector2Array()
+	for index in range(33):
+		points.append(Vector2.from_angle(TAU * index / 32.0) * 48.0)
+	ring.points = points
+	ring.width = 3.0
+	ring.default_color = Color(color.r, color.g, color.b, 0.78)
+	ring.z_index = -1
+	add_child(ring)
+	var core := Line2D.new()
+	core.points = PackedVector2Array([Vector2(-34, 0), Vector2(34, 0)])
+	core.width = 2.0
+	core.default_color = Color(1.0, 1.0, 1.0, 0.5)
+	core.z_index = -1
+	add_child(core)
+	var weapon_label := Label.new()
+	weapon_label.text = str(weapon.get("name", "未知武器"))
+	weapon_label.position = Vector2(-110, 54)
+	weapon_label.size = Vector2(220, 28)
+	weapon_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	weapon_label.add_theme_font_size_override("font_size", 17)
+	weapon_label.add_theme_color_override("font_color", color.lightened(0.25))
+	weapon_label.add_theme_color_override("font_outline_color", Color(0.01, 0.015, 0.025, 1.0))
+	weapon_label.add_theme_constant_override("outline_size", 5)
+	add_child(weapon_label)
 
 func _physics_process(delta: float) -> void:
 	_t += delta
@@ -145,7 +188,9 @@ func _on_body(body: Node) -> void:
 			return
 		"weapon":
 			if Game.unlock_weapon(item_id):
-				Fx.popup(get_parent(), global_position + Vector2(0, -30), "获得武器！", Color(0.9, 0.65, 1.0))
+				var weapon := _weapon_data()
+				var weapon_name := str(weapon.get("name", "未知武器"))
+				Fx.popup(get_parent(), global_position + Vector2(0, -30), "获得武器：" + weapon_name + "  ·  Q切换", weapon.get("color", Color(0.9, 0.65, 1.0)))
 				Fx.screen_flash(get_tree(), Color(0.65, 0.3, 1.0, 0.35)); Game.shake(7.0)
 			queue_free(); return
 		"memory":

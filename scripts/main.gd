@@ -1513,8 +1513,13 @@ func _seed_progression_ui_for_qa() -> void:
 	Game.level = maxi(Game.level, 8)
 	Game.skill_points = maxi(Game.skill_points, 9)
 	Game.coins = maxi(Game.coins, 860)
-	Game.skills = {"hp": 1, "power": 1, "speed": 1, "atk": 1, "crit": 1, "spin": 1}
-	for weapon_id in ["sword", "hammer", "cannon"]:
+	Game.skills = {
+		"hp": 1, "power": 1, "speed": 1, "atk": 1, "crit": 1, "spin": 1,
+		"dual_edge": 1, "dual_cross": 1, "dual_execution": 1,
+		"spear_mastery": 1, "spear_charge": 1, "spear_dragon": 1,
+		"crossbow_focus": 1, "crossbow_burst": 1, "crossbow_barrage": 1,
+	}
+	for weapon_id in ["sword", "hammer", "cannon", "dual_blades", "spear", "crossbow"]:
 		if not Game.unlocked_weapons.has(weapon_id):
 			Game.unlocked_weapons.append(weapon_id)
 	Game.skills_changed.emit()
@@ -1535,6 +1540,9 @@ func _seed_inventory_for_qa() -> void:
 		{"name":"史诗·天龙指环", "slot":"ring", "rarity":2, "lv":2, "atk":2.0, "def":0.0, "hp":0.0, "crit":0.12, "ls":1.0, "spd":0.0, "source":"虚空天龙机甲"},
 		{"name":"稀有·暗翼护符", "slot":"amulet", "rarity":1, "lv":1, "atk":0.0, "def":0.0, "hp":1.0, "crit":0.06, "ls":1.0, "spd":0.03, "source":"上升气流密室"},
 	]
+	for weapon_id in ["sword", "hammer", "cannon", "dual_blades", "spear", "crossbow"]:
+		if not Game.unlocked_weapons.has(weapon_id):
+			Game.unlocked_weapons.append(weapon_id)
 	Game.gear_changed.emit()
 	Game.progression_changed.emit()
 
@@ -1632,7 +1640,7 @@ func _qa_option(env_name: String) -> String:
 	return ""
 
 # 动作连拍: 角色面前放站桩假人, 触发一次攻击, 连存若干帧供打击感验收
-# 用法: SHOT_MOTION=1 (可选 SHOT_ROOM=<房间> / SHOT_ENEMY=<敌人type>) ... --shot
+# 用法: SHOT_MOTION=1 (可选 SHOT_ROOM / SHOT_ENEMY / SHOT_WEAPON / SHOT_SKILL / SHOT_OUTPUT) ... --shot
 func _motion_burst() -> void:
 	var dummy_type := OS.get_environment("SHOT_ENEMY")
 	if dummy_type == "" or not ENEMY_DEFS.has(dummy_type):
@@ -1640,7 +1648,7 @@ func _motion_burst() -> void:
 	# 一排假人, 让位移/弹道技能也有命中目标
 	for dx in [70.0, 150.0, 230.0]:
 		_spawn_enemy(player.position.x + dx, player.position.y, dummy_type)
-	# SHOT_WEAPON: sword/hammer/cannon — 切到指定武器再放技能(验证武器联动变形)
+	# SHOT_WEAPON 接受 Weapons.LIST 任意 id，包括 dual_blades/spear/crossbow。
 	var wid := OS.get_environment("SHOT_WEAPON")
 	if wid != "":
 		for i in range(Weapons.LIST.size()):
@@ -1651,7 +1659,9 @@ func _motion_burst() -> void:
 				player.weapon_changed.emit(player.weapon["name"], player.weapon["color"])  # 刷新HUD武器名
 				break
 	await get_tree().create_timer(0.5).timeout   # 等镜头/场景稳定
-	var out_dir := ProjectSettings.globalize_path("res://screenshots/motion")
+	var out_dir := _qa_option("SHOT_OUTPUT")
+	if out_dir == "":
+		out_dir = ProjectSettings.globalize_path("res://screenshots/motion")
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	# SHOT_SKILL: ""=普攻J / ground / upper / dash / burst / ult
 	var skill := OS.get_environment("SHOT_SKILL")
