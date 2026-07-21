@@ -37,6 +37,7 @@ var dialogue_flags: Dictionary = {} # 首次见面/已读节点等对话状态
 var story_flags: Dictionary = {}    # 阶段12任务与阶段11伏笔共用的叙事标记
 var quest_flags: Dictionary = {}    # complete:<quest_id> -> true，兼容事实回算
 var tracked_quest_id: String = "echo_coordinates"
+const DASH_GATE_TUTORIAL_FLAG := "dash_gate_taught"
 
 # ---- 收集系统(隐藏宝藏/生命碎片, 回溯解锁) ----
 var collected: Dictionary = {}      # secret_id -> true (已收集, 不再刷出)

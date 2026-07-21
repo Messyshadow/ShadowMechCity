@@ -16,6 +16,7 @@ const QUEST_TRACKER_SCRIPT := preload("res://scripts/quest_tracker.gd")
 const CINEMATIC_DATA := preload("res://scripts/cinematic_data.gd")
 const CINEMATIC_PANEL_SCRIPT := preload("res://scripts/cinematic_panel.gd")
 const TUTORIAL_GUIDE_SCRIPT := preload("res://scripts/tutorial_guide.gd")
+const DASH_GATE_SCRIPT := preload("res://scripts/dash_gate.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -629,41 +630,10 @@ func _make_breakable(x: float, top: float, w: float, h: float) -> void:
 	world.add_child(body)
 
 func _make_dash_gate(x: float, top: float, w: float, h: float) -> void:
-	var body := StaticBody2D.new()
-	body.collision_layer = 0b100000   # bit6: 冲刺门(玩家平时碰撞, 冲刺时相位穿越)
-	body.collision_mask = 0
-	body.position = Vector2(x + w * 0.5, top + h * 0.5)
-	var col := CollisionShape2D.new()
-	var shape := RectangleShape2D.new()
-	shape.size = Vector2(w, h)
-	col.shape = shape
-	body.add_child(col)
-	# 视觉: 青色能量屏障
-	var rect := ColorRect.new()
-	rect.color = Color(0.4, 0.85, 1.0, 0.35)
-	rect.size = Vector2(w, h)
-	rect.position = Vector2(-w * 0.5, -h * 0.5)
-	body.add_child(rect)
-	var edge := Line2D.new()
-	edge.width = 3.0
-	edge.default_color = Color(0.6, 0.95, 1.0)
-	edge.points = PackedVector2Array([Vector2(0, -h * 0.5), Vector2(0, h * 0.5)])
-	var mat := CanvasItemMaterial.new()
-	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	edge.material = mat
-	body.add_child(edge)
-	var lab := Label.new()
-	lab.text = "⟫冲刺⟫"
-	lab.position = Vector2(-28, -h * 0.5 - 30)
-	lab.add_theme_font_size_override("font_size", 18)
-	lab.add_theme_color_override("font_color", Color(0.6, 0.95, 1.0))
-	lab.add_theme_color_override("font_outline_color", Color(0, 0, 0))
-	lab.add_theme_constant_override("outline_size", 5)
-	body.add_child(lab)
-	var tw := rect.create_tween().set_loops()
-	tw.tween_property(rect, "color:a", 0.18, 0.8)
-	tw.tween_property(rect, "color:a", 0.4, 0.8)
-	world.add_child(body)
+	var gate := DASH_GATE_SCRIPT.new()
+	gate.position = Vector2(x + w * 0.5, top + h * 0.5)
+	world.add_child(gate)
+	gate.setup(Vector2(w, h), 1, player)
 
 func _make_mover(mv: Array, tint: Color) -> void:
 	# [cx, cy, w, axis, dist, period, phase]

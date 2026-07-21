@@ -14,6 +14,10 @@ func _init() -> void:
 		_expect(pause_src.contains(marker), "pause menu exposes " + marker)
 	_expect(game_src.contains('"retreat"'), "retreat input is registered")
 	_expect(game_src.contains('"dash_gate_taught"'), "dash gate tutorial flag is persisted")
+	var gate_src := FileAccess.get_file_as_string("res://scripts/dash_gate.gd")
+	for marker in ["冲刺穿越相位屏障", "普通移动无法穿越", "direction_arrow", "dash_gate_taught", "collision_layer = 0b100000"]:
+		_expect(gate_src.contains(marker), "dash gate behavior exists: " + marker)
+	_expect(main_src.contains("DASH_GATE_SCRIPT"), "main preloads the dash gate component")
 	if failures.is_empty():
 		print("STAGE_13_D_1_PASS")
 		quit(0)
