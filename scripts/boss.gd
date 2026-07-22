@@ -7,6 +7,7 @@ signal defeated
 const GRAVITY := 1400.0
 const PROJ := preload("res://scripts/enemy_projectile.gd")
 const ENEMY := preload("res://scripts/enemy.gd")
+const CombatFeedback := preload("res://scripts/combat_feedback.gd")
 
 # 由 main 注入
 var boss_name := "蒸汽机甲"
@@ -236,6 +237,14 @@ func _contact() -> void:
 func take_damage(amount: int, _knockback: Vector2) -> void:
 	if state == "dead":
 		return
+	var impact_profile := CombatFeedback.profile(CombatFeedback.tier_for_hit(amount))
+	var boss_scale := CombatFeedback.BOSS_RESPONSE_SCALE
+	impact_profile["ring_width"] = maxf(3.0, float(impact_profile["ring_width"]) * (0.7 + boss_scale))
+	impact_profile["particle_amount"] = maxi(12, int(float(impact_profile["particle_amount"]) * (0.75 + boss_scale)))
+	var impact_dir := _knockback.normalized() if _knockback.length_squared() > 0.01 else Vector2(float(-dir), -0.12)
+	Fx.combat_impact(get_parent(), global_position + Vector2(0, -body_size.y * 0.48), impact_dir,
+		impact_profile, CombatFeedback.material_palette("stone"))
+	CombatFeedback.play_material_sfx(self, "stone", CombatFeedback.tier_for_hit(amount))
 	hp -= amount
 	flash_mat.set_shader_parameter("flash", 1.0)
 	create_tween().tween_method(

@@ -1404,12 +1404,13 @@ func _setup_audio() -> void:
 	add_child(bgm)
 	bgm.play()
 
-func play_sfx(key: String, db: float = 0.0) -> void:
+func play_sfx(key: String, db: float = 0.0, pitch: float = 1.0) -> void:
 	if not _sfx.has(key) or _sfx[key] == null:
 		return
 	var p := AudioStreamPlayer.new()
 	p.stream = _sfx[key]
 	p.volume_db = db
+	p.pitch_scale = clampf(pitch, 0.45, 1.6)
 	add_child(p)
 	p.play()
 	p.finished.connect(func():
@@ -1426,6 +1427,10 @@ func _auto_screenshot() -> void:
 	var shot_13d1 := _qa_option("SHOT_13D1")
 	if shot_13d1 != "":
 		await _prepare_13d1_capture(shot_13d1)
+	var shot_13d2 := _qa_option("SHOT_13D2")
+	if shot_13d2 != "":
+		await _prepare_13d2_capture(shot_13d2)
+		return
 	var portal_kind := _qa_option("SHOT_PORTAL_PROMPT")
 	if portal_kind != "":
 		await _prepare_portal_capture(portal_kind, _qa_option("SHOT_PORTAL_TRAVEL") == "1")
@@ -1589,6 +1594,81 @@ func _freeze_13d1_capture_player() -> void:
 	player.anim.visible = true
 	player.set_input_locked(true)
 	player.set_physics_process(false)
+
+func _prepare_13d2_capture(kind: String) -> void:
+	if kind != "material_hits":
+		push_error("SHOT_13D2 must be material_hits: " + kind)
+		get_tree().quit(1)
+		return
+	_enter_room("castle_gallery", "")
+	await get_tree().process_frame
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(enemy):
+			enemy.queue_free()
+	for portal in _interactive_portals:
+		if is_instance_valid(portal):
+			portal.queue_free()
+	_interactive_portals.clear()
+	await get_tree().process_frame
+	var target_specs := [
+		[600.0, "beast", "血肉"],
+		[800.0, "mech_soldier", "金属"],
+		[1000.0, "golem", "岩石"],
+		[1200.0, "soul_shield", "护盾"],
+		[1400.0, "void_wyvern", "虚空"],
+	]
+	for spec in target_specs:
+		_spawn_enemy(float(spec[0]), 720.0, str(spec[1]))
+	await get_tree().process_frame
+	var targets: Array[Node] = []
+	for spec in target_specs:
+		for enemy in get_tree().get_nodes_in_group("enemy"):
+			if is_instance_valid(enemy) and str(enemy.enemy_type) == str(spec[1]):
+				enemy.max_hp = 99
+				enemy.hp = 99
+				enemy.velocity = Vector2.ZERO
+				enemy.set_physics_process(false)
+				targets.append(enemy)
+				var label := Label.new()
+				label.text = str(spec[2])
+				label.position = Vector2(float(spec[0]) - 34.0, 565.0)
+				label.z_index = 80
+				label.add_theme_font_size_override("font_size", 24)
+				label.add_theme_color_override("font_color", Color(0.8, 0.95, 1.0))
+				label.add_theme_color_override("font_outline_color", Color(0.01, 0.02, 0.04))
+				label.add_theme_constant_override("outline_size", 6)
+				world.add_child(label)
+				break
+	player.global_position = Vector2(280, 720)
+	player.velocity = Vector2.ZERO
+	player.iframes = 99.0
+	player.anim.visible = true
+	player.set_input_locked(true)
+	player.set_physics_process(false)
+	camera.target = null
+	camera.global_position = Vector2(1000, 430)
+	camera.zoom = Vector2(0.82, 0.82)
+	for banner in get_tree().get_nodes_in_group("room_banner"):
+		banner.queue_free()
+	var out_dir := _qa_option("SHOT_OUTPUT")
+	if out_dir == "":
+		out_dir = ProjectSettings.globalize_path("res://screenshots/13d2/material-hits")
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	var tiers := [2, 3, 4, 2, 5]
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("%s/frame_0.png" % out_dir)
+	for i in range(targets.size()):
+		var enemy := targets[i]
+		if is_instance_valid(enemy):
+			enemy.take_damage(int(tiers[i]), Vector2(260.0, -95.0))
+		await get_tree().create_timer(0.06, true, false, true).timeout
+		await RenderingServer.frame_post_draw
+		print("13D2_IMPACT_FRAME %d material=%s" % [i + 1, target_specs[i][2]])
+		var save_error := get_viewport().get_texture().get_image().save_png("%s/frame_%d.png" % [out_dir, i + 1])
+		if save_error != OK:
+			push_error("Failed 13D.2 impact frame %d: %s" % [i + 1, error_string(save_error)])
+	await get_tree().create_timer(0.1, true, false, true).timeout
+	get_tree().quit()
 
 func _seed_progression_ui_for_qa() -> void:
 	# 仅 --shot 进程内使用，不调用 save_game，不污染玩家存档。

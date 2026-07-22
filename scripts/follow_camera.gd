@@ -13,13 +13,20 @@ var max_offset := Vector2(26, 18)
 var max_roll := 0.05
 var _normal_smooth := 7.0
 var _normal_y_offset := -36.0
+const SHAKE_MERGE_WINDOW := 0.09
+var _merge_timer := 0.0
 
 func _ready() -> void:
 	add_to_group("camera")
 	make_current()
 
 func add_trauma(amount: float) -> void:
-	trauma = clampf(trauma + amount / 12.0, 0.0, 1.0)
+	var incoming := clampf(amount / 15.0, 0.0, 1.0)
+	if _merge_timer > 0.0:
+		trauma = maxf(trauma, incoming)
+	else:
+		trauma = clampf(trauma + incoming, 0.0, 1.0)
+	_merge_timer = SHAKE_MERGE_WINDOW
 
 func begin_shaft(bottom_y: float) -> void:
 	_normal_smooth = smooth
@@ -33,6 +40,7 @@ func end_shaft() -> void:
 	y_offset = _normal_y_offset
 
 func _process(delta: float) -> void:
+	_merge_timer = maxf(0.0, _merge_timer - delta)
 	if target and is_instance_valid(target):
 		var vx: float = clampf(target.velocity.x, -320.0, 320.0)
 		var desired := target.global_position + Vector2(vx * look_ahead, y_offset) + dialogue_focus

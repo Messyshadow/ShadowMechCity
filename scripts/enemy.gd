@@ -21,6 +21,7 @@ var room_bounds := Rect2()
 
 const GRAVITY := 1400.0
 const PROJ := preload("res://scripts/enemy_projectile.gd")
+const CombatFeedback := preload("res://scripts/combat_feedback.gd")
 const CORROSION_TICK := 1.0
 var corrosion_time := 0.0
 var _corrosion_timer := CORROSION_TICK
@@ -728,19 +729,27 @@ func _damage_player() -> void:
 func take_damage(amount: int, knockback: Vector2) -> void:
 	if dead:
 		return
+	var armor_blocked := false
 	if combat_role == "vanguard" and _role_state.is_empty() and player and is_instance_valid(player):
 		var incoming_side := signf(player.global_position.x - global_position.x)
 		if incoming_side == float(dir):
 			amount = maxi(1, ceili(float(amount) * FRONTAL_SHIELD_RATIO))
 			knockback *= 0.25
+			armor_blocked = true
 			_shield_spark()
+	var impact_tier := CombatFeedback.tier_for_hit(amount, false, armor_blocked)
+	var impact_profile := CombatFeedback.profile(impact_tier)
+	var impact_material := CombatFeedback.material_for_enemy(enemy_type, behavior)
+	var impact_palette := CombatFeedback.material_palette(impact_material)
+	var impact_direction := knockback.normalized() if knockback.length_squared() > 0.01 else Vector2(float(dir), -0.15)
 	hp -= amount
 	_hit_count += 1
-	velocity = knockback * (1.0 - knockback_resist)
+	velocity = knockback * float(impact_profile["knockback"]) * (1.0 - knockback_resist)
 	if _is_flying_behavior():
 		_base_y = global_position.y   # 飞行敌被击退后更新基准高度
 	_flash()
-	Fx.hit_ring(get_parent(), global_position + Vector2(0, -body_size.y * 0.5), Color(1, 0.92, 0.6))
+	Fx.combat_impact(get_parent(), global_position + Vector2(0, -body_size.y * 0.5), impact_direction, impact_profile, impact_palette)
+	CombatFeedback.play_material_sfx(self, impact_material, impact_tier)
 	# 受击中断起手攻击, 反馈更明确
 	if _atk_state != 0:
 		_atk_state = 0

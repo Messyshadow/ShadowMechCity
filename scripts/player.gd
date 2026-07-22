@@ -58,6 +58,7 @@ const DIVE_SPEED := 1000.0        # 空中下砸速度
 
 const PROJECTILE_SCRIPT := preload("res://scripts/projectile.gd")
 const BOMB_SCRIPT := preload("res://scripts/bomb.gd")
+const CombatFeedback := preload("res://scripts/combat_feedback.gd")
 
 # ---- 运行时状态 ----
 enum S { NORMAL, DASH, ATTACK, HURT, DEAD, DIVE }
@@ -1222,15 +1223,12 @@ func _land_hit(enemy: Node2D) -> void:
 		health = mini(health + 1, max_hp())
 		health_changed.emit(health, max_hp())
 		Fx.popup(get_parent(), global_position + Vector2(0, -80), "+1", Color(0.5, 1.0, 0.6))
-	var shake: float = weapon["shake"]
+	var impact_tier := CombatFeedback.tier_for_hit(dmg, is_finisher or is_crit)
+	var impact_profile := CombatFeedback.profile(impact_tier)
 	if is_finisher or is_crit:
-		Game.hitstop(0.10, 0.03)
-		Game.shake(shake * 1.6)
 		Fx.screen_flash(get_tree(), Color(1.0, 0.9, 0.6, 0.16))
-	else:
-		Game.hitstop(0.05, 0.05)
-		Game.shake(shake)
-	_play_sfx("hit", -8.0)
+	Game.hitstop(float(impact_profile["hitstop"]), float(impact_profile["time_scale"]))
+	Game.shake(float(impact_profile["shake"]))
 	# 命中回技力 + 攒怒气
 	gain_mp(MP_ON_HIT)
 	gain_rage(RAGE_ON_HIT)
@@ -1255,12 +1253,17 @@ func take_damage(amount: int, from_pos: Vector2) -> void:
 	# 装备防御减伤(每3点防御减1伤, 至少受1)
 	var defense := Game.equip_bonus("def")
 	amount = maxi(1, amount - int(floor(defense / 3.0)))
+	var impact_profile := CombatFeedback.profile("heavy" if amount >= 2 else "light")
+	var impact_palette := CombatFeedback.material_palette("flesh")
+	var impact_direction := (global_position - from_pos).normalized()
+	Fx.combat_impact(get_parent(), global_position + Vector2(0, -42), impact_direction, impact_profile, impact_palette)
+	CombatFeedback.play_material_sfx(self, "flesh", "heavy" if amount >= 2 else "light")
 	health -= amount
 	health_changed.emit(health, max_hp())
 	gain_rage(RAGE_ON_HURT)
 	Fx.popup(get_parent(), global_position + Vector2(0, -70), "-%d" % amount, Color(1, 0.4, 0.4))
-	Game.shake(7.0)
-	Game.hitstop(0.08, 0.05)
+	Game.shake(float(impact_profile["shake"]))
+	Game.hitstop(float(impact_profile["hitstop"]), float(impact_profile["time_scale"]))
 	if health <= 0:
 		_die()
 		return

@@ -141,6 +141,66 @@ static func hit_ring(parent: Node, pos: Vector2, color: Color = Color(1, 1, 1)) 
 	tw.tween_property(ring, "modulate:a", 0.0, 0.22)
 	tw.chain().tween_callback(ring.queue_free)
 
+## 分层命中特效：方向火花、核心闪光、冲击环与短暂残留。
+## profile / palette 来自 CombatFeedback，危险预警使用更高 z_index，不会被装饰粒子遮挡。
+static func combat_impact(parent: Node, pos: Vector2, direction: Vector2,
+		profile: Dictionary, palette: Dictionary) -> void:
+	if parent == null or not is_instance_valid(parent):
+		return
+	var aim := direction.normalized() if direction.length_squared() > 0.01 else Vector2.RIGHT
+	var particle_amount := int(profile.get("particle_amount", 12))
+	var ring_width := float(profile.get("ring_width", 4.0))
+	var core_color: Color = palette.get("core", Color.WHITE)
+	var spark_color: Color = palette.get("spark", Color(1.0, 0.75, 0.3))
+	var residue_color: Color = palette.get("residue", Color(0.2, 0.45, 0.7, 0.7))
+	_burst(parent, pos, particle_amount, spark_color, 250.0 + ring_width * 16.0,
+		38.0, aim, 0.28, 1.8, 3.8 + ring_width * 0.22, 95.0)
+	var core := Polygon2D.new()
+	core.polygon = PackedVector2Array([
+		Vector2(-10, 0), Vector2(0, -7), Vector2(18, 0), Vector2(0, 7),
+	])
+	core.position = pos
+	core.rotation = aim.angle()
+	core.color = core_color
+	core.z_index = 31
+	var add_mat := CanvasItemMaterial.new()
+	add_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	core.material = add_mat
+	parent.add_child(core)
+	var core_tween := core.create_tween()
+	core_tween.set_parallel(true)
+	core_tween.tween_property(core, "scale", Vector2(2.2, 1.4), 0.11)
+	core_tween.tween_property(core, "modulate:a", 0.0, 0.14)
+	core_tween.chain().tween_callback(core.queue_free)
+	var ring := Line2D.new()
+	ring.width = ring_width
+	ring.default_color = spark_color
+	ring.closed = true
+	var ring_points := PackedVector2Array()
+	for i in range(18):
+		var angle := TAU * float(i) / 18.0
+		ring_points.append(Vector2(cos(angle) * 13.0, sin(angle) * 8.0))
+	ring.points = ring_points
+	ring.position = pos
+	ring.rotation = aim.angle()
+	ring.z_index = 30
+	ring.material = add_mat
+	parent.add_child(ring)
+	var ring_tween := ring.create_tween()
+	ring_tween.set_parallel(true)
+	ring_tween.tween_property(ring, "scale", Vector2(2.6, 2.0), 0.2)
+	ring_tween.tween_property(ring, "modulate:a", 0.0, 0.2)
+	ring_tween.chain().tween_callback(ring.queue_free)
+	var residue := Line2D.new()
+	residue.width = maxf(2.0, ring_width * 0.5)
+	residue.default_color = residue_color
+	residue.points = PackedVector2Array([pos - aim * 34.0, pos + aim * 12.0])
+	residue.z_index = 18
+	parent.add_child(residue)
+	var residue_tween := residue.create_tween()
+	residue_tween.tween_property(residue, "modulate:a", 0.0, 0.34)
+	residue_tween.tween_callback(residue.queue_free)
+
 ## 全屏闪光 (重击/技能命中)
 static func screen_flash(tree: SceneTree, color: Color = Color(1, 1, 1, 0.35)) -> void:
 	if tree == null:
