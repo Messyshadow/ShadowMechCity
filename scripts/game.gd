@@ -415,6 +415,7 @@ const ACTIONS := {
 	"bomb":       [KEY_F],
 	"ult":        [KEY_V],
 	"restart":    [KEY_R],
+	"retreat":    [KEY_B],
 	"interact":   [KEY_E, KEY_ENTER],
 }
 

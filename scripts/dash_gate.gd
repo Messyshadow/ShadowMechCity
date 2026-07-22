@@ -53,14 +53,24 @@ func _build_gate() -> void:
 
 	prompt = Label.new()
 	prompt.text = "%s  [Shift] 冲刺穿越相位屏障" % direction_arrow()
-	prompt.position = Vector2(-178, -minf(gate_size.y * 0.5, 255.0))
-	prompt.custom_minimum_size = Vector2(356, 48)
+	prompt.position = Vector2(-210, -minf(gate_size.y * 0.5, 255.0))
+	prompt.custom_minimum_size = Vector2(420, 58)
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	prompt.add_theme_font_size_override("font_size", 22)
+	prompt.add_theme_font_size_override("font_size", 24)
 	prompt.add_theme_color_override("font_color", Color(0.78, 0.98, 1.0))
 	prompt.add_theme_color_override("font_outline_color", Color(0.01, 0.03, 0.06))
-	prompt.add_theme_constant_override("outline_size", 8)
+	prompt.add_theme_constant_override("outline_size", 6)
+	var prompt_plate := StyleBoxFlat.new()
+	prompt_plate.bg_color = Color(0.015, 0.055, 0.085, 0.94)
+	prompt_plate.border_color = Color(0.22, 0.86, 1.0, 0.95)
+	prompt_plate.set_border_width_all(2)
+	prompt_plate.set_corner_radius_all(10)
+	prompt_plate.content_margin_left = 16.0
+	prompt_plate.content_margin_right = 16.0
+	prompt_plate.content_margin_top = 8.0
+	prompt_plate.content_margin_bottom = 8.0
+	prompt.add_theme_stylebox_override("normal", prompt_plate)
 	prompt.visible = false
 	add_child(prompt)
 

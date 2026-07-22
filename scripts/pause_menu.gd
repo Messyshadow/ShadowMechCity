@@ -6,6 +6,7 @@ var settings: CanvasLayer    # 由 main 注入
 var main_ref: Node           # 由 main 注入 (提供 save_now)
 var save_msg: Label
 var first_btn: Button
+var retreat_btn: Button
 
 func _ready() -> void:
 	layer = 25
@@ -35,6 +36,8 @@ func _build() -> void:
 	first_btn = _btn(vb, "继续", _resume)
 	_btn(vb, "存档", _on_save)
 	_btn(vb, "设置", _on_settings)
+	retreat_btn = _btn(vb, "撤离 Boss 战（测试版）", _on_retreat)
+	retreat_btn.visible = false
 	_btn(vb, "回主菜单", _on_title)
 
 	save_msg = Label.new()
@@ -68,6 +71,7 @@ func _open() -> void:
 	get_tree().paused = true
 	Game.menu_open += 1
 	save_msg.text = ""
+	retreat_btn.visible = main_ref != null and main_ref.has_method("can_retreat_boss") and main_ref.can_retreat_boss()
 	if first_btn:
 		first_btn.grab_focus()
 
@@ -85,6 +89,11 @@ func _on_save() -> void:
 func _on_settings() -> void:
 	if settings:
 		settings.open_panel()
+
+func _on_retreat() -> void:
+	_resume()
+	if main_ref and main_ref.has_method("retreat_from_boss"):
+		main_ref.retreat_from_boss()
 
 func _on_title() -> void:
 	get_tree().paused = false

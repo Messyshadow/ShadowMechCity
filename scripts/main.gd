@@ -17,6 +17,7 @@ const CINEMATIC_DATA := preload("res://scripts/cinematic_data.gd")
 const CINEMATIC_PANEL_SCRIPT := preload("res://scripts/cinematic_panel.gd")
 const TUTORIAL_GUIDE_SCRIPT := preload("res://scripts/tutorial_guide.gd")
 const DASH_GATE_SCRIPT := preload("res://scripts/dash_gate.gd")
+const BOSS_RETREAT_CONSOLE := preload("res://scripts/boss_retreat_console.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -77,6 +78,7 @@ var _interactive_portals: Array = []
 var _door_hint: Node = null
 var boss_bar: CanvasLayer
 var _boss: Node = null
+var _boss_entry_room := ""
 var skill_panel: CanvasLayer
 var inv_panel: CanvasLayer
 var map_panel: Control
@@ -207,6 +209,18 @@ func reload_current_room_after_death() -> void:
 	var id := room_id
 	_enter_room.call_deferred(id, "")
 
+func can_retreat_boss() -> bool:
+	return _boss_entry_room != "" and is_instance_valid(_boss) and not Game.has_item("boss_" + room_id)
+
+func retreat_from_boss() -> void:
+	if not can_retreat_boss():
+		return
+	var target_room := _boss_entry_room
+	_boss_entry_room = ""
+	boss_bar.hide_boss()
+	Game.reset_session_encounters()
+	_enter_room.call_deferred(target_room, room_id)
+
 func _setup_boss_bar() -> void:
 	boss_bar = CanvasLayer.new()
 	boss_bar.set_script(load("res://scripts/boss_bar.gd"))
@@ -303,8 +317,15 @@ func _enter_room(id: String, from_room: String) -> void:
 	if _active_npc != "" and is_instance_valid(dialogue_panel) and dialogue_panel.is_open():
 		dialogue_panel.close_conversation()
 	_record_room_clear()
-	room_id = id
 	var room: Dictionary = Rooms.ROOMS[id]
+	var undefeated_boss := room.has("boss") and not Game.has_item("boss_" + id)
+	if undefeated_boss and from_room != "":
+		_boss_entry_room = from_room
+	elif undefeated_boss and _boss_entry_room == "":
+		_boss_entry_room = _fallback_boss_entry(room)
+	elif not room.has("boss"):
+		_boss_entry_room = ""
+	room_id = id
 	door_cd = 0.45
 	# 清空旧房间
 	_locked_doors = []
@@ -406,6 +427,8 @@ func _enter_room(id: String, from_room: String) -> void:
 	player.spawn_point = sp
 	player.state = 0
 	player.iframes = 0.5
+	if is_instance_valid(_boss) and _boss_entry_room != "":
+		_spawn_boss_retreat_console(room)
 	# 相机
 	var b = room["bounds"]
 	_bounds = b
@@ -417,6 +440,27 @@ func _enter_room(id: String, from_room: String) -> void:
 	if hud.has_method("set_area"):
 		hud.set_area(room["name"])
 	_show_banner(room["name"])
+
+func _fallback_boss_entry(room: Dictionary) -> String:
+	for door in room.get("doors", []):
+		var target := str(door.get("to", ""))
+		if target != "":
+			return target
+	return ""
+
+func _spawn_boss_retreat_console(room: Dictionary) -> void:
+	var entry_spawn := _spawn_for(room, _boss_entry_room)
+	var bounds: Array = room["bounds"]
+	var center := Vector2(
+		(float(bounds[0]) + float(bounds[2])) * 0.5,
+		(float(bounds[1]) + float(bounds[3])) * 0.5
+	)
+	var inward := (center - entry_spawn).normalized()
+	var console := BOSS_RETREAT_CONSOLE.new()
+	console.name = "BossRetreatConsole"
+	console.position = entry_spawn + inward * 95.0 + Vector2(0, 12)
+	world.add_child(console)
+	console.setup(player, self)
 
 func _spawn_npc(entry: Array) -> void:
 	if entry.size() < 3:
@@ -1379,6 +1423,9 @@ func _auto_screenshot() -> void:
 	var rid := _qa_option("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	var shot_13d1 := _qa_option("SHOT_13D1")
+	if shot_13d1 != "":
+		await _prepare_13d1_capture(shot_13d1)
 	var portal_kind := _qa_option("SHOT_PORTAL_PROMPT")
 	if portal_kind != "":
 		await _prepare_portal_capture(portal_kind, _qa_option("SHOT_PORTAL_TRAVEL") == "1")
@@ -1493,6 +1540,55 @@ func _auto_screenshot() -> void:
 		push_error("Failed to save QA screenshot to %s: %s" % [shot_output, error_string(save_error)])
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
+
+func _prepare_13d1_capture(kind: String) -> void:
+	if kind == "dash_gate":
+		Game.story_flags.erase(Game.DASH_GATE_TUTORIAL_FLAG)
+		_enter_room("tunnel", "depths")
+		await get_tree().process_frame
+		_clear_13d1_capture_enemies()
+		player.global_position = Vector2(205, 520)
+		_freeze_13d1_capture_player()
+		camera.target = null
+		camera.global_position = Vector2(640, 340)
+		camera.zoom = Vector2(0.88, 0.88)
+	elif kind == "boss_retreat":
+		Game.items.erase("boss_mine_boss")
+		_enter_room("mine_boss", "cavern")
+		await get_tree().process_frame
+		_clear_13d1_capture_enemies(true)
+		var console := world.get_node_or_null("BossRetreatConsole")
+		if not is_instance_valid(console):
+			push_error("SHOT_13D1 boss retreat console not found")
+			return
+		player.global_position = console.global_position + Vector2(130, 0)
+		_freeze_13d1_capture_player()
+		if is_instance_valid(_boss):
+			_boss.set_physics_process(false)
+		camera.target = null
+		camera.global_position = Vector2(650, 340)
+		camera.zoom = Vector2(0.78, 0.78)
+	else:
+		push_error("SHOT_13D1 must be dash_gate or boss_retreat: " + kind)
+		return
+	for banner in get_tree().get_nodes_in_group("room_banner"):
+		banner.queue_free()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+func _clear_13d1_capture_enemies(keep_boss: bool = false) -> void:
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(enemy):
+			if keep_boss and enemy == _boss:
+				continue
+			enemy.queue_free()
+
+func _freeze_13d1_capture_player() -> void:
+	player.velocity = Vector2.ZERO
+	player.iframes = 0.0
+	player.anim.visible = true
+	player.set_input_locked(true)
+	player.set_physics_process(false)
 
 func _seed_progression_ui_for_qa() -> void:
 	# 仅 --shot 进程内使用，不调用 save_game，不污染玩家存档。
