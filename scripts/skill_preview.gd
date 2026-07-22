@@ -8,6 +8,9 @@ var viewport: SubViewport
 var actor: AnimatedSprite2D
 var weapon_sprite: Sprite2D
 var current_tween: Tween
+var training_dummy: Node2D
+var environment_target: Node2D
+var stage_caption: Label
 
 func _ready() -> void:
 	custom_minimum_size = Vector2(PREVIEW_SIZE)
@@ -37,9 +40,48 @@ func _build_preview() -> void:
 	floor_line.default_color = Color(0.22, 0.82, 0.98, 0.55)
 	floor_line.points = PackedVector2Array([Vector2(20, 122), Vector2(390, 122)])
 	viewport.add_child(floor_line)
+	training_dummy = Node2D.new()
+	training_dummy.name = "TrainingDummy"
+	training_dummy.position = Vector2(246, 92)
+	var dummy_body := Polygon2D.new()
+	dummy_body.polygon = PackedVector2Array([Vector2(-14, -22), Vector2(14, -22), Vector2(18, 25), Vector2(-18, 25)])
+	dummy_body.color = Color(0.32, 0.38, 0.46)
+	training_dummy.add_child(dummy_body)
+	var dummy_core := Polygon2D.new()
+	dummy_core.polygon = PackedVector2Array([Vector2(-7, -8), Vector2(7, -8), Vector2(7, 8), Vector2(-7, 8)])
+	dummy_core.color = Color(1.0, 0.46, 0.22)
+	training_dummy.add_child(dummy_core)
+	viewport.add_child(training_dummy)
+	environment_target = Node2D.new()
+	environment_target.name = "EnvironmentTarget"
+	environment_target.position = Vector2(348, 92)
+	var target_ring := Line2D.new()
+	target_ring.width = 4.0
+	target_ring.default_color = Color(0.3, 0.92, 1.0)
+	var ring_points := PackedVector2Array()
+	for point_index in range(33):
+		var angle := TAU * point_index / 32.0
+		ring_points.append(Vector2.from_angle(angle) * 24.0)
+	target_ring.points = ring_points
+	environment_target.add_child(target_ring)
+	var target_core := Polygon2D.new()
+	target_core.polygon = PackedVector2Array([Vector2(0, -11), Vector2(11, 0), Vector2(0, 11), Vector2(-11, 0)])
+	target_core.color = Color(0.42, 0.9, 1.0, 0.7)
+	environment_target.add_child(target_core)
+	viewport.add_child(environment_target)
+	stage_caption = Label.new()
+	stage_caption.name = "StageCaption"
+	stage_caption.position = Vector2(18, 8)
+	stage_caption.size = Vector2(374, 26)
+	stage_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stage_caption.add_theme_font_size_override("font_size", 14)
+	stage_caption.add_theme_color_override("font_color", Color(0.68, 0.92, 1.0))
+	stage_caption.add_theme_color_override("font_outline_color", Color(0.0, 0.01, 0.03))
+	stage_caption.add_theme_constant_override("outline_size", 4)
+	viewport.add_child(stage_caption)
 	actor = AnimatedSprite2D.new()
 	actor.sprite_frames = AnimLoader.build_player()
-	actor.position = Vector2(205, 108)
+	actor.position = Vector2(105, 108)
 	actor.scale = Vector2(1.2, 1.2)
 	actor.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	viewport.add_child(actor)
@@ -55,7 +97,7 @@ func play_node(node: Dictionary, weapon: Dictionary = {}) -> void:
 		return
 	if current_tween and current_tween.is_valid():
 		current_tween.kill()
-	actor.position = Vector2(205, 108)
+	actor.position = Vector2(105, 108)
 	actor.rotation = 0.0
 	actor.modulate = Color.WHITE
 	weapon_sprite.rotation = float(weapon.get("rest_rot", -0.5))
@@ -75,13 +117,58 @@ func play_node(node: Dictionary, weapon: Dictionary = {}) -> void:
 	elif preview in ["ultimate", "skill_cast", "bomb", "dual_combo", "spear_combo", "crossbow_combo"]:
 		animation = "attack3"
 	actor.play(animation)
+	var preview_stages: Array = node.get("preview_stages", [])
+	var interaction_tags: Array = node.get("interaction_tags", [])
+	environment_target.visible = not interaction_tags.is_empty()
+	training_dummy.visible = not preview_stages.is_empty()
+	if preview_stages.is_empty():
+		stage_caption.text = "技能演示"
+		current_tween = create_tween().set_loops()
+		if preview == "run" or preview == "dash":
+			current_tween.tween_property(actor, "position:x", 295.0, 0.7)
+			current_tween.tween_property(actor, "position:x", 105.0, 0.0)
+		else:
+			current_tween.tween_property(actor, "modulate", Color(0.55, 0.92, 1.0), 0.28)
+			current_tween.tween_property(actor, "modulate", Color.WHITE, 0.28)
+		return
+	_play_functional_preview(preview_stages, str(interaction_tags[0]))
+
+func _play_functional_preview(preview_stages: Array, interaction_tag: String) -> void:
+	_set_target_style(interaction_tag)
+	training_dummy.modulate = Color.WHITE
+	environment_target.modulate = Color.WHITE
 	current_tween = create_tween().set_loops()
-	if preview == "run" or preview == "dash":
-		current_tween.tween_property(actor, "position:x", 295.0, 0.7)
-		current_tween.tween_property(actor, "position:x", 125.0, 0.0)
-	else:
-		current_tween.tween_property(actor, "modulate", Color(0.55, 0.92, 1.0), 0.28)
-		current_tween.tween_property(actor, "modulate", Color.WHITE, 0.28)
+	current_tween.tween_callback(_set_stage.bind(str(preview_stages[0]), "① 起手"))
+	current_tween.tween_property(actor, "modulate", Color(0.55, 0.92, 1.0), 0.28)
+	current_tween.tween_callback(_set_stage.bind(str(preview_stages[1]), "② 移动 / 发射"))
+	current_tween.tween_property(actor, "position:x", 190.0, 0.34).set_trans(Tween.TRANS_QUAD)
+	current_tween.tween_callback(_set_stage.bind(str(preview_stages[2]), "③ 命中假人"))
+	current_tween.tween_property(training_dummy, "modulate", Color(1.0, 0.32, 0.22), 0.12)
+	current_tween.tween_property(training_dummy, "modulate", Color.WHITE, 0.14)
+	current_tween.tween_callback(_set_stage.bind(str(preview_stages[3]), "④ 环境互动"))
+	current_tween.tween_property(environment_target, "scale", Vector2(1.35, 1.35), 0.14)
+	current_tween.tween_property(environment_target, "modulate", Color(1.5, 1.5, 1.5), 0.12)
+	current_tween.tween_callback(_set_stage.bind(str(preview_stages[4]), "⑤ 收招"))
+	current_tween.tween_property(actor, "position:x", 105.0, 0.35)
+	current_tween.tween_property(environment_target, "scale", Vector2.ONE, 0.1)
+	current_tween.tween_property(environment_target, "modulate", Color.WHITE, 0.1)
+	current_tween.tween_interval(0.18)
+
+func _set_stage(_stage_id: String, label: String) -> void:
+	stage_caption.text = label
+
+func _set_target_style(tag: String) -> void:
+	var colors := {
+		"sword_wave": Color(0.25, 0.86, 1.0), "hammer_charge": Color(1.0, 0.55, 0.18),
+		"cannon_steam": Color(0.72, 0.95, 1.0), "dual_grapple": Color(0.8, 0.35, 1.0),
+		"spear_drill": Color(1.0, 0.78, 0.25), "crossbow_remote": Color(0.25, 1.0, 0.72),
+	}
+	var color: Color = colors.get(tag, Color.CYAN)
+	for child in environment_target.get_children():
+		if child is Line2D:
+			child.default_color = color
+		elif child is Polygon2D:
+			child.color = Color(color, 0.72)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_VISIBILITY_CHANGED and viewport:

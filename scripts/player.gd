@@ -645,6 +645,23 @@ func _line_hit(length: float, half_height: float, dmg: int, kb_scale: float, kb_
 		Fx.hit_spark(get_parent(), (enemy as Node2D).global_position)
 		Fx.hit_ring(get_parent(), (enemy as Node2D).global_position, weapon["color"])
 
+# 统一环境协议：武器只发送 tag，不认识房间和机关类型。
+func _try_skill_interaction(tag: String, radius: float, forward_only := true) -> bool:
+	for target in get_tree().get_nodes_in_group("skill_interactable"):
+		if not is_instance_valid(target) or not target.has_method("try_skill_interaction"):
+			continue
+		var offset: Vector2 = target.global_position - global_position
+		var target_distance := float(target.interaction_distance_from(global_position)) if target.has_method("interaction_distance_from") else offset.length()
+		if target_distance > radius or (forward_only and offset.x * facing < -28.0):
+			continue
+		if target.try_skill_interaction(tag, self):
+			Fx.cast_ring(get_parent(), target.global_position, weapon["color"])
+			# 与目标自带名称错层显示，避免窄屏上两行文字互相压住。
+			Fx.popup(get_parent(), target.global_position + Vector2(0, -116), "环境共鸣!", weapon["color"])
+			Game.shake(5.0)
+			return true
+	return false
+
 # 任意角度飞弹(全向弹幕/防空齐射用)
 func _spawn_proj_vel(scale: float, tint: Color, dmg: int, v: Vector2, life: float, pierce: int = 2) -> void:
 	var proj := Area2D.new()
@@ -684,6 +701,8 @@ func _skill_upper() -> void:
 				_spawn_proj_vel(1.3, col, _skill_dmg(1.0), Vector2(cos(a), sin(a)) * 760.0, 1.0)
 			Fx.shockwave(get_parent(), center + Vector2(0, -10), col)
 			_play_sfx("atk_cannon", -2.0)
+			if Game.skill_lv("cannon_steam_jet") > 0:
+				_try_skill_interaction("cannon_steam", 280.0, false)
 		"hammer":   # 上勾锤: 大跳 + 强力击飞 + 橙冲击
 			if is_on_floor():
 				velocity.y = -260.0
@@ -725,6 +744,8 @@ func _skill_dash_atk() -> void:
 			Fx.play_slash(get_parent(), global_position + Vector2(facing * 110, -26), -facing, slash_frames, 0.95, Color(0.75, 0.4, 1.0))
 			_line_hit(210.0, 82.0, _skill_dmg(1.5 + 0.2 * Game.skill_lv("dual_execution")), 260.0, -150.0)
 			_play_sfx("dash", -2.0)
+			if Game.skill_lv("dual_grapple") > 0:
+				_try_skill_interaction("dual_grapple", 390.0, false)
 		"spear": # 冲锋贯穿：长距离直线控制
 			velocity = Vector2(facing * 580.0, 0.0)
 			iframes = maxf(iframes, 0.18)
@@ -732,6 +753,8 @@ func _skill_dash_atk() -> void:
 			Fx.play_slash(get_parent(), global_position + Vector2(facing * 138, -34), facing, fx_frames["bolt"], 1.3, col)
 			_line_hit(270.0, 52.0, _skill_dmg(2.0 + 0.25 * Game.skill_lv("spear_dragon")), 480.0, -110.0)
 			_play_sfx("attack", -2.0)
+			if Game.skill_lv("spear_drill") > 0:
+				_try_skill_interaction("spear_drill", 320.0)
 		"cannon":   # 后跃齐射: 向后跃 + 向前扇形 3 弹(拉开距离)
 			velocity = Vector2(-facing * 520.0, -200.0)
 			for i in range(3):
@@ -891,6 +914,8 @@ func _heavy_sword() -> void:
 	_squash(Vector2(1.2, 0.85))
 	if is_on_floor():
 		velocity.x = -facing * 60.0
+	if Game.skill_lv("sword_resonance") > 0:
+		_try_skill_interaction("sword_wave", 520.0)
 
 # 蒸汽炮重攻击: 蓄力远程重炮(飞很远)
 func _heavy_cannon() -> void:
@@ -915,6 +940,8 @@ func _heavy_hammer() -> void:
 	Game.shake(9.0)
 	_play_sfx("atk_hammer", -1.0)
 	_squash(Vector2(1.4, 0.7))   # 后坐力
+	if Game.skill_lv("hammer_demolition") > 0:
+		_try_skill_interaction("hammer_charge", 205.0)
 
 func _dual_blades_heavy() -> void:
 	var center := global_position + Vector2(facing * 64, -34)
@@ -946,6 +973,8 @@ func _crossbow_heavy() -> void:
 	Game.shake(7.0)
 	_play_sfx("atk_cannon", -1.0)
 	_squash(Vector2(1.3, 0.76))
+	if Game.skill_lv("crossbow_remote") > 0:
+		_try_skill_interaction("crossbow_remote", 680.0)
 
 # ------------------------------------------------------------- 空中下砸
 func _start_dive() -> void:

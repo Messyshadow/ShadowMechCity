@@ -468,6 +468,7 @@ const ROOMS := {
 		"pits":[[850,380,3]], "platforms":[[260,560,170,24],[540,450,160,24],[820,350,170,24],[1120,450,160,24],[1450,560,170,24]],
 		"movers":[[850,520,150,"h",150,3.0,0.0]], "hazards":[[850,680,180,20,2,"steam"]], "enemies":[[520,410,"gearbat"],[1200,410,"drillworm"]],
 		"items":[[1450,520,"chest","secret_chest_mine"]], "secrets":[[850,310,"memory","memory_mine_cache"]],
+		"skill_targets":[[360,520,"brittle_wall",48,160],[1260,380,"drill_wall",48,150]],
 		"start_spawn":Vector2(180,680), "doors":[{"side":"left","p":590,"to":"mine"}]},
 	"secret_factory_heat": {
 		"name":"秘室·废热回收仓", "theme":"factory", "region":"factory", "hidden_room":true, "map":Vector2i(4,0), "bounds":[0,0,1800,740],
@@ -475,7 +476,7 @@ const ROOMS := {
 		"platforms":[[280,560,170,24],[620,460,160,24],[900,270,190,24],[1180,460,160,24],[1520,560,170,24]],
 		"hazards":[[720,700,100,20,2,"steam"],[1080,700,100,20,2,"gear"]], "enemies":[[480,680,"mech_soldier"],[1320,680,"steam_brute"]],
 		"items":[[900,230,"chest","secret_chest_factory"]], "secrets":[[1540,520,"memory","memory_factory_heat"]],
-		"weapons":[[900,420,"dual_blades"]],
+		"weapons":[[900,420,"dual_blades"]], "skill_targets":[[720,430,"steam_anchor"],[1280,410,"relay"]],
 		"start_spawn":Vector2(170,700), "doors":[{"side":"left","p":600,"to":"factory_works"}]},
 	"secret_water_cistern": {
 		"name":"秘室·沉没蓄水池", "theme":"water", "region":"water", "hidden_room":true, "map":Vector2i(2,3), "bounds":[0,0,1700,760],
@@ -495,7 +496,7 @@ const ROOMS := {
 		"pits":[[950,620,3]], "platforms":[[260,620,170,24,true],[560,500,160,24,true],[900,340,190,24,true],[1280,460,170,24,true],[1620,590,170,24,true]],
 		"winds":[[950,450,520,520,260,-150]], "hazards":[[1480,760,120,20,2,"rune"]], "enemies":[[700,440,"void_eagle"],[1320,400,"storm_mage"]],
 		"items":[[1620,550,"chest","secret_chest_void"]], "secrets":[[900,300,"memory","memory_void_observatory"]],
-		"weapons":[[260,580,"crossbow"]],
+		"weapons":[[260,580,"crossbow"]], "skill_targets":[[760,360,"grapple_anchor"],[1440,500,"remote_switch"]],
 		"start_spawn":Vector2(180,740), "doors":[{"side":"left","p":650,"to":"void_hangar"}]},
 	"secret_castle_ossuary": {
 		"name":"秘室·君王遗骨库", "theme":"castle", "region":"castle", "hidden_room":true, "map":Vector2i(4,2), "bounds":[0,0,1900,820],

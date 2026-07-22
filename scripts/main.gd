@@ -18,6 +18,7 @@ const CINEMATIC_PANEL_SCRIPT := preload("res://scripts/cinematic_panel.gd")
 const TUTORIAL_GUIDE_SCRIPT := preload("res://scripts/tutorial_guide.gd")
 const DASH_GATE_SCRIPT := preload("res://scripts/dash_gate.gd")
 const BOSS_RETREAT_CONSOLE := preload("res://scripts/boss_retreat_console.gd")
+const SKILL_INTERACTABLE_SCRIPT := preload("res://scripts/skill_interactable.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -412,6 +413,10 @@ func _enter_room(id: String, from_room: String) -> void:
 	# 可破坏墙 [x, top, w, h]  (炸弹炸开)
 	for bw in room.get("breakables", []):
 		_make_breakable(bw[0], bw[1], bw[2], bw[3])
+	# 功能型武器目标 [x, y, kind, width?, height?]，只放在可选路线。
+	for target in room.get("skill_targets", []):
+		var target_size := Vector2(float(target[3]), float(target[4])) if target.size() >= 5 else Vector2(54, 74)
+		_make_skill_interactable(float(target[0]), float(target[1]), str(target[2]), target_size)
 	for d in room["doors"]:
 		_make_door(room, d)
 	if room.has("save"):
@@ -672,6 +677,13 @@ func _make_breakable(x: float, top: float, w: float, h: float) -> void:
 	lab.add_theme_constant_override("outline_size", 4)
 	body.add_child(lab)
 	world.add_child(body)
+
+func _make_skill_interactable(x: float, y: float, kind: String, size: Vector2) -> Node:
+	var target := SKILL_INTERACTABLE_SCRIPT.new()
+	target.position = Vector2(x, y)
+	world.add_child(target)
+	target.setup(kind, size)
+	return target
 
 func _make_dash_gate(x: float, top: float, w: float, h: float) -> void:
 	var gate := DASH_GATE_SCRIPT.new()
@@ -1431,6 +1443,10 @@ func _auto_screenshot() -> void:
 	if shot_13d2 != "":
 		await _prepare_13d2_capture(shot_13d2)
 		return
+	var shot_13d3 := _qa_option("SHOT_13D3")
+	if shot_13d3 != "":
+		await _prepare_13d3_capture(shot_13d3)
+		return
 	var portal_kind := _qa_option("SHOT_PORTAL_PROMPT")
 	if portal_kind != "":
 		await _prepare_portal_capture(portal_kind, _qa_option("SHOT_PORTAL_TRAVEL") == "1")
@@ -1670,6 +1686,64 @@ func _prepare_13d2_capture(kind: String) -> void:
 	await get_tree().create_timer(0.1, true, false, true).timeout
 	get_tree().quit()
 
+func _prepare_13d3_capture(kind: String) -> void:
+	var setups := {
+		"sword_relay": ["secret_factory_heat", "sword", "sword_resonance", Vector2(1080, 440), Vector2(1050, 410)],
+		"hammer_wall": ["secret_mine_cache", "hammer", "hammer_demolition", Vector2(205, 680), Vector2(420, 510)],
+		"cannon_steam": ["secret_factory_heat", "cannon", "cannon_steam_jet", Vector2(600, 450), Vector2(760, 400)],
+		"dual_grapple": ["secret_void_observatory", "dual_blades", "dual_grapple", Vector2(560, 470), Vector2(760, 380)],
+		"spear_drill": ["secret_mine_cache", "spear", "spear_drill", Vector2(1040, 440), Vector2(1260, 390)],
+		"crossbow_switch": ["secret_void_observatory", "crossbow", "crossbow_remote", Vector2(1110, 570), Vector2(1390, 500)],
+	}
+	if not setups.has(kind):
+		push_error("SHOT_13D3 unknown capture: " + kind)
+		get_tree().quit(1)
+		return
+	var setup: Array = setups[kind]
+	_enter_room(str(setup[0]), "")
+	await get_tree().process_frame
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(enemy):
+			enemy.queue_free()
+	for banner in get_tree().get_nodes_in_group("room_banner"):
+		banner.queue_free()
+	Game.skills[str(setup[2])] = 1
+	for i in range(Weapons.LIST.size()):
+		if str(Weapons.LIST[i]["id"]) == str(setup[1]):
+			player._on_weapon_equipped(i)
+			break
+	player.global_position = setup[3]
+	player.velocity = Vector2.ZERO
+	player.facing = 1
+	player.iframes = 99.0
+	player.set_input_locked(true)
+	camera.target = null
+	camera.global_position = setup[4]
+	camera.zoom = Vector2(0.92, 0.92)
+	var out_dir := _qa_option("SHOT_OUTPUT")
+	if out_dir == "":
+		out_dir = ProjectSettings.globalize_path("res://screenshots/13d3/%s" % kind)
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	await get_tree().create_timer(0.28, true, false, true).timeout
+	await RenderingServer.frame_post_draw
+	get_viewport().get_texture().get_image().save_png("%s/frame_0.png" % out_dir)
+	print("13D3_TRIGGER kind=%s skill=%s level=%d targets=%d" % [kind, setup[2], Game.skill_lv(str(setup[2])), get_tree().get_nodes_in_group("skill_interactable").size()])
+	match kind:
+		"sword_relay": player._heavy_sword()
+		"hammer_wall": player._heavy_hammer()
+		"cannon_steam": player._skill_upper()
+		"dual_grapple", "spear_drill": player._skill_dash_atk()
+		"crossbow_switch": player._crossbow_heavy()
+	for frame_index in range(1, 4):
+		await get_tree().create_timer(0.11 + frame_index * 0.05, true, false, true).timeout
+		await RenderingServer.frame_post_draw
+		var save_error := get_viewport().get_texture().get_image().save_png("%s/frame_%d.png" % [out_dir, frame_index])
+		if save_error != OK:
+			push_error("Failed 13D.3 frame %d: %s" % [frame_index, error_string(save_error)])
+	print("13D3_CAPTURE_COMPLETE " + kind)
+	await get_tree().create_timer(0.1, true, false, true).timeout
+	get_tree().quit()
+
 func _seed_progression_ui_for_qa() -> void:
 	# 仅 --shot 进程内使用，不调用 save_game，不污染玩家存档。
 	Game.level = maxi(Game.level, 8)
@@ -1680,6 +1754,8 @@ func _seed_progression_ui_for_qa() -> void:
 		"dual_edge": 1, "dual_cross": 1, "dual_execution": 1,
 		"spear_mastery": 1, "spear_charge": 1, "spear_dragon": 1,
 		"crossbow_focus": 1, "crossbow_burst": 1, "crossbow_barrage": 1,
+		"sword_resonance": 1, "hammer_demolition": 1, "cannon_steam_jet": 1,
+		"dual_grapple": 1, "spear_drill": 1, "crossbow_remote": 1,
 	}
 	for weapon_id in ["sword", "hammer", "cannon", "dual_blades", "spear", "crossbow"]:
 		if not Game.unlocked_weapons.has(weapon_id):

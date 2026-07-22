@@ -94,7 +94,12 @@ func _explode() -> void:
 			e.take_damage(damage, Vector2(kd * 340.0, -280.0))
 	for w in get_tree().get_nodes_in_group("breakable"):
 		if is_instance_valid(w) and w.global_position.distance_to(p) < 225.0:
-			Fx.death_burst(parent, w.global_position, Color(0.7, 0.55, 0.4))
-			Fx.popup(parent, w.global_position + Vector2(0, -20), "墙壁破裂!", Color(1, 0.8, 0.4))
-			w.queue_free()
+			var opened := true
+			if w.has_method("try_skill_interaction"):
+				opened = w.try_skill_interaction("bomb", self)
+			else:
+				w.queue_free()
+			if opened:
+				Fx.death_burst(parent, w.global_position, Color(0.7, 0.55, 0.4))
+				Fx.popup(parent, w.global_position + Vector2(0, -20), "墙壁破裂!", Color(1, 0.8, 0.4))
 	queue_free()
