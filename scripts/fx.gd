@@ -1,5 +1,195 @@
 class_name Fx
 extends RefCounted
+
+const SKILL_FX_PROFILE := preload("res://scripts/skill_fx_profile.gd")
+
+static func _additive_material() -> CanvasItemMaterial:
+	var material := CanvasItemMaterial.new()
+	material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	return material
+
+static func _circle_points(radius: float, count: int = 24, stretch := Vector2.ONE) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	for i in range(count):
+		var angle := TAU * float(i) / float(count)
+		points.append(Vector2(cos(angle) * radius * stretch.x, sin(angle) * radius * stretch.y))
+	return points
+
+static func _arc_points(radius: float, start_angle: float, end_angle: float, count: int = 18) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	for i in range(count):
+		var weight := float(i) / float(maxi(1, count - 1))
+		var angle := lerpf(start_angle, end_angle, weight)
+		points.append(Vector2.from_angle(angle) * radius)
+	return points
+
+static func _fx_line(parent: Node, points: PackedVector2Array, width: float,
+		color: Color, z_index: int, additive := true) -> Line2D:
+	var line := Line2D.new()
+	line.points = points
+	line.width = width
+	line.default_color = color
+	line.z_index = z_index
+	line.antialiased = true
+	if additive:
+		line.material = _additive_material()
+	parent.add_child(line)
+	return line
+
+static func _fade_and_free(item: CanvasItem, duration: float, grow := Vector2.ONE) -> void:
+	var tween := item.create_tween()
+	tween.set_parallel(true)
+	if grow != Vector2.ONE:
+		tween.tween_property(item, "scale", grow, duration).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(item, "modulate:a", 0.0, duration)
+	tween.chain().tween_callback(item.queue_free)
+
+## 主动技能预警层：范围/方向先读，始终位于攻击主体之上。
+static func skill_telegraph(parent: Node, pos: Vector2, facing: float,
+		profile: Dictionary) -> CanvasItem:
+	if parent == null or not is_instance_valid(parent):
+		return null
+	var root := Node2D.new()
+	root.name = "SkillTelegraph"
+	root.position = pos
+	root.scale = Vector2(float(profile["scale"]), float(profile["scale"]))
+	root.z_index = int(profile["z_telegraph"])
+	root.set_meta("skill_fx_layer", "telegraph")
+	parent.add_child(root)
+	var color: Color = profile["secondary"]
+	color.a = minf(color.a, 0.58)
+	var shape := String(profile["shape"])
+	match shape:
+		"arc":
+			_fx_line(root, _arc_points(82.0, -1.0, 1.0), 3.0, color, 0)
+		"block":
+			_fx_line(root, PackedVector2Array([
+				Vector2(-54, 10), Vector2(-54, -24), Vector2(72, -24),
+				Vector2(72, 10), Vector2(-54, 10),
+			]), 3.0, color, 0)
+		"steam_beam":
+			_fx_line(root, PackedVector2Array([Vector2(6, -15), Vector2(170, -15)]), 3.0, color, 0)
+			_fx_line(root, PackedVector2Array([Vector2(6, 15), Vector2(170, 15)]), 3.0, color, 0)
+		"cross":
+			_fx_line(root, _circle_points(72.0, 24, Vector2(1.0, 0.62)), 3.0, color, 0)
+		"lance":
+			_fx_line(root, PackedVector2Array([
+				Vector2(8, 0), Vector2(128, -18), Vector2(184, 0),
+				Vector2(128, 18), Vector2(8, 0),
+			]), 3.0, color, 0)
+		"reticle":
+			_fx_line(root, _circle_points(48.0), 3.0, color, 0)
+			_fx_line(root, PackedVector2Array([Vector2(48, 0), Vector2(174, 0)]), 2.0, color, 0)
+	root.scale.x *= facing
+	_fade_and_free(root, minf(0.28, float(profile["duration"]) * 0.55),
+		Vector2(root.scale.x * 1.06, root.scale.y * 1.06))
+	return root
+
+## 主动技能主体层：六种武器使用六种轮廓，而不是仅替换颜色。
+static func skill_body(parent: Node, pos: Vector2, facing: float,
+		profile: Dictionary) -> CanvasItem:
+	if parent == null or not is_instance_valid(parent):
+		return null
+	var root := Node2D.new()
+	root.name = "SkillBody"
+	root.position = pos
+	root.scale = Vector2(float(profile["scale"]) * facing, float(profile["scale"]))
+	root.z_index = int(profile["z_body"])
+	root.set_meta("skill_fx_layer", "body")
+	parent.add_child(root)
+	var primary: Color = profile["primary"]
+	var secondary: Color = profile["secondary"]
+	match String(profile["shape"]):
+		"arc":
+			_fx_line(root, _arc_points(72.0, -1.18, 1.12), 9.0, primary, 0)
+			_fx_line(root, _arc_points(88.0, -1.05, 0.95), 3.0, secondary, 0)
+		"block":
+			var block := Polygon2D.new()
+			block.polygon = PackedVector2Array([
+				Vector2(-28, 4), Vector2(-10, -38), Vector2(34, -38),
+				Vector2(68, 2), Vector2(34, 18), Vector2(-8, 18),
+			])
+			block.color = Color(primary.r, primary.g, primary.b, 0.5)
+			block.material = _additive_material()
+			root.add_child(block)
+			for crack_x in [-20.0, 10.0, 40.0]:
+				_fx_line(root, PackedVector2Array([
+					Vector2(crack_x, 10), Vector2(crack_x + 12, 30), Vector2(crack_x + 5, 52),
+				]), 4.0, secondary, 1)
+		"steam_beam":
+			var beam := Polygon2D.new()
+			beam.polygon = PackedVector2Array([
+				Vector2(0, -10), Vector2(190, -24), Vector2(228, 0),
+				Vector2(190, 24), Vector2(0, 10),
+			])
+			beam.color = Color(primary.r, primary.g, primary.b, 0.42)
+			beam.material = _additive_material()
+			root.add_child(beam)
+			_fx_line(root, PackedVector2Array([Vector2(0, 0), Vector2(224, 0)]), 6.0, secondary, 1)
+		"cross":
+			_fx_line(root, PackedVector2Array([Vector2(-54, -48), Vector2(68, 50)]), 8.0, primary, 0)
+			_fx_line(root, PackedVector2Array([Vector2(-54, 48), Vector2(68, -50)]), 8.0, secondary, 1)
+			_fx_line(root, _circle_points(62.0, 20, Vector2(1.0, 0.7)), 3.0, primary, 0)
+		"lance":
+			var lance := Polygon2D.new()
+			lance.polygon = PackedVector2Array([
+				Vector2(-20, 0), Vector2(40, -9), Vector2(188, -4),
+				Vector2(238, 0), Vector2(188, 4), Vector2(40, 9),
+			])
+			lance.color = Color(primary.r, primary.g, primary.b, 0.72)
+			lance.material = _additive_material()
+			root.add_child(lance)
+			_fx_line(root, PackedVector2Array([Vector2(-12, 0), Vector2(226, 0)]), 3.0, secondary, 1)
+		"reticle":
+			_fx_line(root, _circle_points(42.0), 5.0, primary, 0)
+			_fx_line(root, PackedVector2Array([Vector2(-58, 0), Vector2(58, 0)]), 3.0, secondary, 1)
+			_fx_line(root, PackedVector2Array([Vector2(0, -58), Vector2(0, 58)]), 3.0, secondary, 1)
+			for offset_y in [-12.0, 0.0, 12.0]:
+				_fx_line(root, PackedVector2Array([Vector2(50, offset_y), Vector2(198, offset_y * 1.7)]), 2.5, primary, 0)
+	_fade_and_free(root, minf(0.5, float(profile["duration"]) * 0.72),
+		Vector2(root.scale.x * 1.14, root.scale.y * 1.08))
+	return root
+
+## 主动技能残留层：低亮度、短生命周期，保持场景和敌方预警可读。
+static func skill_residue(parent: Node, pos: Vector2, facing: float,
+		profile: Dictionary) -> CanvasItem:
+	if parent == null or not is_instance_valid(parent):
+		return null
+	var root := Node2D.new()
+	root.name = "SkillResidue"
+	root.position = pos
+	root.scale = Vector2(float(profile["scale"]) * facing, float(profile["scale"]))
+	root.z_index = int(profile["z_residue"])
+	root.set_meta("skill_fx_layer", "residue")
+	parent.add_child(root)
+	var color: Color = profile["primary"]
+	color.a = 0.24
+	var length := 110.0
+	if String(profile["shape"]) in ["steam_beam", "lance", "reticle"]:
+		length = 210.0
+	for offset in [-12.0, 0.0, 12.0]:
+		_fx_line(root, PackedVector2Array([
+			Vector2(-20, offset), Vector2(length, offset * 0.35),
+		]), 2.0 if offset != 0.0 else 3.0, color, 0, false)
+	_fade_and_free(root, float(profile["duration"]))
+	return root
+
+## 统一主动技能入口。真实命中层由 combat_impact 在伤害生效时生成。
+static func layered_skill(parent: Node, pos: Vector2, facing: float,
+		weapon_id: String, cue: String) -> Array[CanvasItem]:
+	var profile: Dictionary = SKILL_FX_PROFILE.profile(weapon_id, cue)
+	var layers: Array[CanvasItem] = []
+	var telegraph := skill_telegraph(parent, pos, facing, profile)
+	var body := skill_body(parent, pos, facing, profile)
+	var residue := skill_residue(parent, pos, facing, profile)
+	for layer in [telegraph, body, residue]:
+		if layer != null:
+			layers.append(layer)
+	var flash_alpha := float(profile["flash_alpha"])
+	if flash_alpha > 0.0 and parent != null and parent.get_tree() != null:
+		var primary: Color = profile["primary"]
+		screen_flash(parent.get_tree(), Color(primary.r, primary.g, primary.b, flash_alpha))
+	return layers
 ## 程序化粒子/特效辅助 (无需 .tres 资源)
 
 static func _burst(parent: Node, pos: Vector2, count: int, color: Color,

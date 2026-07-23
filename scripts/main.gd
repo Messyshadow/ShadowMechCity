@@ -1436,6 +1436,10 @@ func _auto_screenshot() -> void:
 	var rid := _qa_option("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	var shot_13_4 := _qa_option("SHOT_13_4")
+	if shot_13_4 != "":
+		await _prepare_13_4_capture(shot_13_4)
+		return
 	var shot_13d1 := _qa_option("SHOT_13D1")
 	if shot_13d1 != "":
 		await _prepare_13d1_capture(shot_13d1)
@@ -1956,13 +1960,48 @@ func _qa_option(env_name: String) -> String:
 
 # 动作连拍: 角色面前放站桩假人, 触发一次攻击, 连存若干帧供打击感验收
 # 用法: SHOT_MOTION=1 (可选 SHOT_ROOM / SHOT_ENEMY / SHOT_WEAPON / SHOT_SKILL / SHOT_OUTPUT) ... --shot
+func _prepare_13_4_capture(weapon_id: String) -> void:
+	var valid_weapon := false
+	for weapon_data in Weapons.LIST:
+		if String(weapon_data.get("id", "")) == weapon_id:
+			valid_weapon = true
+			break
+	if not valid_weapon:
+		push_error("SHOT_13_4 unknown weapon: " + weapon_id)
+		get_tree().quit(2)
+		return
+	for enemy in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(enemy):
+			enemy.queue_free()
+	var bounds: Array = Rooms.ROOMS[room_id]["bounds"]
+	player.global_position = Vector2(
+		lerpf(float(bounds[0]), float(bounds[2]), 0.34),
+		float(bounds[3]) - 60.0
+	)
+	player.velocity = Vector2.ZERO
+	player.iframes = 99.0
+	await get_tree().process_frame
+	await get_tree().create_timer(0.9).timeout
+	OS.set_environment("SHOT_WEAPON", weapon_id)
+	OS.set_environment("SHOT_SKILL", "burst")
+	await _motion_burst()
+
 func _motion_burst() -> void:
 	var dummy_type := OS.get_environment("SHOT_ENEMY")
 	if dummy_type == "" or not ENEMY_DEFS.has(dummy_type):
 		dummy_type = "slime"
 	# 一排假人, 让位移/弹道技能也有命中目标
-	for dx in [70.0, 150.0, 230.0]:
+	var dummy_offsets := [125.0, 285.0] if _qa_option("SHOT_13_4") != "" else [70.0, 150.0, 230.0]
+	for dx in dummy_offsets:
 		_spawn_enemy(player.position.x + dx, player.position.y, dummy_type)
+	if _qa_option("SHOT_13_4") != "":
+		for capture_dummy in get_tree().get_nodes_in_group("enemy"):
+			if not is_instance_valid(capture_dummy):
+				continue
+			capture_dummy.set_physics_process(false)
+			capture_dummy.contact_damage = 0
+			capture_dummy.max_hp = 999
+			capture_dummy.hp = 999
 	# SHOT_WEAPON 接受 Weapons.LIST 任意 id，包括 dual_blades/spear/crossbow。
 	var wid := OS.get_environment("SHOT_WEAPON")
 	if wid != "":

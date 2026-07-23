@@ -600,6 +600,16 @@ func _try_skill() -> void:
 		_dash_ready = 0.0   # 消费掉, 防一次双击连放
 	_cast(arch)
 
+func _play_layered_skill_fx(cue: String) -> void:
+	var weapon_id := String(weapon.get("id", "sword"))
+	Fx.layered_skill(
+		get_parent(),
+		global_position + Vector2(facing * 34.0, -34.0),
+		float(facing),
+		weapon_id,
+		cue
+	)
+
 func _cast(arch: String) -> void:
 	var d: Dictionary = SkillsActive.ARCHETYPES[arch]
 	if float(_skill_cds.get(arch, 0.0)) > 0.0:
@@ -611,7 +621,7 @@ func _cast(arch: String) -> void:
 	mp -= float(d["mp"])
 	_skill_cds[arch] = float(d["cd"]) * float(_attributes()["cooldown_rate"])
 	gain_rage(4.0)
-	Fx.cast_ring(get_parent(), global_position + Vector2(0, -30), weapon["color"])
+	_play_layered_skill_fx(arch)
 	match arch:
 		"ground":   _fire_skill()
 		"upper":    _skill_upper()
@@ -720,7 +730,6 @@ func _skill_upper() -> void:
 			_aoe_hit(center, 115.0, _skill_dmg(1.5), 130.0, -560.0)
 			Game.shake(7.0)
 			_play_sfx("attack", -2.0)
-	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.14))
 	Game.hitstop(0.06, 0.05)
 	_squash(Vector2(0.85, 1.25))
 
@@ -833,7 +842,6 @@ func _skill_burst() -> void:
 			_aoe_hit(center, 135.0, _skill_dmg(1.4), 240.0, -120.0)
 			Game.shake(9.0)
 			_play_sfx("attack", -1.0)
-	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.16))
 	Game.hitstop(0.07, 0.05)
 	_squash(Vector2(1.2, 0.85))
 
@@ -847,9 +855,7 @@ func _cast_ult() -> void:
 	var col: Color = weapon["color"]
 	Game.hitstop(0.16, 0.05)
 	Game.shake(18.0)
-	Fx.screen_flash(get_tree(), Color(col.r, col.g, col.b, 0.32))
-	Fx.cast_ring(get_parent(), global_position + Vector2(0, -30), col)
-	Fx.cast_ring(get_parent(), global_position + Vector2(0, -48), Color(1, 1, 1))
+	_play_layered_skill_fx("ultimate")
 	match weapon["id"]:
 		"dual_blades": # 暗影交叉处决：高速交叉刃幕
 			for offset in [-52.0, -24.0, 8.0, 40.0]:
