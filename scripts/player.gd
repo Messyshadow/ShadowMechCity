@@ -59,6 +59,7 @@ const DIVE_SPEED := 1000.0        # 空中下砸速度
 const PROJECTILE_SCRIPT := preload("res://scripts/projectile.gd")
 const BOMB_SCRIPT := preload("res://scripts/bomb.gd")
 const CombatFeedback := preload("res://scripts/combat_feedback.gd")
+const PlayerVisualProfile := preload("res://scripts/player_visual_profile.gd")
 
 # ---- 运行时状态 ----
 enum S { NORMAL, DASH, ATTACK, HURT, DEAD, DIVE }
@@ -117,11 +118,18 @@ var fx_frames := {}      # 各武器特效帧
 # 子节点
 var anim: AnimatedSprite2D
 var sprite_scale_base := Vector2.ONE
+var visual_root: Node2D
+var ground_shadow: Polygon2D
+var core_glow: Polygon2D
+var _visual_time := 0.0
 var hitbox: Area2D
 var hitbox_shape: CollisionShape2D
 var hitbox_rect: RectangleShape2D
 var weapon_pivot: Node2D
 var weapon_sprite: Sprite2D
+var offhand_pivot: Node2D
+var offhand_weapon_sprite: Sprite2D
+var weapon_pose: Dictionary = {}
 
 func set_input_locked(value: bool) -> void:
 	input_locked = value
@@ -222,15 +230,46 @@ func _build_nodes() -> void:
 	col.position = Vector2(0, -30)
 	add_child(col)
 
-	# 动画精灵 (Pixel Adventure 32px, 放大)
+	# 统一视觉根：角色、机械核心和武器共同响应挤压拉伸，碰撞体保持不变。
+	visual_root = Node2D.new()
+	visual_root.name = "VisualRoot"
+	add_child(visual_root)
+
+	ground_shadow = Polygon2D.new()
+	ground_shadow.name = "GroundShadow"
+	var shadow_points := PackedVector2Array()
+	for shadow_index in range(20):
+		var shadow_angle := TAU * float(shadow_index) / 20.0
+		shadow_points.append(Vector2(cos(shadow_angle) * 18.0, sin(shadow_angle) * 5.0))
+	ground_shadow.polygon = shadow_points
+	ground_shadow.color = Color(0.01, 0.025, 0.045, 0.56)
+	ground_shadow.position = Vector2(0, -2)
+	ground_shadow.z_index = -3
+	visual_root.add_child(ground_shadow)
+
+	# 动画精灵 (rvros Adventurer, 保留原比例与脚底基线)
 	anim = AnimatedSprite2D.new()
 	anim.sprite_frames = AnimLoader.build_player()
 	anim.centered = true
 	anim.scale = Vector2(HERO_SCALE, HERO_SCALE)
 	anim.position = Vector2(0, ANIM_OFFSET_Y)
+	anim.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	anim.play("idle")
-	add_child(anim)
+	visual_root.add_child(anim)
 	sprite_scale_base = Vector2(HERO_SCALE, HERO_SCALE)
+
+	core_glow = Polygon2D.new()
+	core_glow.name = "CoreGlow"
+	core_glow.polygon = PackedVector2Array([
+		Vector2(0, -7), Vector2(5, 0), Vector2(0, 7), Vector2(-5, 0),
+	])
+	core_glow.position = Vector2(1, -43)
+	core_glow.color = Color(0.36, 0.94, 1.0, 0.34)
+	core_glow.z_index = 3
+	var core_material := CanvasItemMaterial.new()
+	core_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	core_glow.material = core_material
+	visual_root.add_child(core_glow)
 
 	# 攻击判定框 (在身前, 随朝向翻转)
 	hitbox = Area2D.new()
@@ -247,12 +286,25 @@ func _build_nodes() -> void:
 
 	# 手持武器 (可见挥砍): pivot 在手部, sprite 沿 pivot 伸出
 	weapon_pivot = Node2D.new()
+	weapon_pivot.name = "WeaponPivot"
 	weapon_pivot.position = Vector2(6, -34)
-	add_child(weapon_pivot)
+	weapon_pivot.z_index = 2
+	visual_root.add_child(weapon_pivot)
 	weapon_sprite = Sprite2D.new()
+	weapon_sprite.name = "MainWeapon"
 	weapon_sprite.position = Vector2(0, -22)   # 沿 pivot 向外/上伸出
 	weapon_sprite.scale = Vector2(1.4, 1.4)
+	weapon_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	weapon_pivot.add_child(weapon_sprite)
+
+	offhand_pivot = Node2D.new()
+	offhand_pivot.name = "OffhandPivot"
+	offhand_pivot.z_index = 1
+	visual_root.add_child(offhand_pivot)
+	offhand_weapon_sprite = Sprite2D.new()
+	offhand_weapon_sprite.name = "OffhandWeapon"
+	offhand_weapon_sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	offhand_pivot.add_child(offhand_weapon_sprite)
 
 func _physics_process(delta: float) -> void:
 	# 掉出世界 -> 死亡重生
@@ -268,6 +320,7 @@ func _physics_process(delta: float) -> void:
 		_update_anim()
 		_update_squash(delta)
 		_update_weapon(delta)
+		_update_character_visual(delta)
 		return
 
 	match state:
@@ -283,13 +336,14 @@ func _physics_process(delta: float) -> void:
 	_update_anim()
 	_update_squash(delta)
 	_update_weapon(delta)
+	_update_character_visual(delta)
 
 func _update_timers(delta: float) -> void:
 	if iframes > 0.0:
 		iframes -= delta
-		anim.visible = int(iframes * 20.0) % 2 == 0
+		visual_root.visible = int(iframes * 20.0) % 2 == 0
 	else:
-		anim.visible = true
+		visual_root.visible = true
 	if dash_cd > 0.0:
 		dash_cd -= delta
 	if skill_cd > 0.0:
@@ -541,7 +595,9 @@ func _spawn_ghost() -> void:
 	var g := Sprite2D.new()
 	g.texture = anim.sprite_frames.get_frame_texture(anim.animation, anim.frame)
 	g.flip_h = anim.flip_h
-	g.global_position = global_position
+	g.global_position = global_position + anim.position * visual_root.scale
+	g.scale = anim.scale * visual_root.scale
+	g.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	g.modulate = Color(0.5, 0.8, 1.0, 0.5)
 	g.z_index = -1
 	get_parent().add_child(g)
@@ -1048,21 +1104,60 @@ func _next_unlocked_weapon(from_index: int) -> int:
 	return 0
 
 func _apply_weapon() -> void:
+	weapon_pose = PlayerVisualProfile.pose(String(weapon.get("id", "sword")))
+	# 武器表仍可覆盖家族默认姿态，保证已有关卡奖励武器兼容。
+	weapon_pose["hand"] = weapon.get("hand", weapon_pose["hand"])
+	weapon_pose["visual_scale"] = weapon.get("visual_scale", weapon_pose["visual_scale"])
+	weapon_pose["rest_rot"] = weapon.get("rest_rot", weapon_pose["rest_rot"])
 	if weapon_sprite:
 		weapon_sprite.texture = load(weapon["sprite"])
-		var visual_scale := float(weapon.get("visual_scale", 1.4))
+		var visual_scale := float(weapon_pose["visual_scale"])
 		weapon_sprite.scale = Vector2(visual_scale, visual_scale)
+		weapon_sprite.position = weapon_pose["sprite_offset"]
+		var split_dual := String(weapon.get("id", "")) == "dual_blades"
+		weapon_sprite.region_enabled = split_dual
+		if split_dual:
+			weapon_sprite.region_rect = Rect2(0, 0, 64, 128)
 	if weapon_pivot:
-		weapon_pivot.position = weapon["hand"]
+		weapon_pivot.position = weapon_pose["hand"]
+		weapon_pivot.rotation = float(weapon_pose["rest_rot"])
+	if offhand_weapon_sprite:
+		offhand_weapon_sprite.texture = load(weapon["sprite"])
+		offhand_weapon_sprite.region_enabled = bool(weapon_pose["offhand"])
+		if bool(weapon_pose["offhand"]):
+			offhand_weapon_sprite.region_rect = Rect2(64, 0, 64, 128)
+			offhand_weapon_sprite.position = weapon_pose.get("offhand_offset", Vector2(0, -18))
+			var offhand_scale := float(weapon_pose["visual_scale"])
+			offhand_weapon_sprite.scale = Vector2(offhand_scale, offhand_scale)
+	if offhand_pivot:
+		offhand_pivot.position = weapon_pose.get("offhand_hand", Vector2.ZERO)
+		offhand_pivot.rotation = float(weapon_pose.get("offhand_rest_rot", 0.0))
 
 func _update_weapon(_delta: float) -> void:
 	if weapon_pivot == null:
 		return
 	weapon_pivot.scale.x = float(facing)
+	offhand_pivot.scale.x = float(facing)
 	# 非攻击状态: 武器回到休息姿态
 	if state != S.ATTACK:
-		weapon_pivot.rotation = lerp_angle(weapon_pivot.rotation, weapon["rest_rot"], 0.4)
-		weapon_sprite.visible = weapon["type"] == "melee" or state == S.NORMAL
+		var rest_rotation := float(weapon_pose.get("rest_rot", weapon.get("rest_rot", -0.5)))
+		if anim.animation == "wall_slide":
+			rest_rotation = lerpf(rest_rotation, -1.35, 0.72)
+		weapon_pivot.rotation = lerp_angle(weapon_pivot.rotation, rest_rotation, 0.4)
+		offhand_pivot.rotation = lerp_angle(
+			offhand_pivot.rotation,
+			float(weapon_pose.get("offhand_rest_rot", 0.0)),
+			0.4
+		)
+	var alive := state != S.DEAD
+	var visible_during_attack := bool(weapon_pose.get("visible_during_attack", true))
+	var attacking := state == S.ATTACK
+	var ranged_weapon := String(weapon.get("type", "melee")) == "ranged"
+	# 近战待机时背负在角色后层，避免剑/锤/双刀遮住头脸；出招时切回前景。
+	weapon_pivot.z_index = 2 if attacking or ranged_weapon else -1
+	offhand_pivot.z_index = 1 if attacking else -2
+	weapon_sprite.visible = alive and (state != S.ATTACK or visible_during_attack)
+	offhand_weapon_sprite.visible = alive and bool(weapon_pose.get("offhand", false))
 
 func _aim_facing() -> void:
 	# 出招瞬间按当前方向键修正朝向, 保证攻击/技能方向跟手
@@ -1148,15 +1243,24 @@ func _swing_weapon() -> void:
 	var from_a: float
 	var to_a: float
 	if attack_up:
-		from_a = -2.7; to_a = -0.3
+		from_a = float(weapon_pose.get("upper_from", -2.7))
+		to_a = float(weapon_pose.get("upper_to", -0.3))
 	elif attack_index % 2 == 1:
-		from_a = -2.0; to_a = 0.7       # 上劈下砍
+		from_a = float(weapon_pose.get("swing_from", -2.0))
+		to_a = float(weapon_pose.get("swing_to", 0.7))
 	else:
-		from_a = 0.7; to_a = -2.0       # 反向回砍
+		from_a = float(weapon_pose.get("swing_to", 0.7))
+		to_a = float(weapon_pose.get("swing_from", -2.0))
 	weapon_pivot.rotation = from_a
+	if bool(weapon_pose.get("offhand", false)):
+		offhand_pivot.rotation = -from_a
 	var tw := weapon_pivot.create_tween()
 	tw.tween_property(weapon_pivot, "rotation", to_a, weapon["atk_time"] * 0.8) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if bool(weapon_pose.get("offhand", false)):
+		var offhand_tween := offhand_pivot.create_tween()
+		offhand_tween.tween_property(offhand_pivot, "rotation", -to_a, weapon["atk_time"] * 0.8) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 func _fire_weapon() -> void:
 	# 蒸汽炮: 发射弹丸 + 炮口火花 + 后坐力
@@ -1175,7 +1279,10 @@ func _fire_weapon() -> void:
 	Fx.hit_spark(get_parent(), global_position + Vector2(facing * 58, -34))
 	Game.shake(weapon["shake"])
 	_play_sfx(weapon["sfx"], -2.0)
-	weapon_pivot.rotation = 0.0
+	weapon_pivot.position = Vector2(weapon_pose["hand"]) + Vector2(weapon_pose.get("recoil", Vector2.ZERO))
+	var recoil_tween := weapon_pivot.create_tween()
+	recoil_tween.tween_property(weapon_pivot, "position", Vector2(weapon_pose["hand"]), 0.16) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	if is_on_floor():
 		velocity.x = -facing * 100.0
 
@@ -1185,6 +1292,9 @@ func _fire_crossbow() -> void:
 	_spawn_projectile(fx_frames["bolt2"], 0.72, weapon["color"], damage, 940.0, 1.8, 2, yoff)
 	Fx.hit_spark(get_parent(), global_position + Vector2(facing * 54, yoff))
 	weapon_pivot.rotation = -0.08 * facing
+	weapon_pivot.position = Vector2(weapon_pose["hand"]) + Vector2(weapon_pose.get("recoil", Vector2.ZERO))
+	var recoil_tween := weapon_pivot.create_tween()
+	recoil_tween.tween_property(weapon_pivot, "position", Vector2(weapon_pose["hand"]), 0.13)
 	velocity.x = -facing * 45.0
 	Game.shake(weapon["shake"])
 	_play_sfx("atk_cannon", -3.0)
@@ -1319,7 +1429,7 @@ func _die() -> void:
 	state = S.DEAD
 	died.emit()
 	Fx.death_burst(get_parent(), global_position, Color(0.5, 0.8, 1.0))
-	anim.visible = false
+	visual_root.visible = false
 	Game.shake(12.0)
 	await get_tree().create_timer(0.8).timeout
 	_respawn()
@@ -1333,7 +1443,7 @@ func _respawn() -> void:
 	health = max_hp()
 	iframes = 0.5
 	state = S.NORMAL
-	anim.visible = true
+	visual_root.visible = true
 	health_changed.emit(health, max_hp())
 
 # ------------------------------------------------------------- 表现
@@ -1368,11 +1478,28 @@ func _set_anim(name: String) -> void:
 	if anim.animation != name:
 		anim.play(name)
 
-# 挤压拉伸
+# 角色附属表现：机械核心呼吸、离地阴影收缩。只改视觉，不参与碰撞。
+func _update_character_visual(delta: float) -> void:
+	_visual_time += delta
+	if is_instance_valid(core_glow):
+		var pulse := 0.92 + sin(_visual_time * 5.2) * 0.12
+		core_glow.scale = Vector2(pulse, pulse)
+		core_glow.rotation = sin(_visual_time * 2.6) * 0.08
+	if is_instance_valid(ground_shadow):
+		var airborne := not is_on_floor()
+		var target_scale := Vector2(0.58, 0.72) if airborne else Vector2.ONE
+		ground_shadow.scale = ground_shadow.scale.lerp(target_scale, 1.0 - exp(-12.0 * delta))
+		ground_shadow.modulate.a = lerpf(
+			ground_shadow.modulate.a,
+			0.34 if airborne else 0.72,
+			1.0 - exp(-10.0 * delta)
+		)
+
+# 挤压拉伸：统一作用于角色、核心和武器，碰撞体不变。
 func _squash(mult: Vector2) -> void:
-	anim.scale = sprite_scale_base * mult
+	visual_root.scale = mult
 func _update_squash(delta: float) -> void:
-	anim.scale = anim.scale.lerp(sprite_scale_base, 1.0 - exp(-18.0 * delta))
+	visual_root.scale = visual_root.scale.lerp(Vector2.ONE, 1.0 - exp(-18.0 * delta))
 
 func _play_sfx(key: String, db: float = 0.0) -> void:
 	if has_node("/root/Main"):

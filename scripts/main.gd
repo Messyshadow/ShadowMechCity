@@ -1436,6 +1436,10 @@ func _auto_screenshot() -> void:
 	var rid := _qa_option("SHOT_ROOM")
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	var shot_13_1 := _qa_option("SHOT_13_1")
+	if shot_13_1 != "":
+		await _prepare_13_1_capture(shot_13_1)
+		return
 	var shot_13_4 := _qa_option("SHOT_13_4")
 	if shot_13_4 != "":
 		await _prepare_13_4_capture(shot_13_4)
@@ -1960,6 +1964,106 @@ func _qa_option(env_name: String) -> String:
 
 # 动作连拍: 角色面前放站桩假人, 触发一次攻击, 连存若干帧供打击感验收
 # 用法: SHOT_MOTION=1 (可选 SHOT_ROOM / SHOT_ENEMY / SHOT_WEAPON / SHOT_SKILL / SHOT_OUTPUT) ... --shot
+## 13.1 主角视觉统一确定性抓图。
+## SHOT_13_1=locomotion：待机/奔跑/跳跃/下落/冲刺/受击。
+## SHOT_13_1=weapons + SHOT_WEAPON=<id>：六武器待机与攻击姿态。
+func _prepare_13_1_capture(capture_kind: String) -> void:
+	if capture_kind != "locomotion" and capture_kind != "weapons":
+		push_error("SHOT_13_1 unknown capture kind: " + capture_kind)
+		get_tree().quit(2)
+		return
+	for capture_enemy in get_tree().get_nodes_in_group("enemy"):
+		if is_instance_valid(capture_enemy):
+			capture_enemy.queue_free()
+	var bounds: Array = Rooms.ROOMS[room_id]["bounds"]
+	player.global_position = Vector2(
+		lerpf(float(bounds[0]), float(bounds[2]), 0.14),
+		float(bounds[3]) - 60.0
+	)
+	player.velocity = Vector2.ZERO
+	player.iframes = 0.0
+	if is_instance_valid(camera):
+		camera.zoom = Vector2(1.35, 1.35)
+	await get_tree().process_frame
+	await get_tree().create_timer(0.55).timeout
+	var out_dir := _qa_option("SHOT_OUTPUT")
+	if out_dir == "":
+		out_dir = ProjectSettings.globalize_path("res://screenshots/13_1/%s" % capture_kind)
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	if capture_kind == "weapons":
+		await _capture_13_1_weapon(out_dir)
+	else:
+		await _capture_13_1_locomotion(out_dir)
+	get_tree().quit()
+
+func _capture_13_1_locomotion(out_dir: String) -> void:
+	player.velocity = Vector2.ZERO
+	player._set_anim("idle")
+	await _save_13_1_frame(out_dir, "idle")
+
+	Input.action_press("move_right")
+	for _step in range(14):
+		await get_tree().physics_frame
+	Input.action_release("move_right")
+	player._set_anim("run")
+	await _save_13_1_frame(out_dir, "run")
+
+	player.velocity = Vector2(180.0, -520.0)
+	player._set_anim("jump")
+	for _step in range(4):
+		await get_tree().physics_frame
+	await _save_13_1_frame(out_dir, "jump")
+
+	player.velocity = Vector2(120.0, 390.0)
+	player._set_anim("fall")
+	for _step in range(4):
+		await get_tree().physics_frame
+	await _save_13_1_frame(out_dir, "fall")
+
+	player._start_dash()
+	await get_tree().physics_frame
+	await _save_13_1_frame(out_dir, "dash")
+
+	player.state = 3 # Player.S.HURT；QA 只固定动画，不改生命/存档。
+	player.velocity = Vector2(-190.0, -160.0)
+	player._squash(Vector2(0.86, 1.14))
+	player._set_anim("hurt")
+	await _save_13_1_frame(out_dir, "hurt")
+
+func _capture_13_1_weapon(out_dir: String) -> void:
+	var weapon_id := _qa_option("SHOT_WEAPON")
+	var found := false
+	for i in range(Weapons.LIST.size()):
+		if String(Weapons.LIST[i].get("id", "")) == weapon_id:
+			player.weapon_index = i
+			player.weapon = Weapons.get_weapon(i)
+			player._apply_weapon()
+			player.weapon_changed.emit(player.weapon["name"], player.weapon["color"])
+			found = true
+			break
+	if not found:
+		push_error("SHOT_13_1 unknown weapon: " + weapon_id)
+		get_tree().quit(2)
+		return
+	player.velocity = Vector2.ZERO
+	player._set_anim("idle")
+	await _save_13_1_frame(out_dir, "idle")
+	Input.action_press("attack")
+	await get_tree().process_frame
+	await get_tree().physics_frame
+	Input.action_release("attack")
+	for frame_index in range(5):
+		await get_tree().create_timer(0.065).timeout
+		await _save_13_1_frame(out_dir, "attack_%d" % frame_index)
+
+func _save_13_1_frame(out_dir: String, file_stem: String) -> void:
+	await RenderingServer.frame_post_draw
+	var error := get_viewport().get_texture().get_image().save_png(
+		"%s/%s.png" % [out_dir, file_stem]
+	)
+	if error != OK:
+		push_error("SHOT_13_1 failed to save frame: %s (%s)" % [file_stem, error])
+
 func _prepare_13_4_capture(weapon_id: String) -> void:
 	var valid_weapon := false
 	for weapon_data in Weapons.LIST:
