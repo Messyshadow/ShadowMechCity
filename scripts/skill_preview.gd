@@ -155,6 +155,7 @@ func play_node(node: Dictionary, weapon: Dictionary = {}) -> void:
 	elif preview in ["ultimate", "skill_cast", "bomb", "dual_combo", "spear_combo", "crossbow_combo"]:
 		animation = "attack3"
 	actor.play(animation)
+	var preview_stages: Array = node.get("preview_stages", [])
 	var interaction_tags: Array = node.get("interaction_tags", [])
 	environment_target.visible = not interaction_tags.is_empty()
 	var passive := str(node.get("type", "")).contains("被动")
@@ -169,7 +170,8 @@ func play_node(node: Dictionary, weapon: Dictionary = {}) -> void:
 	if passive:
 		_play_passive_preview()
 	else:
-		_play_showcase_preview(not interaction_tags.is_empty())
+		var staged_interaction := preview_stages.is_empty() or preview_stages.has("interaction")
+		_play_showcase_preview(not interaction_tags.is_empty() and staged_interaction)
 
 func _play_showcase_preview(has_environment_target: bool) -> void:
 	current_tween = create_tween().set_loops()
@@ -179,7 +181,8 @@ func _play_showcase_preview(has_environment_target: bool) -> void:
 	current_tween.tween_property(actor, "position:x", 118.0, 0.28).set_trans(Tween.TRANS_QUAD)
 	current_tween.parallel().tween_method(effect.animate_progress.bind(1), 0.0, 1.0, 0.28)
 	current_tween.tween_callback(_enter_phase.bind(2, "③ 命中反馈"))
-	current_tween.tween_property(training_dummy, "modulate", Color(1.0, 0.32, 0.22), 0.12)
+	current_tween.tween_method(effect.animate_progress.bind(2), 0.0, 1.0, 0.12)
+	current_tween.parallel().tween_property(training_dummy, "modulate", Color(1.0, 0.32, 0.22), 0.12)
 	current_tween.parallel().tween_property(training_dummy, "position:x", 312.0, 0.12)
 	current_tween.parallel().tween_property(flash_overlay, "color:a", 0.16, 0.05)
 	current_tween.tween_property(training_dummy, "modulate", Color.WHITE, 0.14)
