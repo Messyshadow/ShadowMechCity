@@ -1444,6 +1444,10 @@ func _auto_screenshot() -> void:
 	if shot_13_4 != "":
 		await _prepare_13_4_capture(shot_13_4)
 		return
+	var skill_showcase := _qa_option("SHOT_SKILL_SHOWCASE")
+	if skill_showcase != "":
+		await _prepare_skill_showcase_capture(skill_showcase)
+		return
 	var shot_13d1 := _qa_option("SHOT_13D1")
 	if shot_13d1 != "":
 		await _prepare_13d1_capture(shot_13d1)
@@ -2089,6 +2093,43 @@ func _prepare_13_4_capture(weapon_id: String) -> void:
 	OS.set_environment("SHOT_WEAPON", weapon_id)
 	OS.set_environment("SHOT_SKILL", "burst")
 	await _motion_burst()
+
+func _prepare_skill_showcase_capture(node_id: String) -> void:
+	var skill_node: Dictionary = {}
+	for candidate in SkillsData.TREE:
+		if str(candidate.get("id", "")) == node_id:
+			skill_node = candidate
+			break
+	if skill_node.is_empty():
+		push_error("SHOT_SKILL_SHOWCASE unknown skill node: " + node_id)
+		get_tree().quit(2)
+		return
+	if not is_instance_valid(skill_panel):
+		push_error("SHOT_SKILL_SHOWCASE skill panel is unavailable")
+		get_tree().quit(2)
+		return
+	_seed_progression_ui_for_qa()
+	var page := str(skill_node.get("page", "基础"))
+	var family := str(skill_node.get("family", "刀剑"))
+	skill_panel.call("open_for_qa", page, family, node_id)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var out_dir := _qa_option("SHOT_OUTPUT")
+	if out_dir == "":
+		out_dir = ProjectSettings.globalize_path("res://screenshots/13_4_1/%s" % node_id)
+	DirAccess.make_dir_recursive_absolute(out_dir)
+	for frame_index in range(8):
+		await get_tree().create_timer(0.22).timeout
+		await RenderingServer.frame_post_draw
+		var save_error := get_viewport().get_texture().get_image().save_png(
+			"%s/frame_%d.png" % [out_dir, frame_index]
+		)
+		if save_error != OK:
+			push_error("SHOT_SKILL_SHOWCASE failed to save frame %d: %s" % [
+				frame_index, error_string(save_error)
+			])
+	await get_tree().create_timer(0.1).timeout
+	get_tree().quit()
 
 func _motion_burst() -> void:
 	var dummy_type := OS.get_environment("SHOT_ENEMY")

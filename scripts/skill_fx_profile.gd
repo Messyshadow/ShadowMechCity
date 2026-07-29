@@ -60,3 +60,14 @@ static func profile(weapon_id: String, cue: String) -> Dictionary:
 	result["z_telegraph"] = Z_TELEGRAPH
 	result["z_impact"] = Z_IMPACT
 	return result
+
+
+static func preview_profile(weapon_id: String, pattern: String, intensity: String) -> Dictionary:
+	var cue := "ultimate" if intensity == "ultimate" else "burst"
+	var result := profile(weapon_id, cue)
+	result["pattern"] = pattern
+	result["intensity"] = intensity
+	# 面板空间比实战画面小，终结技也限制在可读范围内。
+	result["scale"] = minf(float(result.get("scale", 1.0)), 1.5)
+	result["flash_alpha"] = minf(float(result.get("flash_alpha", 0.0)), 0.16)
+	return result

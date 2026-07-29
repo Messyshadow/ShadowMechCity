@@ -142,7 +142,7 @@ func _build() -> void:
 	detail_body = RichTextLabel.new()
 	detail_body.bbcode_enabled = true
 	detail_body.fit_content = false
-	detail_body.custom_minimum_size = Vector2(390, 165)
+	detail_body.custom_minimum_size = Vector2(390, 122)
 	detail_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	detail_body.add_theme_font_size_override("normal_font_size", 14)
 	detail_v.add_child(detail_body)
