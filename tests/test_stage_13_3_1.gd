@@ -45,7 +45,7 @@ func _run() -> void:
 		"隐藏上行传送门必须保留原逻辑")
 	_expect(main.contains("shaft.spawn_local_position()"),
 		"玩家未使用竖井方向化出生点")
-	_expect(main.contains("await shaft.cancelled"),
+	_expect(main.contains("shaft.cancelled.connect"),
 		"主场景未处理上行失败返回入口")
 	_expect(main.contains("SHOT_SHAFT_DIRECTION"),
 		"godot-capture 缺少双向竖井选择")

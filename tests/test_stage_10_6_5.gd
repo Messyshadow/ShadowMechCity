@@ -23,14 +23,14 @@ func _init() -> void:
 	_check(camera_source.contains("func end_shaft"), "camera must restore normal follow after descent")
 	_check(main_source.contains('if _qa_option("SHOT_SHAFT") == "1"'), "godot-capture needs a playable shaft burst mode")
 	_check(main_source.contains("func _shaft_capture_burst"), "shaft burst capture helper is missing")
-	_check(main_source.contains("for i in range(6)"), "shaft QA must capture six changing frames")
+	_check(main_source.contains("for i in range(8)"), "shaft QA must capture eight changing frames")
 	_check(main_source.contains("create_timer(0.38)"), "shaft burst must span the full multi-second descent")
 	if FileAccess.file_exists("res://scripts/shaft_transition.gd"):
 		var shaft_source := FileAccess.get_file_as_string("res://scripts/shaft_transition.gd")
-		for marker in ["signal finished", "const SHAFT_DEPTH := 620.0", "func setup", "_make_wall", "_make_ledge", "_make_bottom_trigger", "TIMEOUT_SECONDS"]:
+		for marker in ["signal finished", "const SHAFT_DEPTH := DOWN_DEPTH", "func setup", "_make_wall", "_make_ledge", "_make_bottom_trigger", "TIMEOUT_SECONDS"]:
 			_check(shaft_source.contains(marker), "shaft component missing: " + marker)
 		_check(shaft_source.contains("z_index = -1"), "shaft art must render behind the player")
-		_check(shaft_source.contains("_make_ledge(-52.0, 175.0)") and shaft_source.contains("shape.size = Vector2(50.0, 12.0)"), "shaft ledges must leave a clear central fall lane")
+		_check(shaft_source.contains("_make_ledge(-52.0, depth * 0.28)") and shaft_source.contains("shape.size = Vector2(50.0, 12.0)"), "shaft ledges must leave a clear central fall lane")
 		_check(shaft_source.contains('call_deferred("_emit_finished")'), "bottom trigger must leave the physics flush before changing rooms")
 	if failures.is_empty():
 		print("PASS stage 10.6.5 playable shaft contracts")

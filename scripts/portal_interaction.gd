@@ -45,6 +45,8 @@ static func prompt_text(door: Dictionary, target_name: String, visited: bool, mi
 		return "[E / Enter] 前往 " + target_name if visited else "[E / Enter] 进入隐藏回响"
 	if str(door.get("side", "")) == "down":
 		return "[E / Enter] 向下进入"
+	if str(door.get("side", "")) == "up":
+		return "[E / Enter] 向上攀登"
 	return "[E / Enter] 启动传送阵"
 
 func configure(data: Dictionary, destination: String, visited: bool, missing_names: Array) -> void:

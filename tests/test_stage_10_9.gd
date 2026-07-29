@@ -20,7 +20,7 @@ func _init() -> void:
 		_check(portal.requires_interaction({"side":"left", "hidden":true}), "hidden side door requires interact")
 		_check(portal.requires_interaction({"side":"left", "trigger_mode":"interact"}), "explicit interact override works")
 		_check(not portal.requires_interaction({"side":"up", "trigger_mode":"auto"}), "explicit auto override works")
-		_check(portal.prompt_text({"side":"up"}, "破碎甲板", false, []).contains("启动传送阵"), "up prompt names teleport action")
+		_check(portal.prompt_text({"side":"up"}, "破碎甲板", false, []).contains("向上攀登"), "up prompt names climb action")
 		_check(portal.prompt_text({"side":"down"}, "地下水道", false, []).contains("向下进入"), "down prompt names descent")
 		_check(portal.prompt_text({"side":"left", "hidden":true}, "遗失档案库", false, []).contains("隐藏回响"), "unvisited secret stays unnamed")
 		_check(portal.prompt_text({"side":"left", "hidden":true}, "遗失档案库", true, []).contains("遗失档案库"), "visited secret shows target name")

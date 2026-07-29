@@ -1035,7 +1035,9 @@ func _on_door(body: Node, d: Dictionary, tag: String, locked: String) -> void:
 	# 否则 "Can't change this state while flushing queries"。先锁 door_cd 防重入。
 	door_cd = 0.6
 	if d["side"] == "down":
-		_play_shaft_transition.call_deferred(d["to"])
+		_play_shaft_transition.call_deferred(d["to"], "down")
+	elif d["side"] == "up" and not d.get("hidden", false):
+		_play_shaft_transition.call_deferred(d["to"], "up")
 	else:
 		_enter_room.call_deferred(d["to"], room_id)
 
@@ -1071,29 +1073,44 @@ func _make_shaft_safety_floor(center_x: float, floor_y: float, width: float) -> 
 	cover.add_child(collision)
 	world.add_child(cover)
 
-func _play_shaft_transition(to_room: String) -> void:
+func _play_shaft_transition(to_room: String, direction: String = "down") -> void:
 	door_cd = 99.0
 	var from_room := room_id
 	var room: Dictionary = Rooms.ROOMS[room_id]
 	var floor_y: float = float(room["bounds"][3])
+	var entrance_position := player.global_position
 	var shaft := Node2D.new()
 	shaft.set_script(SHAFT_TRANSITION_SCRIPT)
 	shaft.global_position = Vector2(player.global_position.x, floor_y)
 	world.add_child(shaft)
-	shaft.setup(room.get("theme", "city"), player)
+	shaft.setup(room.get("theme", "city"), player, direction)
+	var transition_state := {"cancelled": false}
+	shaft.cancelled.connect(func() -> void:
+		transition_state["cancelled"] = true)
 	player.shaft_mode = true
 	player.z_index = 10
 	player.state = 0
-	player.velocity = Vector2(0.0, 90.0)
-	player.global_position = Vector2(shaft.global_position.x, floor_y + 52.0)
+	player.velocity = Vector2.ZERO if direction == "up" else Vector2(0.0, 90.0)
+	player.global_position = shaft.global_position + shaft.spawn_local_position()
+	player.iframes = 0.6
 	camera.target = player
 	if camera.has_method("begin_shaft"):
-		camera.begin_shaft(floor_y + shaft.SHAFT_DEPTH)
+		camera.begin_shaft(shaft.global_position.y + shaft.depth, direction)
 	await shaft.finished
 	player.shaft_mode = false
 	player.z_index = 0
+	player.iframes = 0.6
 	if camera.has_method("end_shaft"):
 		camera.end_shaft()
+	if bool(transition_state["cancelled"]):
+		player.global_position = entrance_position
+		player.velocity = Vector2.ZERO
+		player.spawn_point = entrance_position
+		door_cd = 0.8
+		if is_instance_valid(shaft):
+			shaft.queue_free()
+		Fx.popup(world, entrance_position + Vector2(0, -92), "上行未完成 · 已返回入口", Color(0.62, 0.9, 1.0))
+		return
 	Fx.screen_flash(get_tree(), Color(0.08, 0.02, 0.16, 0.72))
 	_enter_room(to_room, from_room)
 
@@ -1850,29 +1867,52 @@ func _seed_quest_progress_for_qa() -> void:
 
 func _shaft_capture_burst() -> void:
 	await get_tree().process_frame
-	var down_door: Dictionary = {}
-	for door in Rooms.ROOMS[room_id].get("doors", []):
-		if door.get("side", "") == "down":
-			down_door = door
-			break
-	if down_door.is_empty():
-		push_error("SHOT_SHAFT requested in room without a down door: " + room_id)
+	var direction := _qa_option("SHOT_SHAFT_DIRECTION")
+	if direction == "":
+		direction = "down"
+	if direction not in ["down", "up"]:
+		push_error("SHOT_SHAFT_DIRECTION must be down or up")
 		get_tree().quit(1)
 		return
-	player.global_position = Vector2(float(down_door["p"]), float(_bounds[3]) + 24.0)
-	_play_shaft_transition.call_deferred(down_door["to"])
+	var selected_door: Dictionary = {}
+	for door in Rooms.ROOMS[room_id].get("doors", []):
+		if door.get("side", "") == direction and not door.get("hidden", false):
+			selected_door = door
+			break
+	if selected_door.is_empty():
+		push_error("SHOT_SHAFT requested in room without a %s door: %s" % [direction, room_id])
+		get_tree().quit(1)
+		return
+	if direction == "up":
+		# 连拍使用基础墙跳，避免攀墙能力直接爬完而漏掉墙跳过程。
+		Game.abilities.erase("wall_climb")
+	player.global_position = Vector2(float(selected_door["p"]), float(_bounds[3]) - 30.0)
+	_play_shaft_transition.call_deferred(selected_door["to"], direction)
 	await get_tree().process_frame
 	var out_dir := _qa_option("SHOT_OUTPUT")
 	if out_dir == "":
-		out_dir = ProjectSettings.globalize_path("res://screenshots/shaft")
+		out_dir = ProjectSettings.globalize_path("res://screenshots/shaft/%s" % direction)
 	DirAccess.make_dir_recursive_absolute(out_dir)
-	for i in range(6):
-		await get_tree().create_timer(0.38).timeout
+	for i in range(8):
+		if direction == "up":
+			var shaft_center_x := float(selected_door["p"])
+			if i == 0:
+				player._jump()
+			else:
+				var wall_normal := Vector2(-1.0, 0.0) if player.global_position.x > shaft_center_x else Vector2(1.0, 0.0)
+				player._wall_jump(wall_normal)
+		if direction == "up":
+			await get_tree().create_timer(0.26).timeout
+		else:
+			await get_tree().create_timer(0.38).timeout
 		await RenderingServer.frame_post_draw
 		print("SHAFT_FRAME %d player=%s camera=%s" % [i, player.global_position, camera.global_position])
 		var save_error := get_viewport().get_texture().get_image().save_png("%s/frame_%d.png" % [out_dir, i])
 		if save_error != OK:
 			push_error("Failed shaft frame %d: %s" % [i, error_string(save_error)])
+	Input.action_release("move_left")
+	Input.action_release("move_right")
+	Input.action_release("move_up")
 	await get_tree().create_timer(0.1).timeout
 	get_tree().quit()
 
