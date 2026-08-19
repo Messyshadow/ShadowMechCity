@@ -1,5 +1,15 @@
 extends Node2D
-## 王城/虚空专用世界背景。使用世界坐标完整覆盖房间，避免视差贴图边缘露出默认灰底。
+## 七区域程序化世界背景。远景地标使用低对比形状构成，不遮挡平台、敌人和交互提示。
+
+const THEME_PROFILES := {
+	"city": {"landmark":"中央钟塔与列车穹顶", "far_color":Color("101a2a"), "mid_color":Color("18273a"), "accent":Color("55d9ff"), "haze":Color(0.08,0.22,0.30,0.14), "particle":Color(0.42,0.82,1.0,0.22), "particle_dir":Vector2(-0.18,-1.0)},
+	"mine": {"landmark":"矿脉深井与绞盘骨架", "far_color":Color("211008"), "mid_color":Color("32170b"), "accent":Color("ff7138"), "haze":Color(0.32,0.07,0.015,0.13), "particle":Color(1.0,0.36,0.10,0.28), "particle_dir":Vector2(0,-1)},
+	"factory": {"landmark":"巨型炉群与活塞管网", "far_color":Color("251009"), "mid_color":Color("3b170c"), "accent":Color("ff9b38"), "haze":Color(0.36,0.10,0.02,0.14), "particle":Color(1.0,0.52,0.18,0.30), "particle_dir":Vector2(0,-1)},
+	"water": {"landmark":"沉没蓄水塔与排污拱廊", "far_color":Color("08252a"), "mid_color":Color("0b3940"), "accent":Color("54e8e8"), "haze":Color(0.01,0.24,0.27,0.15), "particle":Color(0.28,0.88,1.0,0.26), "particle_dir":Vector2(0,1)},
+	"temple": {"landmark":"星轮祭坛与符文巨像", "far_color":Color("171126"), "mid_color":Color("271b3c"), "accent":Color("d6a8ff"), "haze":Color(0.18,0.10,0.30,0.13), "particle":Color(0.76,0.56,1.0,0.24), "particle_dir":Vector2(0,-1)},
+	"void": {"landmark":"虚空裂隙与浮空舰骨", "far_color":Color("08112d"), "mid_color":Color("111b49"), "accent":Color("8b82ff"), "haze":Color(0.08,0.08,0.34,0.14), "particle":Color(0.48,0.56,1.0,0.28), "particle_dir":Vector2(-0.35,-1)},
+	"castle": {"landmark":"王座尖塔与机械玫瑰窗", "far_color":Color("130c25"), "mid_color":Color("241238"), "accent":Color("c765da"), "haze":Color(0.20,0.06,0.28,0.14), "particle":Color(0.70,0.32,0.84,0.24), "particle_dir":Vector2(0,-1)},
+}
 
 var theme := ""
 var bounds: Array = []
@@ -10,9 +20,17 @@ func setup(p_theme: String, p_bounds: Array) -> void:
 	z_index = -50
 	queue_redraw()
 
+func atmosphere_profile() -> Dictionary:
+	return Dictionary(THEME_PROFILES.get(theme, THEME_PROFILES["city"])).duplicate(true)
+
 func _draw() -> void:
 	if bounds.size() < 4: return
 	match theme:
+		"city": _draw_city()
+		"mine": _draw_mine()
+		"factory": _draw_factory()
+		"water": _draw_water()
+		"temple": _draw_temple()
 		"castle": _draw_castle()
 		"void": _draw_void()
 
@@ -24,6 +42,98 @@ func _draw_gradient_bands(colors: Array[Color]) -> void:
 	var band_h := rect.size.y / colors.size()
 	for i in range(colors.size()):
 		draw_rect(Rect2(rect.position.x, rect.position.y + band_h * i, rect.size.x, band_h + 2), colors[i])
+
+func _profile_gradient() -> void:
+	var profile := atmosphere_profile()
+	var far_color: Color = profile["far_color"]
+	var mid_color: Color = profile["mid_color"]
+	_draw_gradient_bands([far_color.darkened(0.55), far_color.darkened(0.30), far_color, mid_color.darkened(0.18), mid_color, mid_color.darkened(0.12), far_color])
+
+func _span() -> Array[float]:
+	return [float(bounds[0]) - 220.0, float(bounds[2]) + 220.0, float(bounds[3]) - 30.0]
+
+func _draw_city() -> void:
+	_profile_gradient()
+	var span := _span(); var l := span[0]; var r := span[1]; var floor_y := span[2]
+	# 远层错落机械楼群与冷色窗格。
+	for x in range(int(l), int(r), 190):
+		var h := 170.0 + float(posmod(x / 10, 7)) * 27.0
+		draw_rect(Rect2(x, floor_y-h, 132, h), Color(0.035,0.075,0.12,0.94))
+		for wy in range(int(floor_y-h+34), int(floor_y-24), 42):
+			draw_rect(Rect2(x+24,wy,12,18),Color(0.28,0.62,0.88,0.48))
+			draw_rect(Rect2(x+76,wy,12,18),Color(0.28,0.62,0.88,0.32))
+	# 中央车站钟塔、穹顶轨道和悬挂信号灯。
+	var center := (float(bounds[0])+float(bounds[2]))*0.5
+	draw_rect(Rect2(center-58,floor_y-390,116,360),Color(0.055,0.10,0.16,0.98))
+	draw_circle(Vector2(center,floor_y-310),48,Color(0.02,0.04,0.08,0.95))
+	draw_arc(Vector2(center,floor_y-310),48,0,TAU,36,Color(0.32,0.82,1.0,0.76),6,true)
+	draw_line(Vector2(center,floor_y-310),Vector2(center+4,floor_y-345),Color(0.65,0.94,1.0,0.9),4,true)
+	draw_line(Vector2(center,floor_y-310),Vector2(center+29,floor_y-298),Color(0.65,0.94,1.0,0.9),3,true)
+	for x in range(int(l),int(r),430):
+		draw_arc(Vector2(x+215,floor_y-38),215,PI,TAU,30,Color(0.12,0.28,0.38,0.60),12,true)
+
+func _draw_mine() -> void:
+	_profile_gradient()
+	var span := _span(); var l := span[0]; var r := span[1]; var floor_y := span[2]
+	# 不规则矿脉剪影与纵深洞口。
+	for x in range(int(l),int(r),260):
+		var ridge := PackedVector2Array([Vector2(x,floor_y),Vector2(x+38,floor_y-210),Vector2(x+105,floor_y-285),Vector2(x+170,floor_y-165),Vector2(x+260,floor_y)])
+		draw_colored_polygon(ridge,Color(0.075,0.035,0.018,0.96))
+		draw_line(Vector2(x+30,floor_y-40),Vector2(x+112,floor_y-250),Color(0.34,0.12,0.035,0.5),8,true)
+	# 三角支架、绞盘与垂直矿井索。
+	for x in range(int(l)+90,int(r),360):
+		draw_polyline(PackedVector2Array([Vector2(x,floor_y),Vector2(x+75,floor_y-260),Vector2(x+150,floor_y)]),Color(0.24,0.105,0.04,0.9),18,true)
+		draw_circle(Vector2(x+75,floor_y-245),30,Color(0.08,0.04,0.02,0.95))
+		draw_arc(Vector2(x+75,floor_y-245),30,0,TAU,20,Color(0.82,0.28,0.07,0.62),5,true)
+		draw_line(Vector2(x+75,floor_y-215),Vector2(x+75,floor_y-55),Color(0.22,0.14,0.09,0.85),4,true)
+
+func _draw_factory() -> void:
+	_profile_gradient()
+	var span := _span(); var l := span[0]; var r := span[1]; var floor_y := span[2]
+	# 炉群烟囱、压力罐与交错管线。
+	for x in range(int(l),int(r),310):
+		draw_rect(Rect2(x+32,floor_y-310,66,310),Color(0.09,0.035,0.015,0.98))
+		draw_rect(Rect2(x+18,floor_y-330,94,26),Color(0.18,0.07,0.025,0.96))
+		draw_circle(Vector2(x+205,floor_y-150),76,Color(0.12,0.045,0.018,0.96))
+		draw_arc(Vector2(x+205,floor_y-150),76,0,TAU,28,Color(0.58,0.20,0.04,0.6),9,true)
+		draw_line(Vector2(x+98,floor_y-230),Vector2(x+205,floor_y-230),Color(0.32,0.105,0.025,0.82),16,true)
+		draw_line(Vector2(x+205,floor_y-230),Vector2(x+205,floor_y-214),Color(0.32,0.105,0.025,0.82),16,true)
+	# 活塞梁让房间横向运动方向更明显。
+	for y in [floor_y-360.0,floor_y-86.0]:
+		draw_line(Vector2(l,y),Vector2(r,y),Color(0.22,0.07,0.02,0.55),12,true)
+
+func _draw_water() -> void:
+	_profile_gradient()
+	var span := _span(); var l := span[0]; var r := span[1]; var floor_y := span[2]
+	# 巨型蓄水拱廊与水位反光。
+	for x in range(int(l),int(r),300):
+		draw_arc(Vector2(x+150,floor_y-115),124,PI,TAU,28,Color(0.055,0.22,0.24,0.92),20,true)
+		draw_line(Vector2(x+26,floor_y-115),Vector2(x+26,floor_y),Color(0.055,0.22,0.24,0.92),20,true)
+		draw_line(Vector2(x+274,floor_y-115),Vector2(x+274,floor_y),Color(0.055,0.22,0.24,0.92),20,true)
+	for y in range(int(floor_y-160),int(floor_y),28):
+		draw_line(Vector2(l,y),Vector2(r,y),Color(0.18,0.72,0.74,0.07+float(posmod(y,3))*0.02),2,true)
+	# 远处过滤塔与检修灯。
+	var center := (float(bounds[0])+float(bounds[2]))*0.52
+	draw_rect(Rect2(center-90,floor_y-365,180,260),Color(0.025,0.12,0.14,0.92))
+	draw_arc(Vector2(center,floor_y-365),90,PI,TAU,24,Color(0.10,0.38,0.40,0.8),12,true)
+	for yy in range(int(floor_y-320),int(floor_y-125),48): draw_circle(Vector2(center+62,yy),6,Color(0.35,0.95,0.90,0.58))
+
+func _draw_temple() -> void:
+	_profile_gradient()
+	var span := _span(); var l := span[0]; var r := span[1]; var floor_y := span[2]
+	# 古代机械石柱和断裂横梁。
+	for x in range(int(l),int(r),280):
+		draw_rect(Rect2(x+38,floor_y-300,62,300),Color(0.075,0.055,0.105,0.97))
+		draw_rect(Rect2(x+18,floor_y-315,102,24),Color(0.15,0.105,0.19,0.85))
+		for yy in range(int(floor_y-270),int(floor_y-40),56):
+			draw_circle(Vector2(x+69,yy),8,Color(0.46,0.30,0.68,0.42))
+	# 星轮地标与轨道符文。
+	var core := Vector2((float(bounds[0])+float(bounds[2]))*0.5,float(bounds[1])+205)
+	for rr in [118.0,88.0,54.0]:
+		draw_arc(core,rr,-2.8,2.8,42,Color(0.62,0.42,0.84,0.48+rr/700.0),5,true)
+	for i in range(8):
+		var a := TAU*float(i)/8.0
+		draw_circle(core+Vector2(cos(a),sin(a))*88,7,Color(0.86,0.68,1.0,0.7))
 
 func _draw_castle() -> void:
 	_draw_gradient_bands([

@@ -68,6 +68,8 @@ var world: Node2D
 var combat_director: Node
 var pbg: ParallaxBackground
 var camera: Camera2D
+var _camera_atmosphere: CPUParticles2D
+var _theme_backdrop: Node2D
 var hud: CanvasLayer
 var player: CharacterBody2D
 var slash_frames: SpriteFrames
@@ -341,6 +343,7 @@ func _enter_room(id: String, from_room: String) -> void:
 	world.add_child(combat_director)
 	_build_parallax(room["theme"])
 	_make_theme_backdrop(room)
+	_apply_camera_atmosphere(str(room["theme"]))
 	var tint: Color = Rooms.THEME_TINT.get(room["theme"], Color.WHITE)
 	_build_geometry(room, tint)
 	_make_room_atmosphere(room)
@@ -823,20 +826,20 @@ func _make_decor(x: float, y: float, path: String, scale: float) -> void:
 
 func _make_room_atmosphere(room: Dictionary) -> void:
 	var theme: String = room.get("theme", "")
-	if theme != "water" and theme != "mine": return
 	var b = room["bounds"]
 	var root := Node2D.new()
 	root.z_index = -3
-	# 用低对比的空气层拉开远近关系；刻意避免把同一个支撑物平铺成图案墙。
+	# 统一读取七区域配置，用透明空气层拉开远、中、近景。
+	var backdrop = _theme_backdrop
+	var profile: Dictionary = backdrop.atmosphere_profile() if is_instance_valid(backdrop) else {}
 	var haze := Polygon2D.new()
 	haze.polygon = PackedVector2Array([Vector2(b[0],155),Vector2(b[2],155),Vector2(b[2],b[3]-70),Vector2(b[0],b[3]-70)])
+	haze.color = profile.get("haze", Color(0.08,0.12,0.18,0.12))
 	if theme == "water":
-		haze.color = Color(0.01,0.20,0.23,0.16)
 		var service_pipe := Line2D.new(); service_pipe.width = 16.0; service_pipe.default_color = Color(0.025,0.12,0.14,0.58)
 		service_pipe.points = PackedVector2Array([Vector2(b[0]+150,120),Vector2(b[0]+270,120),Vector2(b[0]+292,150),Vector2(b[0]+292,300)]); root.add_child(service_pipe)
 		var lamp := Polygon2D.new(); lamp.polygon = PackedVector2Array([Vector2(b[0]+278,210),Vector2(b[0]+306,210),Vector2(b[0]+312,236),Vector2(b[0]+272,236)]); lamp.color = Color(0.25,0.82,0.82,0.42); root.add_child(lamp)
-	else:
-		haze.color = Color(0.27,0.07,0.015,0.12)
+	elif theme == "mine":
 		var distant_rig := Line2D.new(); distant_rig.width = 13.0; distant_rig.default_color = Color(0.16,0.065,0.025,0.52)
 		distant_rig.points = PackedVector2Array([Vector2(b[2]-260,140),Vector2(b[2]-190,275),Vector2(b[2]-120,140)]); root.add_child(distant_rig)
 		var ember := Polygon2D.new(); ember.polygon = PackedVector2Array([Vector2(b[2]-201,285),Vector2(b[2]-179,285),Vector2(b[2]-174,308),Vector2(b[2]-206,308)]); ember.color = Color(0.9,0.25,0.04,0.36); root.add_child(ember)
@@ -1242,23 +1245,32 @@ func _setup_camera() -> void:
 	camera.set_script(load("res://scripts/follow_camera.gd"))
 	camera.target = player
 	add_child(camera)
-	var em := CPUParticles2D.new()
-	em.amount = 30; em.lifetime = 5.0
-	em.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	em.emission_rect_extents = Vector2(720, 420)
-	em.direction = Vector2(0, -1); em.spread = 30.0; em.gravity = Vector2(0, -8)
-	em.initial_velocity_min = 4.0; em.initial_velocity_max = 16.0
-	em.scale_amount_min = 1.0; em.scale_amount_max = 2.5
-	em.color = Color(1.0, 0.6, 0.3, 0.25)
-	camera.add_child(em)
+	_camera_atmosphere = CPUParticles2D.new()
+	_camera_atmosphere.amount = 30; _camera_atmosphere.lifetime = 5.0
+	_camera_atmosphere.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
+	_camera_atmosphere.emission_rect_extents = Vector2(720, 420)
+	_camera_atmosphere.spread = 30.0
+	_camera_atmosphere.initial_velocity_min = 4.0; _camera_atmosphere.initial_velocity_max = 16.0
+	_camera_atmosphere.scale_amount_min = 1.0; _camera_atmosphere.scale_amount_max = 2.5
+	camera.add_child(_camera_atmosphere)
+	_apply_camera_atmosphere("city")
+
+func _apply_camera_atmosphere(theme: String) -> void:
+	if not is_instance_valid(_camera_atmosphere): return
+	var profile: Dictionary = THEME_BACKDROP_SCRIPT.THEME_PROFILES.get(theme, THEME_BACKDROP_SCRIPT.THEME_PROFILES["city"])
+	var particle_dir: Vector2 = profile.get("particle_dir", Vector2(0,-1))
+	_camera_atmosphere.direction = particle_dir
+	_camera_atmosphere.gravity = particle_dir * 8.0
+	_camera_atmosphere.color = profile.get("particle", Color(0.6,0.75,1.0,0.2))
+	_camera_atmosphere.amount = 38 if theme in ["factory","void"] else 28
 
 func _make_theme_backdrop(room: Dictionary) -> void:
 	var theme: String = room.get("theme", "")
-	if theme != "castle" and theme != "void": return
 	var backdrop := Node2D.new()
 	backdrop.set_script(THEME_BACKDROP_SCRIPT)
 	backdrop.setup(theme, room["bounds"])
 	world.add_child(backdrop)
+	_theme_backdrop = backdrop
 
 func _build_parallax(theme: String) -> void:
 	if pbg and is_instance_valid(pbg):
@@ -1451,8 +1463,21 @@ func _auto_screenshot() -> void:
 		for ability_id in Game.ABILITY_NAME:
 			Game.grant_ability(str(ability_id))
 	var rid := _qa_option("SHOT_ROOM")
+	var region_atmosphere := _qa_option("SHOT_REGION_ATMOSPHERE")
+	if region_atmosphere != "":
+		var region_rooms := {
+			"city":"hub", "mine":"mine", "factory":"factory_entry",
+			"water":"water_grotto", "temple":"temple", "void":"void_deck",
+			"castle":"castle_gate",
+		}
+		if not region_rooms.has(region_atmosphere):
+			push_error("SHOT_REGION_ATMOSPHERE unknown theme: " + region_atmosphere)
+		else:
+			rid = str(region_rooms[region_atmosphere])
 	if rid != "" and Rooms.ROOMS.has(rid):
 		_enter_room(rid, "")
+	elif rid != "":
+		push_error("SHOT_ROOM not found: " + rid)
 	var shot_13_1 := _qa_option("SHOT_13_1")
 	if shot_13_1 != "":
 		await _prepare_13_1_capture(shot_13_1)
