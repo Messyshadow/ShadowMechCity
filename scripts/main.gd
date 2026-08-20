@@ -19,6 +19,7 @@ const TUTORIAL_GUIDE_SCRIPT := preload("res://scripts/tutorial_guide.gd")
 const DASH_GATE_SCRIPT := preload("res://scripts/dash_gate.gd")
 const BOSS_RETREAT_CONSOLE := preload("res://scripts/boss_retreat_console.gd")
 const SKILL_INTERACTABLE_SCRIPT := preload("res://scripts/skill_interactable.gd")
+const REGION_AUDIO_SCRIPT := preload("res://scripts/region_audio_controller.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -76,6 +77,7 @@ var slash_frames: SpriteFrames
 var room_id := ""
 var door_cd := 0.0
 var _sfx := {}
+var region_audio: RegionAudioController
 var _locked_doors: Array = []   # 当前房间的锁门交互区
 var _interactive_portals: Array = []
 var _door_hint: Node = null
@@ -329,6 +331,8 @@ func _enter_room(id: String, from_room: String) -> void:
 	elif not room.has("boss"):
 		_boss_entry_room = ""
 	room_id = id
+	if is_instance_valid(region_audio):
+		region_audio.transition_to(str(room["theme"]), room.get("enemies", []).size(), room.has("boss"))
 	door_cd = 0.45
 	# 清空旧房间
 	_locked_doors = []
@@ -1436,14 +1440,10 @@ func _setup_audio() -> void:
 		_sfx[k] = load("res://assets/audio/%s.wav" % k)
 	for k in ["attack", "hit", "ui"]:
 		_sfx[k] = load("res://assets/audio/%s.mp3" % k)
-	var bgm := AudioStreamPlayer.new()
-	bgm.name = "BGM"
-	bgm.stream = load("res://assets/audio/bgm.mp3")
-	if bgm.stream is AudioStreamMP3:
-		bgm.stream.loop = true
-	bgm.volume_db = -15.0
-	add_child(bgm)
-	bgm.play()
+	region_audio = REGION_AUDIO_SCRIPT.new()
+	region_audio.name = "RegionAudioController"
+	add_child(region_audio)
+	region_audio.setup(load("res://assets/audio/bgm.mp3"))
 
 func play_sfx(key: String, db: float = 0.0, pitch: float = 1.0) -> void:
 	if not _sfx.has(key) or _sfx[key] == null:
@@ -1464,6 +1464,9 @@ func _auto_screenshot() -> void:
 			Game.grant_ability(str(ability_id))
 	var rid := _qa_option("SHOT_ROOM")
 	var region_atmosphere := _qa_option("SHOT_REGION_ATMOSPHERE")
+	var region_audio_shot := _qa_option("SHOT_REGION_AUDIO")
+	if region_atmosphere == "" and region_audio_shot != "":
+		region_atmosphere = region_audio_shot
 	if region_atmosphere != "":
 		var region_rooms := {
 			"city":"hub", "mine":"mine", "factory":"factory_entry",
@@ -1478,6 +1481,10 @@ func _auto_screenshot() -> void:
 		_enter_room(rid, "")
 	elif rid != "":
 		push_error("SHOT_ROOM not found: " + rid)
+	if region_audio_shot != "" and is_instance_valid(region_audio):
+		var audio_intensity := clampi(_qa_option("SHOT_AUDIO_INTENSITY").to_int(), 0, 2)
+		region_audio.set_intensity(audio_intensity)
+		region_audio.show_debug_overlay()
 	var shot_13_1 := _qa_option("SHOT_13_1")
 	if shot_13_1 != "":
 		await _prepare_13_1_capture(shot_13_1)
