@@ -1,0 +1,4 @@
+interface:
+  display_name: "暗影机械城阶段 11"
+  short_description: "Implement four linked Stage 11 systems safely"
+  default_prompt: "Use $stage-11-feature-systems to implement the next approved Stage 11 batch with save compatibility and Godot Capture QA."
