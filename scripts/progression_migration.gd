@@ -1,7 +1,8 @@
 class_name ProgressionMigration
 extends RefCounted
 
-const CURRENT_VERSION := 13
+const CURRENT_VERSION := 14
+const RobotData = preload("res://scripts/robot_data.gd")
 const LEGACY_SKILL_IDS := [
 	"hp", "power", "speed", "dashcd", "triple", "atk", "crit", "lifesteal",
 	"wave", "spin", "mp_max", "mp_regen", "skill_dmg", "skill_cd", "magnet", "ultimate",
@@ -28,5 +29,11 @@ static func migrate(source: Dictionary) -> Dictionary:
 	if not (data.get("abilities", {}) is Dictionary):
 		data["abilities"] = {}
 	data["compat_progression"] = data.get("compat_progression", {})
+	data["robot_roster"] = RobotData.normalize_roster(data.get("robot_roster", []))
+	if (data["robot_roster"] as Array).is_empty():
+		data["robot_roster"] = [RobotData.starter_record()]
+	data["summon_slot_level"] = clampi(int(data.get("summon_slot_level", 1)), 1, 3)
+	data["summon_loadout"] = RobotData.normalize_loadout(
+		data.get("summon_loadout", []), data["robot_roster"], data["summon_slot_level"])
 	data["save_version"] = CURRENT_VERSION
 	return data

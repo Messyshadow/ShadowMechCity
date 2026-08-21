@@ -9,10 +9,12 @@ signal weapon_equipped(index: int)
 signal dialogue_started(npc_id: String)
 signal dialogue_ended(npc_id: String)
 signal quest_changed(states: Dictionary)
+signal summon_changed(snapshot: Dictionary)
 
 const QuestRuntime = preload("res://scripts/quest_runtime.gd")
 const StatResolver = preload("res://scripts/stat_resolver.gd")
 const ProgressionMigration = preload("res://scripts/progression_migration.gd")
+const RobotData = preload("res://scripts/robot_data.gd")
 
 var kills: int = 0
 var weapon_index: int = 0      # 跨关卡保留当前武器
@@ -38,6 +40,12 @@ var story_flags: Dictionary = {}    # 阶段12任务与阶段11伏笔共用的�
 var quest_flags: Dictionary = {}    # complete:<quest_id> -> true，兼容事实回算
 var tracked_quest_id: String = "echo_coordinates"
 const DASH_GATE_TUTORIAL_FLAG := "dash_gate_taught"
+
+# ---- 阶段 11.1 召唤伙伴 ----
+# 只存档稳定档案 ID，不存储场景节点或背包数组下标。
+var robot_roster: Array = []
+var summon_loadout: Array[String] = []
+var summon_slot_level: int = 1
 
 # ---- 收集系统(隐藏宝藏/生命碎片, 回溯解锁) ----
 var collected: Dictionary = {}      # secret_id -> true (已收集, 不再刷出)
@@ -123,6 +131,8 @@ func save_game() -> void:
 		"permanent_chests": permanent_chests,
 		"dialogue_flags": dialogue_flags, "story_flags": story_flags,
 		"quest_flags": quest_flags, "tracked_quest_id": tracked_quest_id,
+		"robot_roster": robot_roster, "summon_loadout": summon_loadout,
+		"summon_slot_level": summon_slot_level,
 	}
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
@@ -161,6 +171,10 @@ func load_save() -> bool:
 	var loaded_quests = data.get("quest_flags", {})
 	quest_flags = loaded_quests if loaded_quests is Dictionary else {}
 	tracked_quest_id = str(data.get("tracked_quest_id", ""))
+	robot_roster = RobotData.normalize_roster(data.get("robot_roster", []))
+	summon_loadout = RobotData.normalize_loadout(data.get("summon_loadout", []), robot_roster, int(data.get("summon_slot_level", 1)))
+	summon_slot_level = clampi(int(data.get("summon_slot_level", 1)), 1, 3)
+	ensure_starter_robot(false)
 	refresh_quests(false)
 	return true
 
@@ -172,8 +186,34 @@ func reset() -> void:
 	collected = {}; heart_pieces = 0
 	permanent_chests = {}
 	dialogue_flags = {}; story_flags = {}; quest_flags = {}; tracked_quest_id = "echo_coordinates"
+	robot_roster = []; summon_loadout = []; summon_slot_level = 1
+	ensure_starter_robot(false)
 	reset_session_encounters()
 	refresh_quests(false)
+
+func ensure_starter_robot(notify: bool = true) -> Dictionary:
+	var starter := RobotData.starter_record()
+	var found := false
+	for record in robot_roster:
+		if record is Dictionary and str(record.get("robot_instance_id", "")) == str(starter["robot_instance_id"]):
+			found = true
+			break
+	if not found:
+		robot_roster.append(starter)
+	if summon_loadout.is_empty():
+		summon_loadout.append(str(starter["robot_instance_id"]))
+	summon_slot_level = clampi(summon_slot_level, 1, 3)
+	var snapshot := summon_snapshot()
+	if notify:
+		summon_changed.emit(snapshot)
+	return snapshot
+
+func summon_snapshot() -> Dictionary:
+	return {
+		"roster": robot_roster.duplicate(true),
+		"loadout": summon_loadout.duplicate(),
+		"slot_level": summon_slot_level,
+	}
 
 func xp_needed() -> int:
 	return 4 + level * 3
@@ -416,6 +456,7 @@ const ACTIONS := {
 	"ult":        [KEY_V],
 	"restart":    [KEY_R],
 	"retreat":    [KEY_B],
+	"summon":     [KEY_C],
 	"interact":   [KEY_E, KEY_ENTER],
 }
 

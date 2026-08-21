@@ -20,6 +20,7 @@ const DASH_GATE_SCRIPT := preload("res://scripts/dash_gate.gd")
 const BOSS_RETREAT_CONSOLE := preload("res://scripts/boss_retreat_console.gd")
 const SKILL_INTERACTABLE_SCRIPT := preload("res://scripts/skill_interactable.gd")
 const REGION_AUDIO_SCRIPT := preload("res://scripts/region_audio_controller.gd")
+const SUMMON_CONTROLLER_SCRIPT := preload("res://scripts/summon_controller.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -78,6 +79,7 @@ var room_id := ""
 var door_cd := 0.0
 var _sfx := {}
 var region_audio: RegionAudioController
+var summon_controller: SummonController
 var _locked_doors: Array = []   # 当前房间的锁门交互区
 var _interactive_portals: Array = []
 var _door_hint: Node = null
@@ -117,6 +119,7 @@ func _ready() -> void:
 	_setup_hud()
 	_setup_skill_panel()
 	_setup_map_panel()
+	_setup_summon_controller()
 	_setup_quest_ui()
 	_setup_menus()
 	_setup_dialogue_panel()
@@ -132,7 +135,14 @@ func _ready() -> void:
 	if loaded:
 		player.health = clampi(Game.player_hp, 1, player.max_hp())
 		player.health_changed.emit(player.health, player.max_hp())
-	var qa_running := "--shot" in OS.get_cmdline_args() or "--shot" in OS.get_cmdline_user_args()
+	# 自编译引擎的命令行解析在不同构建间可能吞掉未知的 --shot；
+	# 只要明确提供截图环境变量，也应进入同一条确定性 QA 路径。
+	var qa_running := (
+		"--shot" in OS.get_cmdline_args()
+		or "--shot" in OS.get_cmdline_user_args()
+		or _qa_option("SHOT_ROOM") != ""
+		or _qa_option("SHOT_OUTPUT") != ""
+	)
 	if qa_running:
 		_auto_screenshot()
 	else:
@@ -439,6 +449,8 @@ func _enter_room(id: String, from_room: String) -> void:
 	player.spawn_point = sp
 	player.state = 0
 	player.iframes = 0.5
+	if is_instance_valid(summon_controller):
+		summon_controller.on_room_entered(world, player)
 	if is_instance_valid(_boss) and _boss_entry_room != "":
 		_spawn_boss_retreat_console(room)
 	# 相机
@@ -1410,6 +1422,11 @@ func _setup_map_panel() -> void:
 	inv_panel.set_script(load("res://scripts/inventory_panel.gd"))
 	add_child(inv_panel)
 
+func _setup_summon_controller() -> void:
+	summon_controller = SUMMON_CONTROLLER_SCRIPT.new()
+	summon_controller.name = "SummonController"
+	add_child(summon_controller)
+
 func _show_banner(text: String) -> void:
 	var cl := CanvasLayer.new()
 	cl.name = "RoomBanner"
@@ -1545,6 +1562,13 @@ func _auto_screenshot() -> void:
 		for sid in ["heart_hub","memory_hub_archive","memory_void_observatory"]: Game.collected[sid] = true
 		Game.current_room = room_id
 		map_panel.open = true; map_panel.queue_redraw()
+	if _qa_option("SHOT_MAP_FULL") == "1" and is_instance_valid(map_panel):
+		map_panel.call("force_open_for_qa", true)
+	var shot_summon := _qa_option("SHOT_SUMMON")
+	if shot_summon != "" and is_instance_valid(summon_controller):
+		# 视觉验收聚焦召唤物，不让房间敌群先把玩家击倒导致构图失效。
+		player.iframes = 99.0
+		summon_controller.deploy_for_qa(shot_summon)
 	if _qa_option("SHOT_QUEST_LOG") == "1" or _qa_option("SHOT_QUEST_TRACKER") == "1" or _qa_option("SHOT_SIDE_QUESTS") == "1" or _qa_option("SHOT_COLLECTIBLES") == "1":
 		_seed_quest_progress_for_qa()
 		Game.refresh_quests()

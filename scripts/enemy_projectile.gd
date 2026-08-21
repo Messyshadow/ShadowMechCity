@@ -13,7 +13,7 @@ func setup(velocity: Vector2, dmg: int, tint: Color = Color(1.0, 0.6, 0.3)) -> v
 
 func _ready() -> void:
 	collision_layer = 0
-	collision_mask = 0b00010   # player
+	collision_mask = 0b01010   # player + summon ally
 	z_index = 16
 	var cs := CollisionShape2D.new()
 	var sh := CircleShape2D.new()
@@ -50,7 +50,7 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 func _on_hit(body: Node) -> void:
-	if body.is_in_group("player") and body.has_method("take_damage"):
+	if (body.is_in_group("player") or body.is_in_group("summon_ally")) and body.has_method("take_damage"):
 		body.take_damage(damage, global_position)
 		Fx.hit_spark(get_parent(), global_position)
 		queue_free()

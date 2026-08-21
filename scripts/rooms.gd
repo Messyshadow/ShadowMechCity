@@ -8,7 +8,7 @@ const START := "hub"
 
 const ROOMS := {
 	"hub": {
-		"name": "中央车站", "theme": "city", "map": Vector2i(0, 0),
+		"name": "机械中枢·中央车站", "theme": "city", "map": Vector2i(0, 0),
 		"bounds": [0, 0, 1400, 560],
 		"platforms": [[300, 440, 180, 24], [900, 400, 200, 24], [0, 160, 200, 22], [1040,300,150,22,true], [1180,205,150,22,true], [1120,105,170,22,true]],
 		"oneways": [[600, 470, 150]],
@@ -33,7 +33,7 @@ const ROOMS := {
 	},
 	# ============================ 遗迹神殿区域(阶段10.3): 前厅/中庭/地宫/符文回廊 + 守护神Boss, 符文机关 ============================
 	"temple": {
-		"name": "古代神殿·前厅", "theme": "temple", "map": Vector2i(-1, 0),
+		"name": "遗迹神殿·前厅", "theme": "temple", "map": Vector2i(-1, 0),
 		"bounds": [0, 0, 1600, 700],
 		"pits": [[820, 300, 2]],   # 中部断裂地坑(跨平台必经)
 		"platforms": [
@@ -57,7 +57,7 @@ const ROOMS := {
 	},
 	# 神殿·中庭: 攀墙竖井(高处生命碎片, 回溯) + 多层
 	"temple_atrium": {
-		"name": "神殿·中庭", "theme": "temple", "map": Vector2i(-2, 0),
+		"name": "遗迹神殿·星轮中庭", "theme": "temple", "map": Vector2i(-2, 0),
 		"bounds": [0, 0, 1700, 720],
 		"pits": [[900, 360, 2]],
 		"platforms": [
@@ -80,7 +80,7 @@ const ROOMS := {
 	},
 	# 神殿·地宫: 机械守卫精英 + 齿轮古机关 + 多层迷宫
 	"temple_undercroft": {
-		"name": "神殿·地宫", "theme": "temple", "map": Vector2i(-2, 1),
+		"name": "遗迹神殿·沉眠地宫", "theme": "temple", "map": Vector2i(-2, 1),
 		"bounds": [0, 0, 1900, 720],
 		"pits": [[600, 320, 2], [1300, 320, 2]],
 		"platforms": [
@@ -102,7 +102,7 @@ const ROOMS := {
 	},
 	# 符文回廊: 招牌符文机关——踩亮 3 符文板解除封门(通往守护神殿) + 符文光柱陷阱
 	"temple_runes": {
-		"name": "神殿·符文回廊", "theme": "temple", "map": Vector2i(-1, 1),
+		"name": "遗迹神殿·符文回廊", "theme": "temple", "map": Vector2i(-1, 1),
 		"bounds": [0, 0, 1900, 720],
 		"pits": [[1000, 300, 2]],
 		"platforms": [
@@ -124,7 +124,7 @@ const ROOMS := {
 	},
 	# 守护神殿: 远古机械守护神 封闭竞技场
 	"temple_sanctum": {
-		"name": "神殿·守护神殿", "theme": "temple", "map": Vector2i(0, 1),
+		"name": "遗迹神殿·守护圣所", "theme": "temple", "map": Vector2i(0, 1),
 		"bounds": [0, 0, 1500, 620], "weapons": [[750, 540, "relic_blade"]],
 		"platforms": [[300, 440, 180, 24], [1020, 440, 180, 24]],
 		"oneways": [],
@@ -136,7 +136,7 @@ const ROOMS := {
 		"doors": [{"side": "left", "p": 480, "to": "temple_runes"}],
 	},
 	"mine": {
-		"name": "废弃矿坑", "theme": "mine", "map": Vector2i(1, 0),
+		"name": "废铁矿坑·矿车总站", "theme": "mine", "map": Vector2i(1, 0),
 		"bounds": [0, 0, 2200, 720],
 		"pits": [[640, 280, 2], [1520, 300, 2]],   # 熔铁坑(跨平台/矿车必经)
 		"movers": [[1080, 560, 210, "h", 330, 4.2, 0.0]],   # 矿车(水平长轨, 招牌)
@@ -161,7 +161,7 @@ const ROOMS := {
 		],
 	},
 	"depths": {
-		"name": "地下水道", "theme": "water", "map": Vector2i(1, 1),
+		"name": "腐化水道·地下入口", "theme": "water", "map": Vector2i(1, 1),
 		"bounds": [0, 0, 1300, 560],
 		# 宽容回程链：每级抬升 <= 90px 且相邻平台重叠/近接，通到顶部 x=600 上行门
 		"platforms": [
@@ -176,7 +176,7 @@ const ROOMS := {
 			{"side": "down", "p": 300, "to": "water_grotto"}],
 	},
 	"tunnel": {
-		"name": "坍塌隧道", "theme": "mine", "map": Vector2i(2, 1),
+		"name": "废铁矿坑·坍塌隧道", "theme": "mine", "map": Vector2i(2, 1),
 		"bounds": [0, 0, 1400, 560],
 		"pits": [[980, 240, 2]],   # 塌方裂坑(跨平台必经)
 		"platforms": [[300, 430, 170, 22], [760, 360, 170, 22], [1140, 430, 170, 22]],
@@ -188,7 +188,7 @@ const ROOMS := {
 		"doors": [{"side": "left", "p": 430, "to": "depths"}, {"side": "right", "p": 430, "to": "cavern"}],
 	},
 	"cavern": {
-		"name": "熔岩腔穴", "theme": "mine", "map": Vector2i(3, 1),
+		"name": "废铁矿坑·熔岩腔穴", "theme": "mine", "map": Vector2i(3, 1),
 		"bounds": [0, 0, 1500, 560],
 		"pits": [[800, 240, 3]],   # 熔岩池(兑现"熔岩", 跨平台必经)
 		"movers": [[800, 360, 170, "h", 150, 3.0, 0.0]],   # 矿车: 跨熔岩池
@@ -203,7 +203,7 @@ const ROOMS := {
 		"doors": [{"side": "left", "p": 430, "to": "tunnel"}, {"side": "right", "p": 430, "to": "mine_boss"}],
 	},
 	"mine_boss": {
-		"name": "岩核之巢", "theme": "mine", "map": Vector2i(4, 1),
+		"name": "废铁矿坑·岩核之巢", "theme": "mine", "map": Vector2i(4, 1),
 		"bounds": [0, 0, 1500, 560],
 		"platforms": [[300, 410, 180, 24], [1020, 410, 180, 24]],
 		"oneways": [],
@@ -282,7 +282,7 @@ const ROOMS := {
 	# ============================ 蒸汽铸造厂区域(阶段10.1): 4 大迷宫房间 + 泰坦Boss, 互联成环 ============================
 	# 入口熔炉大厅: 多层 + 蒸汽阀陷阱; 左→矿坑(红钥匙门) 右→装配车间 下→熔铁回廊
 	"factory_entry": {
-		"name": "铸造厂·熔炉大厅", "theme": "factory", "map": Vector2i(2, 0),
+		"name": "蒸汽铸造厂·熔炉大厅", "theme": "factory", "map": Vector2i(2, 0),
 		"bounds": [0, 0, 2100, 720],
 		"walls": [[1250, 240, 180, 480], [1660, 430, 44, 290]],   # 中央巨型高炉(实体塔, 翻越) + 右分隔
 		"decor": [[250, 590, "factory/furnace", 1.5], [170, 380, "factory/pipes", 1.1], [1900, 360, "factory/gearwheel", 1.2]],
@@ -309,7 +309,7 @@ const ROOMS := {
 	},
 	# 装配车间: 齿轮陷阱 + 精英重装蒸汽兵; 左→熔炉大厅 下→传送链区
 	"factory_works": {
-		"name": "铸造厂·装配车间", "theme": "factory", "map": Vector2i(3, 0),
+		"name": "蒸汽铸造厂·装配车间", "theme": "factory", "map": Vector2i(3, 0),
 		"bounds": [0, 0, 2200, 720],
 		"pits": [[760, 320, 2], [1720, 300, 2]],                   # 底部双坑
 		"belts": [[400, 700, 320, 24, 110], [1320, 700, 320, 24, -120]],   # 传送带(招牌): 流水线推动
@@ -336,7 +336,7 @@ const ROOMS := {
 	},
 	# 熔铁回廊: 竖向多层 + 熔铁陷阱 + 暗墙后生命碎片(需炸弹回溯); 上→熔炉大厅 右→传送链区
 	"factory_foundry": {
-		"name": "铸造厂·熔铁回廊", "theme": "factory", "map": Vector2i(2, 1),
+		"name": "蒸汽铸造厂·熔铁回廊", "theme": "factory", "map": Vector2i(2, 1),
 		"bounds": [0, 0, 2100, 720],
 		"pits": [[1150, 620, 3]],   # 熔铁河: 贯穿中部底部的宽坑(伤3), 岩桥跨越=必经
 		"decor": [[560, 600, "factory/furnace", 1.2], [1500, 500, "factory/pipes", 1.1], [1880, 250, "factory/gearwheel", 1.0]],
@@ -362,7 +362,7 @@ const ROOMS := {
 	},
 	# 传送链区: 无人机/幽灵蜘蛛 + 冲刺门结构化动线; 左→熔铁回廊 上→装配车间 右→Boss厂房
 	"factory_conveyor": {
-		"name": "铸造厂·传送链区", "theme": "factory", "map": Vector2i(3, 1),
+		"name": "蒸汽铸造厂·传送链区", "theme": "factory", "map": Vector2i(3, 1),
 		"bounds": [0, 0, 2200, 720],
 		"pits": [[700, 360, 2], [1500, 320, 2]],   # 底部双坑, 靠链条平台跨越
 		"decor": [[1100, 170, "factory/gearwheel", 1.6], [480, 560, "factory/pipes", 1.1], [1900, 450, "factory/conveyor", 0.9]],
@@ -391,7 +391,7 @@ const ROOMS := {
 		],
 	},
 	"boss": {
-		"name": "蒸汽工厂", "theme": "factory", "map": Vector2i(4, 1),
+		"name": "蒸汽铸造厂·泰坦炉心", "theme": "factory", "map": Vector2i(4, 1),
 		"bounds": [0, 0, 1500, 560],
 		"platforms": [[280, 410, 180, 24], [1040, 410, 180, 24]],
 		"oneways": [],
@@ -458,20 +458,20 @@ const ROOMS := {
 
 	# ============================ 阶段10.8：七区域独立秘室 ============================
 	"secret_hub_archive": {
-		"name":"秘室·遗失档案库", "theme":"city", "region":"hub", "hidden_room":true, "map":Vector2i(0,-2), "bounds":[0,0,1500,680],
+		"name":"机械中枢秘室·遗失档案库", "theme":"city", "region":"hub", "hidden_room":true, "map":Vector2i(0,-2), "bounds":[0,0,1500,680],
 		"platforms":[[260,540,180,24,true],[520,420,170,24,true],[800,300,190,24,true],[1080,430,170,24,true],[1320,540,160,24,true]],
 		"walls":[[720,360,44,320]], "oneways":[[980,520,150]], "enemies":[],
 		"items":[[1180,390,"chest","secret_chest_hub"]], "secrets":[[800,260,"memory","memory_hub_archive"]],
 		"start_spawn":Vector2(180,640), "doors":[{"side":"left","p":540,"to":"hub"}]},
 	"secret_mine_cache": {
-		"name":"秘室·熔脉私藏间", "theme":"mine", "region":"mine", "hidden_room":true, "map":Vector2i(2,-1), "bounds":[0,0,1700,720],
+		"name":"废铁矿坑秘室·熔脉私藏间", "theme":"mine", "region":"mine", "hidden_room":true, "map":Vector2i(2,-1), "bounds":[0,0,1700,720],
 		"pits":[[850,380,3]], "platforms":[[260,560,170,24],[540,450,160,24],[820,350,170,24],[1120,450,160,24],[1450,560,170,24]],
 		"movers":[[850,520,150,"h",150,3.0,0.0]], "hazards":[[850,680,180,20,2,"steam"]], "enemies":[[520,410,"gearbat"],[1200,410,"drillworm"]],
 		"items":[[1450,520,"chest","secret_chest_mine"]], "secrets":[[850,310,"memory","memory_mine_cache"]],
 		"skill_targets":[[360,520,"brittle_wall",48,160],[1260,380,"drill_wall",48,150]],
 		"start_spawn":Vector2(180,680), "doors":[{"side":"left","p":590,"to":"mine"}]},
 	"secret_factory_heat": {
-		"name":"秘室·废热回收仓", "theme":"factory", "region":"factory", "hidden_room":true, "map":Vector2i(4,0), "bounds":[0,0,1800,740],
+		"name":"蒸汽铸造厂秘室·废热回收仓", "theme":"factory", "region":"factory", "hidden_room":true, "map":Vector2i(4,0), "bounds":[0,0,1800,740],
 		"belts":[[480,720,300,24,130],[1320,720,300,24,-130]], "updrafts":[[900,500,180,420,320]],
 		"platforms":[[280,560,170,24],[620,460,160,24],[900,270,190,24],[1180,460,160,24],[1520,560,170,24]],
 		"hazards":[[720,700,100,20,2,"steam"],[1080,700,100,20,2,"gear"]], "enemies":[[480,680,"mech_soldier"],[1320,680,"steam_brute"]],
@@ -479,27 +479,27 @@ const ROOMS := {
 		"weapons":[[900,420,"dual_blades"]], "skill_targets":[[720,430,"steam_anchor"],[1280,410,"relay"]],
 		"start_spawn":Vector2(170,700), "doors":[{"side":"left","p":600,"to":"factory_works"}]},
 	"secret_water_cistern": {
-		"name":"秘室·沉没蓄水池", "theme":"water", "region":"water", "hidden_room":true, "map":Vector2i(2,3), "bounds":[0,0,1700,760],
+		"name":"腐化水道秘室·沉没蓄水池", "theme":"water", "region":"water", "hidden_room":true, "map":Vector2i(2,3), "bounds":[0,0,1700,760],
 		"water":[[850,450,1660,620,170.0,0.0]], "platforms":[[250,360,170,24],[600,510,160,24],[980,610,180,24],[1370,430,170,24]],
 		"walls":[[820,300,44,460]], "hazards":[[1180,740,180,20,1,"poison"]], "enemies":[[620,470,"fishman"],[1220,570,"snake"]],
 		"items":[[1450,390,"chest","secret_chest_water"]], "secrets":[[980,570,"memory","memory_water_cistern"]],
 		"start_spawn":Vector2(180,700), "doors":[{"side":"left","p":620,"to":"water_channel"}]},
 	"secret_temple_orbit": {
-		"name":"秘室·星轮观测室", "theme":"temple", "region":"temple", "hidden_room":true, "map":Vector2i(-3,0), "bounds":[0,0,1600,800],
+		"name":"遗迹神殿秘室·星轮观测室", "theme":"temple", "region":"temple", "hidden_room":true, "map":Vector2i(-3,0), "bounds":[0,0,1600,800],
 		"platforms":[[260,650,160,24,true],[480,520,150,24,true],[720,390,160,24,true],[980,260,180,24,true],[1260,420,160,24,true],[1450,570,150,24,true]],
 		"runes":[[480,508],[980,248],[1260,408]], "hazards":[[800,780,100,20,2,"rune"]], "enemies":[[720,350,"priest"],[1280,380,"gargoyle"]],
 		"items":[[980,220,"chest","secret_chest_temple"]], "secrets":[[1450,530,"memory","memory_temple_orbit"]],
 		"weapons":[[980,180,"spear"]],
 		"start_spawn":Vector2(180,760), "doors":[{"side":"right","p":650,"to":"temple_atrium"}]},
 	"secret_void_observatory": {
-		"name":"秘室·裂隙观星台", "theme":"void", "region":"void", "hidden_room":true, "map":Vector2i(2,-2), "bounds":[0,0,1900,780],
+		"name":"虚空要塞秘室·裂隙观星台", "theme":"void", "region":"void", "hidden_room":true, "map":Vector2i(2,-2), "bounds":[0,0,1900,780],
 		"pits":[[950,620,3]], "platforms":[[260,620,170,24,true],[560,500,160,24,true],[900,340,190,24,true],[1280,460,170,24,true],[1620,590,170,24,true]],
 		"winds":[[950,450,520,520,260,-150]], "hazards":[[1480,760,120,20,2,"rune"]], "enemies":[[700,440,"void_eagle"],[1320,400,"storm_mage"]],
 		"items":[[1620,550,"chest","secret_chest_void"]], "secrets":[[900,300,"memory","memory_void_observatory"]],
 		"weapons":[[260,580,"crossbow"]], "skill_targets":[[760,360,"grapple_anchor"],[1440,500,"remote_switch"]],
 		"start_spawn":Vector2(180,740), "doors":[{"side":"left","p":650,"to":"void_hangar"}]},
 	"secret_castle_ossuary": {
-		"name":"秘室·君王遗骨库", "theme":"castle", "region":"castle", "hidden_room":true, "map":Vector2i(4,2), "bounds":[0,0,1900,820],
+		"name":"暗影王城秘室·君王遗骨库", "theme":"castle", "region":"castle", "hidden_room":true, "map":Vector2i(4,2), "bounds":[0,0,1900,820],
 		"shafts":[[950,210,220,590]], "platforms":[[280,650,180,24,true],[560,520,160,24,true],[900,380,190,24,true],[1220,500,160,24,true],[1580,640,180,24,true]],
 		"winds":[[950,520,220,500,0,-260]], "hazards":[[720,800,120,20,2,"rune"],[1320,800,120,20,2,"gear"]], "enemies":[[560,480,"soul_spear"],[1250,460,"soul_cannon"]],
 		"items":[[1580,600,"chest","secret_chest_castle"]], "secrets":[[900,340,"memory","memory_castle_ossuary"]],

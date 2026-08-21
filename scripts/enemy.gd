@@ -111,7 +111,7 @@ func _build() -> void:
 
 	touch = Area2D.new()
 	touch.collision_layer = 0
-	touch.collision_mask = 0b00010   # player
+	touch.collision_mask = 0b01010   # player + summon ally
 	var ts := CollisionShape2D.new()
 	var tsh := RectangleShape2D.new()
 	tsh.size = body_size + Vector2(8, 8)
@@ -723,6 +723,8 @@ func _ghost() -> void:
 func _damage_player() -> void:
 	for b in touch.get_overlapping_bodies():
 		if b.is_in_group("player") and b.has_method("take_damage"):
+			b.take_damage(contact_damage, global_position)
+		elif b.is_in_group("summon_ally") and b.has_method("take_damage"):
 			b.take_damage(contact_damage, global_position)
 
 # --------------------------------------------------- 受击 / 死亡
