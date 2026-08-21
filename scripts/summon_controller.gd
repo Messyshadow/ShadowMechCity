@@ -1,6 +1,6 @@
 class_name SummonController
 extends CanvasLayer
-## SUMMON HUD + 11.1a 单槽召唤生命周期。不注册进敌人战斗导演。
+## SUMMON HUD + 11.1b 单槽四定位召唤生命周期。不注册进敌人战斗导演。
 
 const ROBOT_SCRIPT := preload("res://scripts/summon_robot.gd")
 
@@ -19,7 +19,7 @@ var hint_label: Label
 func _ready() -> void:
 	layer = 13
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	Game.ensure_starter_robot(false)
+	Game.ensure_role_roster(false)
 	_build_hud()
 	Game.summon_changed.connect(func(_snapshot: Dictionary) -> void: _refresh_hud())
 	_refresh_hud()
@@ -36,6 +36,9 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("summon") and Game.menu_open == 0 and not get_tree().paused:
 		toggle_summon()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("summon_cycle") and Game.menu_open == 0 and not get_tree().paused:
+		cycle_standby_model()
 		get_viewport().set_input_as_handled()
 
 
@@ -63,14 +66,52 @@ func toggle_summon() -> void:
 
 
 func deploy_for_qa(mode: String = "deployed") -> void:
-	Game.ensure_starter_robot(false)
+	Game.ensure_role_roster(false)
 	rebuild_remaining = 0.0
+	if mode == "standby":
+		desired_deployed = false
+		_refresh_hud()
+		return
 	desired_deployed = true
 	_deploy()
 	if mode == "damaged" and is_instance_valid(active_robot):
 		active_robot.take_damage(5, active_robot.global_position + Vector2(90, 0))
 	elif mode == "cooldown" and is_instance_valid(active_robot):
 		active_robot.take_damage(999, active_robot.global_position + Vector2(90, 0))
+	elif mode == "support" and is_instance_valid(active_robot) and is_instance_valid(player):
+		if player.has_method("max_hp"):
+			player.set("health", maxi(1, int(player.call("max_hp")) - 2))
+			player.emit_signal("health_changed", int(player.get("health")), int(player.call("max_hp")))
+		active_robot.force_support_pulse_for_qa()
+
+
+func cycle_standby_model() -> void:
+	if is_instance_valid(active_robot) or rebuild_remaining > 0.0:
+		return
+	Game.ensure_role_roster(false)
+	if Game.robot_roster.is_empty():
+		return
+	var current_id := str(Game.summon_loadout[0]) if not Game.summon_loadout.is_empty() else ""
+	var current_index := -1
+	for i in range(Game.robot_roster.size()):
+		if str(Game.robot_roster[i].get("robot_instance_id", "")) == current_id:
+			current_index = i
+			break
+	var next_record: Dictionary = Game.robot_roster[(current_index + 1) % Game.robot_roster.size()]
+	Game.summon_loadout = [str(next_record["robot_instance_id"])]
+	Game.summon_changed.emit(Game.summon_snapshot())
+	_refresh_hud()
+
+
+func select_model_for_qa(model_id: String) -> void:
+	Game.ensure_role_roster(false)
+	for record in Game.robot_roster:
+		if str(record.get("model_id", "")) == model_id:
+			Game.summon_loadout = [str(record["robot_instance_id"])]
+			Game.summon_changed.emit(Game.summon_snapshot())
+			_refresh_hud()
+			return
+	push_error("SHOT_SUMMON_MODEL unknown model: " + model_id)
 
 
 func debug_snapshot() -> Dictionary:
@@ -95,7 +136,9 @@ func _deploy() -> void:
 		return
 	active_robot = ROBOT_SCRIPT.new()
 	active_robot.setup(record, player)
-	active_robot.global_position = player.global_position + Vector2(-92, -28)
+	var mobility := str(active_robot.profile.get("mobility", "ground"))
+	var side := 1.0 if player.global_position.x < 210.0 else -1.0
+	active_robot.global_position = player.global_position + (Vector2(side * 105, -118) if mobility == "air" else Vector2(side * 92, -28))
 	world.add_child(active_robot)
 	active_robot.health_changed.connect(_refresh_hud)
 	active_robot.disabled.connect(_on_robot_disabled)
@@ -113,7 +156,7 @@ func _on_robot_disabled(robot: SummonRobot) -> void:
 
 
 func _active_record() -> Dictionary:
-	Game.ensure_starter_robot(false)
+	Game.ensure_role_roster(false)
 	var unlocked_slots := clampi(Game.summon_slot_level, 1, 3)
 	if unlocked_slots <= 0 or Game.summon_loadout.is_empty():
 		return {}
@@ -165,7 +208,7 @@ func _build_hud() -> void:
 	hp_bar.add_theme_stylebox_override("fill", fill); hp_bar.add_theme_stylebox_override("background", background)
 	rows.add_child(hp_bar)
 	hint_label = Label.new()
-	hint_label.text = "[C] 召唤 / 量子回收"
+	hint_label.text = "[C] 召唤  [Z] 切换型号"
 	hint_label.add_theme_font_size_override("font_size", 12)
 	hint_label.add_theme_color_override("font_color", Color(0.54,0.72,0.80))
 	rows.add_child(hint_label)
@@ -186,4 +229,4 @@ func _refresh_hud(current: int = -1, maximum: int = -1) -> void:
 	var hp_max := int(snapshot["max_hp"]) if maximum < 0 else maximum
 	hp_bar.max_value = maxi(1, hp_max)
 	hp_bar.value = hp_now if bool(snapshot["deployed"]) else (0 if rebuild_remaining > 0.0 else hp_max)
-	hint_label.text = "[C] 回收伙伴" if bool(snapshot["deployed"]) else ("[C] 重构冷却" if rebuild_remaining > 0.0 else "[C] 召唤伙伴")
+	hint_label.text = "[C] 回收伙伴" if bool(snapshot["deployed"]) else ("[C] 重构冷却" if rebuild_remaining > 0.0 else "[C] 召唤  [Z] 切换型号")

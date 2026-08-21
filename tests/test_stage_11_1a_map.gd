@@ -31,7 +31,7 @@ func _run() -> void:
 	for marker in ["robot_roster", "summon_loadout", "summon_slot_level", "summon_changed", "ensure_starter_robot"]:
 		_expect(game.contains(marker), "Game 缺少召唤持久字段: " + marker)
 	_expect(game.contains('"summon":') and game.contains("KEY_C"), "缺少 C 键召唤输入")
-	_expect(migration.contains("CURRENT_VERSION := 14"), "存档版本未升级到 14")
+	_expect(migration.contains("CURRENT_VERSION := 15"), "存档版本不得低于 11.1b 的 v15")
 	for marker in ["robot_roster", "summon_loadout", "summon_slot_level"]:
 		_expect(migration.contains(marker), "迁移器缺少字段: " + marker)
 
@@ -61,10 +61,11 @@ func _run() -> void:
 		"inventory": [{"item_id": "legacy_blade"}],
 		"summon_slot_level": 9,
 	})
-	_expect(int(migrated.get("save_version", 0)) == 14, "旧存档未迁移到 v14")
+	_expect(int(migrated.get("save_version", 0)) >= 14, "旧存档未迁移到 v14+")
 	_expect((migrated.get("inventory", []) as Array).size() == 1, "迁移丢失旧背包")
-	_expect((migrated.get("robot_roster", []) as Array).size() == 1, "迁移未补发初始机器人")
-	_expect(str((migrated["robot_roster"] as Array)[0].get("robot_instance_id", "")) == RobotData.STARTER_INSTANCE_ID, "初始机器人实例 ID 不稳定")
+	var migrated_roster: Array = migrated.get("robot_roster", [])
+	_expect(migrated_roster.size() >= 1, "迁移未补发初始机器人")
+	_expect(migrated_roster.any(func(record: Dictionary) -> bool: return str(record.get("robot_instance_id", "")) == RobotData.STARTER_INSTANCE_ID), "初始机器人实例 ID 不稳定")
 	_expect(int(migrated.get("summon_slot_level", 0)) == 3, "召唤槽未限制在 1~3")
 	_expect((migrated.get("summon_loadout", []) as Array) == [RobotData.STARTER_INSTANCE_ID], "迁移未配置初始出战位")
 

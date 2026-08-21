@@ -1568,6 +1568,26 @@ func _auto_screenshot() -> void:
 	if shot_summon != "" and is_instance_valid(summon_controller):
 		# 视觉验收聚焦召唤物，不让房间敌群先把玩家击倒导致构图失效。
 		player.iframes = 99.0
+		if _qa_option("SHOT_SUMMON_ARENA") == "1":
+			for existing_enemy in get_tree().get_nodes_in_group("enemy"):
+				if is_instance_valid(existing_enemy):
+					existing_enemy.queue_free()
+			await get_tree().process_frame
+			player.global_position = Vector2(400, 500)
+			_freeze_13d1_capture_player()
+			_spawn_enemy(760, 560, "guard")
+			await get_tree().process_frame
+			for qa_enemy in get_tree().get_nodes_in_group("enemy"):
+				if is_instance_valid(qa_enemy):
+					qa_enemy.set_physics_process(false)
+		var summon_at := _qa_option("SHOT_SUMMON_AT")
+		if summon_at != "":
+			var summon_parts := summon_at.split(",")
+			if summon_parts.size() == 2:
+				player.global_position = Vector2(summon_parts[0].to_float(), summon_parts[1].to_float())
+		var shot_summon_model := _qa_option("SHOT_SUMMON_MODEL")
+		if shot_summon_model != "":
+			summon_controller.select_model_for_qa(shot_summon_model)
 		summon_controller.deploy_for_qa(shot_summon)
 	if _qa_option("SHOT_QUEST_LOG") == "1" or _qa_option("SHOT_QUEST_TRACKER") == "1" or _qa_option("SHOT_SIDE_QUESTS") == "1" or _qa_option("SHOT_COLLECTIBLES") == "1":
 		_seed_quest_progress_for_qa()

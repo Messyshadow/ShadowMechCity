@@ -171,10 +171,10 @@ func load_save() -> bool:
 	var loaded_quests = data.get("quest_flags", {})
 	quest_flags = loaded_quests if loaded_quests is Dictionary else {}
 	tracked_quest_id = str(data.get("tracked_quest_id", ""))
-	robot_roster = RobotData.normalize_roster(data.get("robot_roster", []))
+	robot_roster = RobotData.ensure_role_roster(data.get("robot_roster", []))
 	summon_loadout = RobotData.normalize_loadout(data.get("summon_loadout", []), robot_roster, int(data.get("summon_slot_level", 1)))
 	summon_slot_level = clampi(int(data.get("summon_slot_level", 1)), 1, 3)
-	ensure_starter_robot(false)
+	ensure_role_roster(false)
 	refresh_quests(false)
 	return true
 
@@ -187,7 +187,7 @@ func reset() -> void:
 	permanent_chests = {}
 	dialogue_flags = {}; story_flags = {}; quest_flags = {}; tracked_quest_id = "echo_coordinates"
 	robot_roster = []; summon_loadout = []; summon_slot_level = 1
-	ensure_starter_robot(false)
+	ensure_role_roster(false)
 	reset_session_encounters()
 	refresh_quests(false)
 
@@ -203,6 +203,16 @@ func ensure_starter_robot(notify: bool = true) -> Dictionary:
 	if summon_loadout.is_empty():
 		summon_loadout.append(str(starter["robot_instance_id"]))
 	summon_slot_level = clampi(summon_slot_level, 1, 3)
+	var snapshot := summon_snapshot()
+	if notify:
+		summon_changed.emit(snapshot)
+	return snapshot
+
+func ensure_role_roster(notify: bool = true) -> Dictionary:
+	robot_roster = RobotData.ensure_role_roster(robot_roster)
+	if summon_loadout.is_empty():
+		summon_loadout.append(RobotData.STARTER_INSTANCE_ID)
+	summon_loadout = RobotData.normalize_loadout(summon_loadout, robot_roster, summon_slot_level)
 	var snapshot := summon_snapshot()
 	if notify:
 		summon_changed.emit(snapshot)
@@ -457,6 +467,7 @@ const ACTIONS := {
 	"restart":    [KEY_R],
 	"retreat":    [KEY_B],
 	"summon":     [KEY_C],
+	"summon_cycle": [KEY_Z],
 	"interact":   [KEY_E, KEY_ENTER],
 }
 

@@ -3,11 +3,20 @@ extends RefCounted
 ## 召唤机器人的纯数据与存档规范化。场景节点不得写入这些记录。
 
 const STARTER_INSTANCE_ID := "starter_bastion_001"
+const ROLE_INSTANCE_IDS := {
+	"scrap_hound_mk1": STARTER_INSTANCE_ID,
+	"bulwark_mole_mk1": "prototype_bulwark_001",
+	"sky_rail_drone_mk1": "prototype_skyrail_001",
+	"lumen_wisp_mk1": "prototype_lumen_001",
+}
 const PROFILES := {
 	"scrap_hound_mk1": {
 		"name": "先锋犬 MK-I",
 		"company": "铸魂工坊",
 		"role": "地面·近战护卫",
+		"mobility": "ground",
+		"combat_style": "striker",
+		"draw_style": "hound",
 		"max_hp": 12,
 		"damage": 2,
 		"move_speed": 185.0,
@@ -16,19 +25,87 @@ const PROFILES := {
 		"rebuild_seconds": 12.0,
 		"accent": Color("53e6ff"),
 	},
+	"bulwark_mole_mk1": {
+		"name": "壁垒鼹 MK-I",
+		"company": "铸魂工坊",
+		"role": "地面·重装盾卫",
+		"mobility": "ground",
+		"combat_style": "vanguard",
+		"draw_style": "mole",
+		"max_hp": 20,
+		"damage": 1,
+		"move_speed": 142.0,
+		"attack_range": 88.0,
+		"attack_cooldown": 1.35,
+		"rebuild_seconds": 15.0,
+		"accent": Color("ffb84f"),
+	},
+	"sky_rail_drone_mk1": {
+		"name": "天轨蜂 MK-I",
+		"company": "虚空蒸汽局",
+		"role": "空中·远程炮击",
+		"mobility": "air",
+		"combat_style": "artillery",
+		"draw_style": "drone",
+		"max_hp": 9,
+		"damage": 3,
+		"move_speed": 215.0,
+		"attack_range": 360.0,
+		"attack_cooldown": 1.75,
+		"rebuild_seconds": 13.0,
+		"accent": Color("ff6e4a"),
+	},
+	"lumen_wisp_mk1": {
+		"name": "流明萤 MK-I",
+		"company": "遗迹符文院",
+		"role": "空中·修复支援",
+		"mobility": "air",
+		"combat_style": "support",
+		"draw_style": "wisp",
+		"max_hp": 10,
+		"damage": 1,
+		"move_speed": 195.0,
+		"attack_range": 260.0,
+		"attack_cooldown": 2.2,
+		"support_cooldown": 5.0,
+		"rebuild_seconds": 11.0,
+		"accent": Color("75ffb5"),
+	},
 }
 
 
 static func starter_record() -> Dictionary:
+	return _record_for("scrap_hound_mk1")
+
+
+static func _record_for(model_id: String) -> Dictionary:
 	return {
-		"robot_instance_id": STARTER_INSTANCE_ID,
-		"model_id": "scrap_hound_mk1",
+		"robot_instance_id": str(ROLE_INSTANCE_IDS[model_id]),
+		"model_id": model_id,
 		"level": 1,
 		"xp": 0,
-		"learned_skills": ["guard_bolt"],
+		"learned_skills": [str(PROFILES[model_id]["combat_style"]) + "_protocol"],
 		"upgrades": {},
 		"affinity": 0,
 	}
+
+
+static func role_records() -> Array:
+	var records: Array = []
+	for model_id in ROLE_INSTANCE_IDS:
+		records.append(_record_for(str(model_id)))
+	return records
+
+
+static func ensure_role_roster(source: Variant) -> Array:
+	var result := normalize_roster(source)
+	var existing := {}
+	for record in result:
+		existing[str(record.get("model_id", ""))] = true
+	for prototype in role_records():
+		if not existing.has(str(prototype["model_id"])):
+			result.append(prototype)
+	return result
 
 
 static func profile(model_id: String) -> Dictionary:
