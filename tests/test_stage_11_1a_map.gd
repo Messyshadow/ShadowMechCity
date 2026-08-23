@@ -31,7 +31,7 @@ func _run() -> void:
 	for marker in ["robot_roster", "summon_loadout", "summon_slot_level", "summon_changed", "ensure_starter_robot"]:
 		_expect(game.contains(marker), "Game 缺少召唤持久字段: " + marker)
 	_expect(game.contains('"summon":') and game.contains("KEY_C"), "缺少 C 键召唤输入")
-	_expect(migration.contains("CURRENT_VERSION := 15"), "存档版本不得低于 11.1b 的 v15")
+	_expect(ProgressionMigration.CURRENT_VERSION >= 15, "存档版本不得低于 11.1b 的 v15")
 	for marker in ["robot_roster", "summon_loadout", "summon_slot_level"]:
 		_expect(migration.contains(marker), "迁移器缺少字段: " + marker)
 

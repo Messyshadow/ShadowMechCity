@@ -1,7 +1,7 @@
 class_name ProgressionMigration
 extends RefCounted
 
-const CURRENT_VERSION := 15
+const CURRENT_VERSION := 16
 const RobotData = preload("res://scripts/robot_data.gd")
 const LEGACY_SKILL_IDS := [
 	"hp", "power", "speed", "dashcd", "triple", "atk", "crit", "lifesteal",

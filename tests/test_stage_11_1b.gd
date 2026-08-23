@@ -28,7 +28,7 @@ func _run() -> void:
 		_expect(data.contains(model_id), "缺少机器人型号: " + model_id)
 	for marker in ["mobility", "combat_style", "role_records", "ROLE_INSTANCE_IDS"]:
 		_expect(data.contains(marker), "机器人数据缺少差异字段: " + marker)
-	_expect(migration.contains("CURRENT_VERSION := 15"), "存档版本未升级到 15")
+	_expect(ProgressionMigration.CURRENT_VERSION >= 15, "存档版本不得低于 15")
 	_expect(game.contains("ensure_role_roster"), "Game 未补齐定位阵容")
 	_expect(game.contains('"summon_cycle":') and game.contains("KEY_Z"), "缺少 Z 键型号切换")
 	for marker in ["func cycle_standby_model", "summon_cycle", "func select_model_for_qa"]:
@@ -57,7 +57,7 @@ func _run() -> void:
 		"summon_loadout": [RobotData.STARTER_INSTANCE_ID],
 		"inventory": [{"item_id": "legacy_blade"}],
 	})
-	_expect(int(migrated.get("save_version", 0)) == 15, "v14 未迁移至 v15")
+	_expect(int(migrated.get("save_version", 0)) >= 15, "v14 未迁移至 v15+")
 	_expect((migrated.get("robot_roster", []) as Array).size() == 4, "迁移未补齐四定位阵容")
 	_expect((migrated.get("inventory", []) as Array).size() == 1, "迁移破坏旧背包")
 	_expect((migrated.get("summon_loadout", []) as Array) == [RobotData.STARTER_INSTANCE_ID], "迁移不应擅自改变出战型号")

@@ -15,6 +15,7 @@ const QuestRuntime = preload("res://scripts/quest_runtime.gd")
 const StatResolver = preload("res://scripts/stat_resolver.gd")
 const ProgressionMigration = preload("res://scripts/progression_migration.gd")
 const RobotData = preload("res://scripts/robot_data.gd")
+const SummonRules = preload("res://scripts/summon_rules.gd")
 
 var kills: int = 0
 var weapon_index: int = 0      # 跨关卡保留当前武器
@@ -224,6 +225,42 @@ func summon_snapshot() -> Dictionary:
 		"loadout": summon_loadout.duplicate(),
 		"slot_level": summon_slot_level,
 	}
+
+func upgrade_summon_slots() -> bool:
+	var cost := SummonRules.slot_upgrade_cost(summon_slot_level)
+	if cost <= 0 or skill_points < cost:
+		return false
+	skill_points -= cost
+	summon_slot_level = mini(3, summon_slot_level + 1)
+	summon_loadout = RobotData.normalize_loadout(summon_loadout, robot_roster, summon_slot_level)
+	summon_changed.emit(summon_snapshot())
+	skills_changed.emit()
+	progression_changed.emit()
+	return true
+
+func assign_summon_slot(slot_index: int, robot_instance_id: String) -> bool:
+	if slot_index < 0 or slot_index >= summon_slot_level:
+		return false
+	var candidate: Dictionary = {}
+	for record in robot_roster:
+		if str(record.get("robot_instance_id", "")) == robot_instance_id:
+			candidate = record
+			break
+	if candidate.is_empty():
+		return false
+	var candidate_model := str(candidate.get("model_id", ""))
+	for i in range(summon_loadout.size()):
+		if i == slot_index:
+			continue
+		for record in robot_roster:
+			if str(record.get("robot_instance_id", "")) == str(summon_loadout[i]) and str(record.get("model_id", "")) == candidate_model:
+				return false
+	while summon_loadout.size() <= slot_index:
+		summon_loadout.append("")
+	summon_loadout[slot_index] = robot_instance_id
+	summon_loadout = RobotData.normalize_loadout(summon_loadout, robot_roster, summon_slot_level)
+	summon_changed.emit(summon_snapshot())
+	return true
 
 func xp_needed() -> int:
 	return 4 + level * 3
@@ -468,6 +505,7 @@ const ACTIONS := {
 	"retreat":    [KEY_B],
 	"summon":     [KEY_C],
 	"summon_cycle": [KEY_Z],
+	"summon_roster": [KEY_G],
 	"interact":   [KEY_E, KEY_ENTER],
 }
 

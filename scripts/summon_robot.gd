@@ -4,8 +4,10 @@ extends CharacterBody2D
 
 signal health_changed(current: int, maximum: int)
 signal disabled(robot: SummonRobot)
+signal attack_committed(robot: SummonRobot)
 
 const GRAVITY := 1400.0
+const FORMATION_RULES := preload("res://scripts/summon_rules.gd")
 
 var record: Dictionary = {}
 var profile: Dictionary = {}
@@ -22,6 +24,11 @@ var _phase := 0.0
 var _disabled := false
 var _unstuck_timer := 0.0
 var _last_position := Vector2.ZERO
+var formation_index := 0
+var formation_count := 1
+var formation_offset := Vector2(-92, -30)
+var power_scale := 1.0
+var overload_lock := 0.0
 
 
 func setup(robot_record: Dictionary, player: Node2D) -> void:
@@ -31,6 +38,22 @@ func setup(robot_record: Dictionary, player: Node2D) -> void:
 	max_hp = int(profile["max_hp"]) + maxi(0, int(record.get("level", 1)) - 1) * 2
 	hp = max_hp
 	_support_cd = float(profile.get("support_cooldown", 0.0)) * 0.45
+
+
+func configure_formation(index: int, count: int, damage_scale: float, initial_delay: float) -> void:
+	formation_index = index
+	formation_count = clampi(count, 1, 3)
+	power_scale = clampf(damage_scale, 0.5, 1.0)
+	formation_offset = FORMATION_RULES.formation_offset(index, formation_count, str(profile.get("mobility", "ground")))
+	_attack_cd = maxf(_attack_cd, initial_delay)
+
+
+func apply_overload_lock(seconds: float) -> void:
+	overload_lock = maxf(overload_lock, seconds)
+	_attack_cd = maxf(_attack_cd, seconds)
+	_support_cd = maxf(_support_cd, seconds)
+	_attack_glow = 1.0
+	queue_redraw()
 
 
 func _ready() -> void:
@@ -64,6 +87,7 @@ func _physics_process(delta: float) -> void:
 	_invulnerable = maxf(0.0, _invulnerable - delta)
 	_flash = maxf(0.0, _flash - delta * 5.0)
 	_attack_glow = maxf(0.0, _attack_glow - delta * 3.0)
+	overload_lock = maxf(0.0, overload_lock - delta)
 	if global_position.distance_to(owner_player.global_position) > 760.0:
 		_quantum_reposition()
 	_find_target()
@@ -92,7 +116,7 @@ func _tick_ground(delta: float) -> void:
 			desired_speed = signf(target.global_position.x - global_position.x) * float(profile["move_speed"])
 	else:
 		var facing := float(owner_player.get("facing")) if owner_player.get("facing") != null else 1.0
-		var follow_x := owner_player.global_position.x - facing * 112.0
+		var follow_x := owner_player.global_position.x + formation_offset.x * facing
 		desired_speed = clampf((follow_x - global_position.x) * 3.0, -float(profile["move_speed"]), float(profile["move_speed"]))
 	velocity.x = move_toward(velocity.x, desired_speed, 620.0 * delta)
 	move_and_slide()
@@ -104,7 +128,8 @@ func _tick_ground(delta: float) -> void:
 
 
 func _tick_air(delta: float) -> void:
-	var desired := owner_player.global_position + Vector2(-112.0, -112.0 + sin(_phase * 2.3) * 10.0)
+	var facing := float(owner_player.get("facing")) if owner_player.get("facing") != null else 1.0
+	var desired := owner_player.global_position + Vector2(formation_offset.x * facing, formation_offset.y + sin(_phase * 2.3 + formation_index) * 10.0)
 	if is_instance_valid(target) and str(profile.get("combat_style", "")) != "support":
 		var side := signf(global_position.x - target.global_position.x)
 		if side == 0.0:
@@ -144,14 +169,14 @@ func _find_target() -> void:
 
 
 func _attack_target() -> void:
-	if not is_instance_valid(target):
+	if not is_instance_valid(target) or overload_lock > 0.0:
 		return
 	_attack_cd = float(profile["attack_cooldown"])
 	_attack_glow = 1.0
 	var style := str(profile.get("combat_style", "striker"))
 	var direction := signf(target.global_position.x - global_position.x)
 	var knockback := Vector2(direction * (285.0 if style == "vanguard" else 165.0), -62.0)
-	target.take_damage(int(profile["damage"]), knockback)
+	target.take_damage(maxi(1, roundi(float(profile["damage"]) * power_scale)), knockback)
 	if style == "artillery":
 		for candidate in get_tree().get_nodes_in_group("enemy"):
 			if candidate != target and is_instance_valid(candidate) and candidate.has_method("take_damage"):
@@ -171,9 +196,12 @@ func _attack_target() -> void:
 	beam_tween.tween_callback(beam.queue_free)
 	Fx.hit_spark(get_parent(), target.global_position + Vector2(0, -28))
 	Game.shake(1.8 if style == "artillery" else 1.2)
+	attack_committed.emit(self)
 
 
 func _support_pulse() -> void:
+	if overload_lock > 0.0:
+		return
 	_support_cd = float(profile.get("support_cooldown", 5.0))
 	var healed := false
 	if owner_player.has_method("max_hp") and int(owner_player.get("health")) < int(owner_player.call("max_hp")):
@@ -186,6 +214,7 @@ func _support_pulse() -> void:
 		healed = true
 	if healed:
 		_attack_glow = 1.0
+		attack_committed.emit(self)
 
 
 func force_support_pulse_for_qa() -> void:
@@ -194,7 +223,7 @@ func force_support_pulse_for_qa() -> void:
 
 
 func _quantum_reposition() -> void:
-	var offset := Vector2(-112.0, -112.0) if _is_air() else Vector2(-96.0, -30.0)
+	var offset := formation_offset
 	global_position = owner_player.global_position + offset
 	velocity = Vector2.ZERO
 	_unstuck_timer = 0.0

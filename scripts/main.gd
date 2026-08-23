@@ -1564,6 +1564,13 @@ func _auto_screenshot() -> void:
 		map_panel.open = true; map_panel.queue_redraw()
 	if _qa_option("SHOT_MAP_FULL") == "1" and is_instance_valid(map_panel):
 		map_panel.call("force_open_for_qa", true)
+	var shot_roster := _qa_option("SHOT_SUMMON_ROSTER")
+	if shot_roster != "" and is_instance_valid(summon_controller):
+		var roster_models: Array = ["scrap_hound_mk1", "sky_rail_drone_mk1", "lumen_wisp_mk1"]
+		var requested_models := _qa_option("SHOT_SUMMON_TEAM")
+		if requested_models != "":
+			roster_models = Array(requested_models.split(","))
+		summon_controller.roster_panel.call("open_for_qa", clampi(shot_roster.to_int(), 1, 3), roster_models)
 	var shot_summon := _qa_option("SHOT_SUMMON")
 	if shot_summon != "" and is_instance_valid(summon_controller):
 		# 视觉验收聚焦召唤物，不让房间敌群先把玩家击倒导致构图失效。
@@ -1588,7 +1595,12 @@ func _auto_screenshot() -> void:
 		var shot_summon_model := _qa_option("SHOT_SUMMON_MODEL")
 		if shot_summon_model != "":
 			summon_controller.select_model_for_qa(shot_summon_model)
+		var shot_summon_team := _qa_option("SHOT_SUMMON_TEAM")
+		if shot_summon_team != "":
+			summon_controller.configure_team_for_qa(clampi(shot_summon_team.split(",").size(), 1, 3), Array(shot_summon_team.split(",")))
 		summon_controller.deploy_for_qa(shot_summon)
+		if _qa_option("SHOT_SUMMON_OVERLOAD") == "1":
+			summon_controller.force_overload_for_qa()
 	if _qa_option("SHOT_QUEST_LOG") == "1" or _qa_option("SHOT_QUEST_TRACKER") == "1" or _qa_option("SHOT_SIDE_QUESTS") == "1" or _qa_option("SHOT_COLLECTIBLES") == "1":
 		_seed_quest_progress_for_qa()
 		Game.refresh_quests()
