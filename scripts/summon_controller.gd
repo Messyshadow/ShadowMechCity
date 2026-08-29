@@ -5,6 +5,7 @@ extends CanvasLayer
 const ROBOT_SCRIPT := preload("res://scripts/summon_robot.gd")
 const RULES := preload("res://scripts/summon_rules.gd")
 const ROSTER_PANEL_SCRIPT := preload("res://scripts/summon_roster_panel.gd")
+const SUMMON_FX := preload("res://scripts/summon_fx.gd")
 
 var world: Node2D
 var player: Node2D
@@ -16,6 +17,7 @@ var rebuild_remaining := 0.0
 var overload_value := 0.0
 var overload_lock_remaining := 0.0
 var _hud_refresh_cooldown := 0.0
+var peak_fx_count := 0
 var panel: PanelContainer
 var roster_panel: CanvasLayer
 var title_label: Label
@@ -39,6 +41,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if get_tree().paused:
 		return
+	peak_fx_count = maxi(peak_fx_count, SUMMON_FX.active_fx_count(get_tree()))
 	var changed := false
 	for instance_id in rebuild_by_id.keys():
 		var previous := float(rebuild_by_id[instance_id])
@@ -124,6 +127,7 @@ func _deploy_loadout() -> void:
 		robot.configure_formation(index, ready_records.size(), float(team_profile["power_scale"]), float(index) * 0.24)
 		robot.global_position = player.global_position + robot.formation_offset
 		world.add_child(robot)
+		SummonFx.projection(world, robot.global_position + Vector2(0, -18), robot.profile.get("accent", Color("53e6ff")), index)
 		robot.health_changed.connect(_on_robot_health_changed.bind(robot))
 		robot.disabled.connect(_on_robot_disabled)
 		robot.attack_committed.connect(_on_robot_attack_committed)
@@ -196,6 +200,38 @@ func force_overload_for_qa() -> void:
 	overload_value = 96.0
 	if not active_robots.is_empty():
 		_on_robot_attack_committed(active_robots[0])
+
+
+func show_fx_for_qa(kind: String) -> void:
+	_prune_active()
+	match kind:
+		"deploy":
+			for index in range(active_robots.size()):
+				var robot := active_robots[index]
+				SummonFx.projection(world, robot.global_position + Vector2(0, -18), robot.profile.get("accent", Color("53e6ff")), index)
+		"warning":
+			for robot in active_robots:
+				robot.force_warning_for_qa()
+		"recall":
+			toggle_summon()
+		"disabled":
+			if is_instance_valid(active_robot):
+				active_robot.take_damage(active_robot.hp, active_robot.global_position + Vector2(100, 0))
+		_:
+			push_error("SHOT_SUMMON_FX unknown state: " + kind)
+	peak_fx_count = maxi(peak_fx_count, SUMMON_FX.active_fx_count(get_tree()))
+
+
+func performance_snapshot() -> Dictionary:
+	_prune_active()
+	return {
+		"active_robots": active_robots.size(),
+		"active_fx": SUMMON_FX.active_fx_count(get_tree()),
+		"peak_fx": peak_fx_count,
+		"fx_budget": SUMMON_FX.MAX_ACTIVE_FX,
+		"overload": overload_value,
+		"fps": Engine.get_frames_per_second(),
+	}
 
 
 func cycle_standby_model() -> void:

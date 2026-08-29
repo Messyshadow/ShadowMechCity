@@ -8,6 +8,7 @@ signal attack_committed(robot: SummonRobot)
 
 const GRAVITY := 1400.0
 const FORMATION_RULES := preload("res://scripts/summon_rules.gd")
+const SUMMON_FX := preload("res://scripts/summon_fx.gd")
 
 var record: Dictionary = {}
 var profile: Dictionary = {}
@@ -29,6 +30,9 @@ var formation_count := 1
 var formation_offset := Vector2(-92, -30)
 var power_scale := 1.0
 var overload_lock := 0.0
+var _windup_remaining := 0.0
+var _pending_target: Node2D
+var _pending_action := ""
 
 
 func setup(robot_record: Dictionary, player: Node2D) -> void:
@@ -88,6 +92,14 @@ func _physics_process(delta: float) -> void:
 	_flash = maxf(0.0, _flash - delta * 5.0)
 	_attack_glow = maxf(0.0, _attack_glow - delta * 3.0)
 	overload_lock = maxf(0.0, overload_lock - delta)
+	var had_windup := _windup_remaining > 0.0
+	_windup_remaining = maxf(0.0, _windup_remaining - delta)
+	if had_windup and _windup_remaining <= 0.0:
+		if _pending_action == "attack":
+			_commit_attack()
+		elif _pending_action == "support":
+			_commit_support()
+		_pending_action = ""
 	if global_position.distance_to(owner_player.global_position) > 760.0:
 		_quantum_reposition()
 	_find_target()
@@ -146,13 +158,13 @@ func _tick_air(delta: float) -> void:
 
 
 func _find_target() -> void:
-	if is_instance_valid(target) and not bool(target.get("dead")):
+	if is_instance_valid(target) and not _is_target_dead(target):
 		if target.global_position.distance_to(owner_player.global_position) < 520.0:
 			return
 	target = null
 	var best := 500.0
 	for candidate in get_tree().get_nodes_in_group("enemy"):
-		if not is_instance_valid(candidate) or bool(candidate.get("dead")) or not candidate.has_method("take_damage"):
+		if not is_instance_valid(candidate) or _is_target_dead(candidate) or not candidate.has_method("take_damage"):
 			continue
 		var enemy := candidate as Node2D
 		if not is_instance_valid(enemy):
@@ -169,40 +181,75 @@ func _find_target() -> void:
 
 
 func _attack_target() -> void:
-	if not is_instance_valid(target) or overload_lock > 0.0:
+	_begin_attack()
+
+
+func _begin_attack() -> void:
+	if not is_instance_valid(target) or overload_lock > 0.0 or _pending_action != "":
 		return
-	_attack_cd = float(profile["attack_cooldown"])
+	var style := str(profile.get("combat_style", "striker"))
+	_windup_remaining = SUMMON_FX.warning_duration(style)
+	_attack_cd = float(profile["attack_cooldown"]) + _windup_remaining
+	_pending_target = target
+	_pending_action = "attack"
+	var accent: Color = profile.get("accent", Color("53e6ff"))
+	SummonFx.skill_warning(get_parent(), global_position + Vector2(0, -28), target.global_position + Vector2(0, -28), style, accent)
+	_attack_glow = 0.55
+
+
+func _commit_attack() -> void:
+	var attack_target := _pending_target
+	_pending_target = null
+	if not is_instance_valid(attack_target) or _is_target_dead(attack_target):
+		return
 	_attack_glow = 1.0
 	var style := str(profile.get("combat_style", "striker"))
-	var direction := signf(target.global_position.x - global_position.x)
+	var direction := signf(attack_target.global_position.x - global_position.x)
 	var knockback := Vector2(direction * (285.0 if style == "vanguard" else 165.0), -62.0)
-	target.take_damage(maxi(1, roundi(float(profile["damage"]) * power_scale)), knockback)
+	attack_target.take_damage(maxi(1, roundi(float(profile["damage"]) * power_scale)), knockback)
 	if style == "artillery":
 		for candidate in get_tree().get_nodes_in_group("enemy"):
-			if candidate != target and is_instance_valid(candidate) and candidate.has_method("take_damage"):
+			if candidate != attack_target and is_instance_valid(candidate) and candidate.has_method("take_damage"):
 				var splash_target := candidate as Node2D
-				if is_instance_valid(splash_target) and splash_target.global_position.distance_to(target.global_position) <= 82.0:
+				if is_instance_valid(splash_target) and splash_target.global_position.distance_to(attack_target.global_position) <= 82.0:
 					candidate.take_damage(1, Vector2(direction * 90.0, -35.0))
 	var beam := Line2D.new()
 	beam.width = 9.0 if style == "artillery" else (5.0 if style == "support" else 7.0)
 	var accent: Color = profile.get("accent", Color("53e6ff"))
 	beam.default_color = Color(accent.r, accent.g, accent.b, 0.96)
-	beam.points = PackedVector2Array([Vector2(24.0 * direction, -38.0), to_local(target.global_position + Vector2(0, -28))])
+	beam.points = PackedVector2Array([Vector2(24.0 * direction, -38.0), to_local(attack_target.global_position + Vector2(0, -28))])
 	beam.z_index = 12
 	add_child(beam)
 	var beam_tween := beam.create_tween()
 	beam_tween.tween_property(beam, "width", 1.0, 0.16)
 	beam_tween.parallel().tween_property(beam, "modulate:a", 0.0, 0.20)
 	beam_tween.tween_callback(beam.queue_free)
-	Fx.hit_spark(get_parent(), target.global_position + Vector2(0, -28))
+	Fx.hit_spark(get_parent(), attack_target.global_position + Vector2(0, -28))
 	Game.shake(1.8 if style == "artillery" else 1.2)
 	attack_committed.emit(self)
 
 
+func _is_target_dead(candidate: Node) -> bool:
+	if not is_instance_valid(candidate):
+		return true
+	var dead_value = candidate.get("dead")
+	if dead_value != null:
+		return dead_value == true
+	var state_value = candidate.get("state")
+	return state_value != null and str(state_value) == "dead"
+
+
 func _support_pulse() -> void:
-	if overload_lock > 0.0:
+	if overload_lock > 0.0 or _pending_action != "":
 		return
-	_support_cd = float(profile.get("support_cooldown", 5.0))
+	_windup_remaining = SUMMON_FX.warning_duration("support")
+	_support_cd = float(profile.get("support_cooldown", 5.0)) + _windup_remaining
+	_pending_action = "support"
+	var accent: Color = profile.get("accent", Color("75ffb5"))
+	SummonFx.skill_warning(get_parent(), global_position + Vector2(0, -30), owner_player.global_position + Vector2(0, -30), "support", accent)
+
+
+func _commit_support() -> void:
 	var healed := false
 	if owner_player.has_method("max_hp") and int(owner_player.get("health")) < int(owner_player.call("max_hp")):
 		owner_player.call("heal", 1)
@@ -219,7 +266,21 @@ func _support_pulse() -> void:
 
 func force_support_pulse_for_qa() -> void:
 	_support_cd = 0.0
-	_support_pulse()
+	var accent: Color = profile.get("accent", Color("75ffb5"))
+	SummonFx.skill_warning(get_parent(), global_position + Vector2(0, -30), owner_player.global_position + Vector2(0, -30), "support", accent)
+	_commit_support()
+
+
+func force_warning_for_qa() -> void:
+	var style := str(profile.get("combat_style", "striker"))
+	var accent: Color = profile.get("accent", Color("53e6ff"))
+	var warning_target := owner_player.global_position + Vector2(190.0, -24.0)
+	if is_instance_valid(target):
+		warning_target = target.global_position + Vector2(0, -28)
+	if style == "support":
+		warning_target = owner_player.global_position + Vector2(0, -30)
+	SummonFx.skill_warning(get_parent(), global_position + Vector2(0, -28), warning_target, style, accent)
+	_attack_glow = 0.65
 
 
 func _quantum_reposition() -> void:
@@ -249,6 +310,7 @@ func recall() -> void:
 		return
 	_disabled = true
 	collision_layer = 0
+	SummonFx.recall(get_parent(), global_position + Vector2(0, -20), profile.get("accent", Color("53e6ff")))
 	var tween := create_tween().set_parallel(true)
 	tween.tween_property(self, "scale", Vector2(0.12, 0.12), 0.20).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
 	tween.tween_property(self, "modulate:a", 0.0, 0.16)
@@ -259,6 +321,7 @@ func _disable() -> void:
 	_disabled = true
 	collision_layer = 0
 	Fx.death_burst(get_parent(), global_position + Vector2(0, -24), Color(0.25, 0.9, 1.0))
+	SummonFx.disabled_burst(get_parent(), global_position + Vector2(0, -24), profile.get("accent", Color("53e6ff")))
 	disabled.emit(self)
 	queue_free()
 

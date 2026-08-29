@@ -1480,6 +1480,9 @@ func _auto_screenshot() -> void:
 		for ability_id in Game.ABILITY_NAME:
 			Game.grant_ability(str(ability_id))
 	var rid := _qa_option("SHOT_ROOM")
+	if _qa_option("SHOT_SUMMON_BOSS") == "1":
+		Game.items.erase("boss_mine_boss")
+		rid = "mine_boss"
 	var region_atmosphere := _qa_option("SHOT_REGION_ATMOSPHERE")
 	var region_audio_shot := _qa_option("SHOT_REGION_AUDIO")
 	if region_atmosphere == "" and region_audio_shot != "":
@@ -1571,7 +1574,11 @@ func _auto_screenshot() -> void:
 		if requested_models != "":
 			roster_models = Array(requested_models.split(","))
 		summon_controller.roster_panel.call("open_for_qa", clampi(shot_roster.to_int(), 1, 3), roster_models)
+	var shot_summon_fx := _qa_option("SHOT_SUMMON_FX")
+	var shot_summon_stress := _qa_option("SHOT_SUMMON_STRESS")
 	var shot_summon := _qa_option("SHOT_SUMMON")
+	if shot_summon == "" and (shot_summon_fx != "" or shot_summon_stress == "1" or _qa_option("SHOT_SUMMON_BOSS") == "1"):
+		shot_summon = "deployed"
 	if shot_summon != "" and is_instance_valid(summon_controller):
 		# 视觉验收聚焦召唤物，不让房间敌群先把玩家击倒导致构图失效。
 		player.iframes = 99.0
@@ -1579,6 +1586,10 @@ func _auto_screenshot() -> void:
 			for existing_enemy in get_tree().get_nodes_in_group("enemy"):
 				if is_instance_valid(existing_enemy):
 					existing_enemy.queue_free()
+			await get_tree().process_frame
+			for room_banner in get_tree().get_nodes_in_group("room_banner"):
+				if is_instance_valid(room_banner):
+					room_banner.queue_free()
 			await get_tree().process_frame
 			player.global_position = Vector2(400, 500)
 			_freeze_13d1_capture_player()
@@ -1595,12 +1606,30 @@ func _auto_screenshot() -> void:
 		var shot_summon_model := _qa_option("SHOT_SUMMON_MODEL")
 		if shot_summon_model != "":
 			summon_controller.select_model_for_qa(shot_summon_model)
+		if _qa_option("SHOT_SUMMON_BOSS") == "1" and is_instance_valid(_boss):
+			player.global_position = _boss.global_position + Vector2(-330, 0)
+			camera.global_position = (_boss.global_position + player.global_position) * 0.5 + Vector2(0, -90)
 		var shot_summon_team := _qa_option("SHOT_SUMMON_TEAM")
+		if shot_summon_team == "" and (_qa_option("SHOT_SUMMON_BOSS") == "1" or shot_summon_stress == "1"):
+			shot_summon_team = "scrap_hound_mk1,sky_rail_drone_mk1,lumen_wisp_mk1"
 		if shot_summon_team != "":
 			summon_controller.configure_team_for_qa(clampi(shot_summon_team.split(",").size(), 1, 3), Array(shot_summon_team.split(",")))
 		summon_controller.deploy_for_qa(shot_summon)
 		if _qa_option("SHOT_SUMMON_OVERLOAD") == "1":
 			summon_controller.force_overload_for_qa()
+		if shot_summon_fx != "":
+			summon_controller.show_fx_for_qa(shot_summon_fx)
+		if shot_summon_stress == "1":
+			for stress_frame in range(180):
+				if stress_frame % 36 == 0:
+					summon_controller.show_fx_for_qa("warning")
+				await get_tree().physics_frame
+			# 压力计数结束后补一次预警，确保验收截图能同时看到 Boss 与三种职责读条。
+			summon_controller.show_fx_for_qa("warning")
+			var stress_snapshot: Dictionary = summon_controller.performance_snapshot()
+			print("SUMMON_STRESS active=%d fx=%d peak=%d budget=%d fps=%d" % [stress_snapshot["active_robots"], stress_snapshot["active_fx"], stress_snapshot["peak_fx"], stress_snapshot["fx_budget"], stress_snapshot["fps"]])
+			if int(stress_snapshot["active_robots"]) > 3 or int(stress_snapshot["peak_fx"]) > int(stress_snapshot["fx_budget"]):
+				push_error("SUMMON_STRESS exceeded runtime budget: " + str(stress_snapshot))
 	if _qa_option("SHOT_QUEST_LOG") == "1" or _qa_option("SHOT_QUEST_TRACKER") == "1" or _qa_option("SHOT_SIDE_QUESTS") == "1" or _qa_option("SHOT_COLLECTIBLES") == "1":
 		_seed_quest_progress_for_qa()
 		Game.refresh_quests()
