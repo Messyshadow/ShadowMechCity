@@ -25,7 +25,7 @@ func _run() -> void:
 	var panel_source := _source("res://scripts/summon_roster_panel.gd")
 	var main_source := _source("res://scripts/main.gd")
 
-	_expect(migration_source.contains("CURRENT_VERSION := 16"), "存档版本未升级到 16")
+	_expect(ProgressionMigration.CURRENT_VERSION >= 16, "存档版本不得低于 16")
 	_expect(game_source.contains("func upgrade_summon_slots"), "Game 缺少技能点解锁召唤槽")
 	_expect(game_source.contains('"summon_roster":') and game_source.contains("KEY_G"), "缺少 G 键阵容入口")
 	for marker in ["slot_upgrade_cost", "unique_loadout", "formation_offset", "overload_profile"]:
@@ -57,7 +57,7 @@ func _run() -> void:
 		"robot_roster": RobotData.role_records(),
 		"inventory": [{"item_id": "legacy_blade"}],
 	})
-	_expect(int(migrated.get("save_version", 0)) == 16, "v15 未迁移至 v16")
+	_expect(int(migrated.get("save_version", 0)) >= 16, "v15 未迁移至兼容版本")
 	_expect((migrated.get("summon_loadout", []) as Array).size() == 2, "迁移应移除重复型号")
 	_expect(int(migrated.get("skill_points", 0)) == 7, "迁移不得消耗旧技能点")
 	_expect((migrated.get("inventory", []) as Array).size() == 1, "迁移破坏旧背包")

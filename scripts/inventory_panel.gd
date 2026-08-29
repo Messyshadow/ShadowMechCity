@@ -3,6 +3,7 @@ extends CanvasLayer
 
 const PANEL_SIZE := Vector2(1200, 650)
 const SORT_MODES := ["稀有度", "等级", "名称"]
+const EquipmentPatchData = preload("res://scripts/equipment_patch_data.gd")
 
 var open := false
 var current_category := "防具"
@@ -378,6 +379,22 @@ func _refresh_detail() -> void:
 		lines.append("%s  %s   [color=%s]%s[/color]" % [row["label"], value_text, tone_color, delta_text])
 	if not has_stats:
 		lines.append("[color=#718596]暂无战斗属性[/color]")
+	if EquipmentPatchData.is_equipment(item) and item.has("item_instance_id"):
+		var brand: Dictionary = EquipmentPatchData.BRANDS.get(str(item.get("brand_id", "")), {})
+		var quote: Dictionary = EquipmentPatchData.upgrade_quote(item)
+		var patch_preview: Dictionary = EquipmentPatchData.attribute_preview(item)
+		var quality_name := str(EquipmentPatchData.QUALITY_NAMES.get(str(item.get("quality", "standard")), "标准"))
+		lines.append("\n[color=#53d9ff]补丁报价预览 · SATELLITE PATCH[/color]")
+		lines.append("%s  |  %s品质  |  补丁 Lv.%d → Lv.%d" % [
+			brand.get("name", "未注册厂商"), quality_name,
+			quote.get("from_level", 0), quote.get("to_level", 1)])
+		lines.append("核心同步补丁：%d 金币（11.2a 仅预览）" % int(quote.get("cost", 0)))
+		var gains: Array[String] = []
+		for stat in EquipmentPatchData.STAT_KEYS:
+			var delta := float(patch_preview["after"].get(stat, 0.0)) - float(patch_preview["before"].get(stat, 0.0))
+			if not is_zero_approx(delta):
+				gains.append("%s %+0.2f" % [ItemsData.STAT_NAME.get(stat, stat), delta])
+		lines.append("预计增益：" + (" / ".join(gains) if not gains.is_empty() else "该装备暂无可同步词条"))
 	lines.append("\n[color=#ffd36e]说明[/color]\n%s" % item.get("description", "可装备并强化的机械城遗物。"))
 	detail_text.text = "\n".join(lines)
 	if selected_kind == "weapon":

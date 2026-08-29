@@ -39,7 +39,7 @@ func _run() -> void:
 		_expect(fx.warning_shape("striker") != fx.warning_shape("artillery"), "近战与炮击预警轮廓不得相同")
 		_expect(fx.warning_shape("vanguard") != fx.warning_shape("support"), "盾卫与支援预警轮廓不得相同")
 
-	_expect(ProgressionMigration.CURRENT_VERSION == 16, "11.1d 不应新增持久字段或重复升级存档")
+	_expect(ProgressionMigration.CURRENT_VERSION >= 16, "后续阶段不得降低 11.1d 的 v16 存档基线")
 
 	if failures.is_empty():
 		print("PASS stage 11.1d summon visual and pressure contracts")

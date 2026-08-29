@@ -1681,6 +1681,8 @@ func _auto_screenshot() -> void:
 		skill_panel.call("open_for_qa", skill_page, skill_family, skill_node)
 		progression_ui_opened = true
 	var inventory_category := _qa_option("SHOT_INVENTORY_CATEGORY")
+	if _qa_option("SHOT_EQUIPMENT_PATCH") == "1":
+		inventory_category = "防具"
 	if OS.get_environment("SHOT_INV") == "1" and inventory_category == "":
 		inventory_category = "防具"
 	if inventory_category != "" and is_instance_valid(inv_panel):
@@ -1924,6 +1926,9 @@ func _seed_inventory_for_qa() -> void:
 		{"name":"史诗·天龙指环", "slot":"ring", "rarity":2, "lv":2, "atk":2.0, "def":0.0, "hp":0.0, "crit":0.12, "ls":1.0, "spd":0.0, "source":"虚空天龙机甲"},
 		{"name":"稀有·暗翼护符", "slot":"amulet", "rarity":1, "lv":1, "atk":0.0, "def":0.0, "hp":1.0, "crit":0.06, "ls":1.0, "spd":0.03, "source":"上升气流密室"},
 	]
+	var migrated_equipment := EquipmentPatchData.migrate_equipment(Game.inventory, Game.equipped)
+	Game.inventory = migrated_equipment["inventory"]
+	Game.equipped = migrated_equipment["equipped"]
 	for weapon_id in ["sword", "hammer", "cannon", "dual_blades", "spear", "crossbow"]:
 		if not Game.unlocked_weapons.has(weapon_id):
 			Game.unlocked_weapons.append(weapon_id)

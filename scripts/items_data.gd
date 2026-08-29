@@ -2,6 +2,8 @@ class_name ItemsData
 extends RefCounted
 ## 装备数据: 槽位 / 稀有度 / 词条 / 随机生成 / 强化
 
+const EquipmentPatchData = preload("res://scripts/equipment_patch_data.gd")
+
 # 槽位 -> 中文名 + 主词条
 const SLOTS := {
 	"helmet": {"name": "头盔", "stats": ["hp", "def"]},
@@ -92,7 +94,7 @@ static func generate(rarity: int = -1) -> Dictionary:
 static func value(item: Dictionary, stat: String) -> float:
 	if item == null or not item.has(stat):
 		return 0.0
-	return float(item[stat]) * (1.0 + 0.12 * int(item.get("lv", 0)))
+	return float(item[stat]) * (1.0 + 0.12 * int(item.get("patch_level", item.get("lv", 0))))
 
 ## 将旧装备词条映射到 13A 统一属性键；不改变物品存档结构。
 static func equipment_modifiers(equipped: Dictionary) -> Dictionary:
@@ -116,4 +118,4 @@ static func equipment_modifiers(equipped: Dictionary) -> Dictionary:
 
 ## 强化花费
 static func enhance_cost(item: Dictionary) -> int:
-	return (int(item["rarity"]) + 1) * 25 * (int(item.get("lv", 0)) + 1)
+	return int(EquipmentPatchData.upgrade_quote(item).get("cost", 0))

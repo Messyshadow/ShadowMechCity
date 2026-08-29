@@ -16,6 +16,7 @@ const StatResolver = preload("res://scripts/stat_resolver.gd")
 const ProgressionMigration = preload("res://scripts/progression_migration.gd")
 const RobotData = preload("res://scripts/robot_data.gd")
 const SummonRules = preload("res://scripts/summon_rules.gd")
+const EquipmentPatchData = preload("res://scripts/equipment_patch_data.gd")
 
 var kills: int = 0
 var weapon_index: int = 0      # 跨关卡保留当前武器
@@ -312,7 +313,8 @@ var inventory: Array = []        # 未装备物品(item 字典)
 var equipped: Dictionary = {}    # slot -> item
 
 func add_item(item: Dictionary) -> void:
-	inventory.append(item)
+	var seed := "runtime:%d:%d" % [int(Time.get_unix_time_from_system()), Time.get_ticks_usec()]
+	inventory.append(EquipmentPatchData.ensure_item(item, seed))
 	gear_changed.emit()
 
 func equip_item(idx: int) -> void:
@@ -337,7 +339,9 @@ func enhance(item: Dictionary) -> bool:
 	if coins < cost:
 		return false
 	coins -= cost
-	item["lv"] = int(item.get("lv", 0)) + 1
+	item["patch_level"] = int(item.get("patch_level", item.get("lv", 0))) + 1
+	# `lv` 仅作为旧 UI/存档兼容镜像；属性与报价以 patch_level 为权威。
+	item["lv"] = int(item["patch_level"])
 	progression_changed.emit()
 	gear_changed.emit()
 	return true
