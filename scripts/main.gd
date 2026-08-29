@@ -21,6 +21,8 @@ const BOSS_RETREAT_CONSOLE := preload("res://scripts/boss_retreat_console.gd")
 const SKILL_INTERACTABLE_SCRIPT := preload("res://scripts/skill_interactable.gd")
 const REGION_AUDIO_SCRIPT := preload("res://scripts/region_audio_controller.gd")
 const SUMMON_CONTROLLER_SCRIPT := preload("res://scripts/summon_controller.gd")
+const EQUIPMENT_UPGRADE_TERMINAL := preload("res://scripts/equipment_upgrade_terminal.gd")
+const EQUIPMENT_UPGRADE_PANEL := preload("res://scripts/equipment_upgrade_panel.gd")
 
 const ENEMY_DEFS := {
 	"mushroom": {"frames": 8, "fps": 6.7, "scale": 0.55, "hp": 4, "speed": 58.0, "size": Vector2(54, 50), "tint": Color(1, 1, 1), "behavior": "walker", "dmg": 1, "kbr": 0.0},
@@ -88,6 +90,8 @@ var _boss: Node = null
 var _boss_entry_room := ""
 var skill_panel: CanvasLayer
 var inv_panel: CanvasLayer
+var equipment_upgrade_panel: CanvasLayer
+var _equipment_terminal: Node2D
 var map_panel: Control
 var _bounds: Array = [0, 0, 1400, 560]   # 当前房间边界(用于攀墙越界保护)
 var _rune_total := 0                      # 当前房间符文板总数
@@ -119,6 +123,7 @@ func _ready() -> void:
 	_setup_hud()
 	_setup_skill_panel()
 	_setup_map_panel()
+	_setup_equipment_upgrade_panel()
 	_setup_summon_controller()
 	_setup_quest_ui()
 	_setup_menus()
@@ -348,6 +353,7 @@ func _enter_room(id: String, from_room: String) -> void:
 	_locked_doors = []
 	_interactive_portals = []
 	_npc_actors = {}
+	_equipment_terminal = null
 	_rune_total = 0
 	_rune_lit = 0
 	for c in world.get_children():
@@ -423,6 +429,8 @@ func _enter_room(id: String, from_room: String) -> void:
 			Pickup.spawn(world, Vector2(sc[0], sc[1]), sc[2], 1, false, sc[3])
 	for npc in room.get("npcs", []):
 		_spawn_npc(npc)
+	if id == "hub":
+		_spawn_equipment_upgrade_terminal()
 
 	# 冲刺门 [x, top, w, h]  (冲刺相位穿越)
 	for g in room.get("gates", []):
@@ -498,6 +506,18 @@ func _spawn_npc(entry: Array) -> void:
 	actor.setup(id)
 	actor.interaction_requested.connect(_start_dialogue)
 	_npc_actors[id] = actor
+
+func _spawn_equipment_upgrade_terminal() -> void:
+	_equipment_terminal = EQUIPMENT_UPGRADE_TERMINAL.new()
+	_equipment_terminal.position = Vector2(704, 560)
+	world.add_child(_equipment_terminal)
+	_equipment_terminal.setup(player)
+	_equipment_terminal.interaction_requested.connect(_open_equipment_upgrade_terminal)
+
+func _open_equipment_upgrade_terminal() -> void:
+	if Game.menu_open > 0 or not is_instance_valid(equipment_upgrade_panel):
+		return
+	equipment_upgrade_panel.open_panel()
 
 func _start_dialogue(npc_id: String, actor: Node2D, forced_node := "") -> void:
 	if _active_npc != "" or Game.menu_open > 0 or not is_instance_valid(actor):
@@ -1422,6 +1442,13 @@ func _setup_map_panel() -> void:
 	inv_panel.set_script(load("res://scripts/inventory_panel.gd"))
 	add_child(inv_panel)
 
+func _setup_equipment_upgrade_panel() -> void:
+	equipment_upgrade_panel = EQUIPMENT_UPGRADE_PANEL.new()
+	add_child(equipment_upgrade_panel)
+	equipment_upgrade_panel.open_changed.connect(func(value: bool):
+		if is_instance_valid(player):
+			player.set_input_locked(value))
+
 func _setup_summon_controller() -> void:
 	summon_controller = SUMMON_CONTROLLER_SCRIPT.new()
 	summon_controller.name = "SummonController"
@@ -1480,6 +1507,8 @@ func _auto_screenshot() -> void:
 		for ability_id in Game.ABILITY_NAME:
 			Game.grant_ability(str(ability_id))
 	var rid := _qa_option("SHOT_ROOM")
+	if _qa_option("SHOT_EQUIPMENT_TERMINAL_WORLD") == "1" or _qa_option("SHOT_EQUIPMENT_TERMINAL") != "":
+		rid = "hub"
 	if _qa_option("SHOT_SUMMON_BOSS") == "1":
 		Game.items.erase("boss_mine_boss")
 		rid = "mine_boss"
@@ -1501,6 +1530,17 @@ func _auto_screenshot() -> void:
 		_enter_room(rid, "")
 	elif rid != "":
 		push_error("SHOT_ROOM not found: " + rid)
+	if _qa_option("SHOT_EQUIPMENT_TERMINAL_WORLD") == "1":
+		await get_tree().process_frame
+		if not is_instance_valid(_equipment_terminal):
+			push_error("SHOT_EQUIPMENT_TERMINAL_WORLD terminal not found")
+		else:
+			player.global_position = _equipment_terminal.global_position + Vector2(-120, 0)
+			player.velocity = Vector2.ZERO
+			player.process_mode = Node.PROCESS_MODE_DISABLED
+			_equipment_terminal.force_prompt_visible(true)
+			camera.target = null
+			camera.global_position = _equipment_terminal.global_position + Vector2(0, -130)
 	if region_audio_shot != "" and is_instance_valid(region_audio):
 		var audio_intensity := clampi(_qa_option("SHOT_AUDIO_INTENSITY").to_int(), 0, 2)
 		region_audio.set_intensity(audio_intensity)
@@ -1670,6 +1710,11 @@ func _auto_screenshot() -> void:
 		if z > 0.0:
 			camera.zoom = Vector2(z, z)
 	var progression_ui_opened := false
+	var terminal_panel_state := _qa_option("SHOT_EQUIPMENT_TERMINAL")
+	if terminal_panel_state != "" and is_instance_valid(equipment_upgrade_panel):
+		_seed_inventory_for_qa()
+		equipment_upgrade_panel.open_for_qa(terminal_panel_state)
+		progression_ui_opened = true
 	if _qa_option("SHOT_SKILL_TREE") == "1" and is_instance_valid(skill_panel):
 		_seed_progression_ui_for_qa()
 		var skill_page := _qa_option("SHOT_SKILL_PAGE")

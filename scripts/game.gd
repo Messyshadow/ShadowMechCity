@@ -346,6 +346,53 @@ func enhance(item: Dictionary) -> bool:
 	gear_changed.emit()
 	return true
 
+func find_equipment_by_id(item_instance_id: String) -> Dictionary:
+	## 装备升级、换装与后续订阅改造统一使用稳定实例 ID，禁止依赖背包下标。
+	if item_instance_id == "":
+		return {}
+	for item in inventory:
+		if item is Dictionary and str(item.get("item_instance_id", "")) == item_instance_id:
+			return item
+	for slot in equipped:
+		var item = equipped[slot]
+		if item is Dictionary and str(item.get("item_instance_id", "")) == item_instance_id:
+			return item
+	return {}
+
+func apply_equipment_patch(item_instance_id: String, patch_id: String = "core_sync") -> Dictionary:
+	## 11.2b 原子交易：先验证身份与余额，再一次性扣款、写入补丁历史并存档。
+	var item := find_equipment_by_id(item_instance_id)
+	if item.is_empty():
+		return {"ok": false, "reason": "not_found"}
+	var quote := EquipmentPatchData.upgrade_quote(item, patch_id)
+	var cost := int(quote.get("cost", 0))
+	if coins < cost:
+		return {"ok": false, "reason": "insufficient_coins", "quote": quote, "coins": coins}
+	var preview := EquipmentPatchData.attribute_preview(item, patch_id)
+	coins -= cost
+	item["patch_level"] = int(quote.get("to_level", int(item.get("patch_level", 0)) + 1))
+	# `lv` 是旧 UI/存档兼容镜像；patch_level 始终为升级权威值。
+	item["lv"] = int(item["patch_level"])
+	var history: Array = item.get("patches", [])
+	history.append({
+		"patch_id": patch_id,
+		"level": int(item["patch_level"]),
+		"installed_at": int(Time.get_unix_time_from_system()),
+	})
+	item["patches"] = history
+	progression_changed.emit()
+	gear_changed.emit()
+	save_game()
+	return {
+		"ok": true,
+		"reason": "installed",
+		"item_instance_id": item_instance_id,
+		"quote": quote,
+		"before": preview.get("before", {}),
+		"after": preview.get("after", {}),
+		"coins": coins,
+	}
+
 func equip_bonus(stat: String) -> float:
 	var total := 0.0
 	for slot in equipped:
