@@ -1,11 +1,13 @@
 extends Node
 const World = preload("res://remaster/world_data.gd")
+const SaveIO = preload("res://remaster/save_io.gd")
+const SquadData = preload("res://remaster/squad_data.gd")
 ## The remaster has its own save schema; the classic save is never overwritten.
 signal changed
 const SAVE := "user://remaster_v1.json"
 var save_path := SAVE
-const WEAPONS := ["blade", "hammer", "cannon", "gauntlet"]
-const WEAPON_NAMES := ["辉光长刃", "铸炉重锤", "脉冲蒸汽炮", "裂岩动力拳套"]
+const WEAPONS := ["blade", "hammer", "cannon", "gauntlet", "dual", "spear", "crossbow"]
+const WEAPON_NAMES := ["辉光长刃", "铸炉重锤", "脉冲蒸汽炮", "裂岩动力拳套", "影铸双刃", "天穹齿轮枪", "裂隙连发弩"]
 const SLOTS := ["helmet", "armor", "gloves", "boots", "amulet", "ring"]
 const SKILLS := {
 	"blade_1": ["刃舞", "长刃伤害 +20%", "blade", "", 1],
@@ -20,6 +22,15 @@ const SKILLS := {
 	"gauntlet_1": ["铁拳", "拳套四连击伤害 +20%", "gauntlet", "", 1],
 	"gauntlet_2": ["升龙驱动", "空中拳击与上勾拳伤害 +40%", "gauntlet", "gauntlet_1", 1],
 	"gauntlet_3": ["过载百裂", "K：冲刺并连续重击，附带击退", "gauntlet", "gauntlet_2", 2],
+	"dual_1": ["双刃协奏", "双刀伤害 +20%，四段快速连击", "dual", "", 1],
+	"dual_2": ["空中回旋", "双刀空中攻击伤害 +40%", "dual", "dual_1", 1],
+	"dual_3": ["影刃风暴", "K：向前连续追击，并对两侧敌人斩击", "dual", "dual_2", 2],
+	"spear_1": ["长锋贯刺", "长枪伤害 +20%，普通攻击距离 3.6 米", "spear", "", 1],
+	"spear_2": ["破盾枪尖", "长枪命中无视盾面减伤，并延长普通敌人硬直", "spear", "spear_1", 1],
+	"spear_3": ["天穹穿刺", "K：向前 6 米贯刺；不会穿过实体墙壁", "spear", "spear_2", 2],
+	"crossbow_1": ["精密弩机", "弓弩伤害 +20%，使用有限弹药", "crossbow", "", 1],
+	"crossbow_2": ["贯穿箭矢", "普通弩箭可以贯穿多个敌人", "crossbow", "crossbow_1", 1],
+	"crossbow_3": ["裂隙散射", "K：消耗 3 发弹药，发射三枚贯穿弩箭", "crossbow", "crossbow_2", 2],
 	"stride": ["轻盈步伐", "地面移动速度 +12%", "movement", "", 1],
 	"dash_flow": ["疾影回转", "冲刺冷却从 0.65 秒缩短至 0.45 秒", "movement", "stride", 1],
 	"triple_jump": ["空中接力", "增加一次空中跳跃，最多三段跳", "movement", "dash_flow", 2],
@@ -38,7 +49,11 @@ var settings: Dictionary = DEFAULT_SETTINGS.duplicate()
 var settings_path := "user://remaster_settings.cfg"
 var story: Dictionary = {}
 var tutorial: Dictionary = {}
+var squad: Dictionary = SquadData.fresh()
 var persistence_enabled := true
+var save_blocked := false
+var save_notice := ""
+var last_recovery_folder := ""
 var coins := 90
 var xp := 0
 var level := 1
@@ -75,6 +90,7 @@ func new_game() -> void:
 	skills.clear(); inventory.clear(); equipped.clear(); buyback.clear()
 	visited.clear(); bosses.clear(); collected.clear(); merchant_gift = false
 	story.clear();tutorial.clear()
+	squad=SquadData.fresh()
 	checkpoint_room = "hub"; checkpoint = Vector3(4, .05, 0)
 	inventory.append(make_item("armor", 0))
 	inventory.append(make_item("boots", 0))
@@ -104,7 +120,7 @@ func stat(key: String) -> float:
 	return value
 
 func attack_damage() -> float:
-	var damage: float = [18.0, 30.0, 24.0, 12.0][weapon] + stat("attack") + (level - 1) * 1.5
+	var damage: float = [18.0, 30.0, 24.0, 12.0, 11.0, 22.0, 20.0][weapon] + stat("attack") + (level - 1) * 1.5
 	if skills.has(WEAPONS[weapon] + "_1"): damage *= 1.2
 	return damage
 
@@ -200,7 +216,7 @@ func reward(is_boss := false) -> void:
 	ammo = mini(120, ammo + (6 if is_boss else (3 if skills.has("cannon_2") else 1)))
 	while xp >= level * 90:
 		xp -= level * 90; level += 1; points += 2
-		hp = minf(max_health(), hp + 20)
+		if hp>0:hp = minf(max_health(), hp + 20)
 	if is_boss or randf() < .28:
 		var rarity := 2 if is_boss else (1 if randf() < .22 else 0)
 		var slot: String = SLOTS[randi() % SLOTS.size()]
@@ -223,29 +239,26 @@ func commit() -> void:
 
 func save_game() -> bool:
 	if not persistence_enabled: return true
+	if save_blocked:return false
 	var data := {"version":1,"coins":coins,"xp":xp,"level":level,"points":points,"weapon":weapon,"hp":hp,"ammo":ammo,"magazine":magazine,"potions":potions,"skills":skills,"inventory":inventory,"equipped":equipped,"buyback":buyback,"visited":visited,"bosses":bosses,"collected":collected,"merchant_gift":merchant_gift,"checkpoint_room":checkpoint_room,"checkpoint":[checkpoint.x,checkpoint.y,checkpoint.z],"serial":serial,"deaths":deaths,"mute":mute}
-	data["story"]=story;data["tutorial"]=tutorial
-	var f := FileAccess.open(save_path + ".tmp", FileAccess.WRITE)
-	if f == null: return false
-	f.store_string(JSON.stringify(data)); f.close()
-	if FileAccess.file_exists(save_path):
-		DirAccess.copy_absolute(save_path, save_path + ".bak")
-		DirAccess.remove_absolute(save_path)
-	return DirAccess.rename_absolute(save_path + ".tmp", save_path) == OK
+	data["story"]=story;data["tutorial"]=tutorial;data["squad"]=squad
+	return SaveIO.write(save_path,data)
 
 func load_game() -> bool:
 	if not persistence_enabled: return false
-	var data: Variant = null
-	for path in [save_path, save_path + ".bak"]:
-		if FileAccess.file_exists(path):
-			data = JSON.parse_string(FileAccess.get_file_as_string(path))
-			if data is Dictionary and int(data.get("version", 0)) == 1: break
-	if not data is Dictionary or int(data.get("version", 0)) != 1: return false
+	var result:=SaveIO.read_best(save_path)
+	save_blocked=bool(result.broken);save_notice=""
+	var data:Variant=result.data
+	if data==null:
+		if save_blocked:save_notice="存档暂时无法读取，已暂停自动保存并保留原文件。"
+		return false
+	if result.source!=save_path:save_notice="已从可用备份恢复进度。建议到同步终端再次保存。"
 	for key in ["coins","xp","level","points","weapon","ammo","magazine","potions","serial","deaths"]:
 		set(key, maxi(0, int(data.get(key, get(key)))))
-	level = maxi(level,1); weapon = clampi(weapon,0,3); magazine = mini(magazine,8); ammo = mini(ammo,120)
+	level = maxi(level,1); weapon = clampi(weapon,0,WEAPONS.size()-1); magazine = mini(magazine,8); ammo = mini(ammo,120)
+	squad=data.get("squad",SquadData.fresh())
 	for key in ["skills","equipped","visited","bosses","collected","story","tutorial"]:
-		if data.get(key) is Dictionary: set(key, data[key])
+		set(key, data.get(key,{}))
 	for key in ["inventory","buyback"]:
 		if data.get(key) is Array: set(key, data[key])
 	# JSON represents every number as a float. Restore the item's integer fields
@@ -257,11 +270,41 @@ func load_game() -> bool:
 					if it.has(key):it[key]=int(it[key])
 	merchant_gift = bool(data.get("merchant_gift",false)); mute = bool(data.get("mute",false))
 	checkpoint_room = str(data.get("checkpoint_room","hub"))
-	if not World.ROOMS.has(checkpoint_room): checkpoint_room = "hub"
 	var p: Array = data.get("checkpoint",[4,.05,0])
 	if p.size() == 3: checkpoint = Vector3(float(p[0]),float(p[1]),0)
-	hp = clampf(float(data.get("hp",120)),1,max_health())
+	if not World.ROOMS.has(checkpoint_room):checkpoint_room="hub";checkpoint=Vector3(4,.05,0)
+	hp = clampf(float(data.get("hp",120)),0,max_health())
+	if hp<=0:
+		deaths+=1;hp=max_health();magazine=8;ammo=maxi(ammo,16)
+		save_notice="上次旅程中核心已熄灭，现从最后存档点重生。"
 	return true
+
+func begin_new_journey() -> bool:
+	if save_blocked:
+		last_recovery_folder=SaveIO.archive(save_path)
+		if last_recovery_folder.is_empty():return false
+		save_blocked=false;save_notice="已保留损坏存档副本，新的旅程将使用新存档。"
+	new_game();return true
+
+func recover_life(damage_dealt: float) -> void:
+	# Damage from projectiles already in flight must not revive a dying hunter.
+	if hp<=0 or damage_dealt<=0:return
+	hp=minf(max_health(),hp+damage_dealt*clampf(stat("lifesteal"),0,.08))
+
+func expand_squad() -> bool:
+	var cost:int=SquadData.slot_cost(int(squad.slots))
+	if cost==0 or points<cost:return false
+	points-=cost;squad.slots+=1;commit();return true
+
+func assign_companion(id:String) -> bool:
+	if not SquadData.PROFILES.has(id):return false
+	if squad.loadout.has(id):
+		if squad.loadout.size()==1:return false
+		squad.loadout.erase(id)
+	elif squad.loadout.size()<int(squad.slots):squad.loadout.append(id)
+	elif int(squad.slots)==1:squad.loadout=[id]
+	else:return false
+	commit();return true
 
 func set_setting(key: String, value: Variant) -> void:
 	if not DEFAULT_SETTINGS.has(key):return

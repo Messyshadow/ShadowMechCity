@@ -77,8 +77,8 @@ func refresh_weapon() -> void:
 		visual.add_child(weapon_mesh);weapon_mesh.position=Vector3(-.48,.86,.12)
 	weapon_mesh.scale = Vector3.ONE * (.72 if Reforged.weapon == 3 else .85)
 	weapon_mesh.rotation.x = -1.5
-	if Reforged.weapon==3 and offhand_socket:
-		offhand_mesh=game.model("gauntlet");offhand_socket.add_child(offhand_mesh)
+	if Reforged.weapon in [3,4] and offhand_socket:
+		offhand_mesh=game.model(Reforged.WEAPONS[Reforged.weapon]);offhand_socket.add_child(offhand_mesh)
 		offhand_mesh.position=Vector3(0,.32,0);offhand_mesh.rotation.x=-1.5;offhand_mesh.scale=Vector3.ONE*.72
 	last_weapon = Reforged.weapon
 
@@ -105,7 +105,7 @@ func _physics_process(dt: float) -> void:
 			game.burst(position+Vector3(facing,1,0),Color(1,.4,.05),6)
 			for enemy in game.enemies:
 				if is_instance_valid(enemy) and not enemy.dead and enemy.position.distance_to(position)<3 and (enemy.position.x-position.x)*facing>-.3:
-					if game.clear_sight(position+Vector3.UP,enemy.position+Vector3.UP):enemy.take_hit(Reforged.attack_damage()*.5,facing)
+					if game.clear_sight(position+Vector3.UP,enemy.position+Vector3.UP):Reforged.recover_life(enemy.take_hit(Reforged.attack_damage()*.5,facing))
 	if hit_pause > 0:
 		hit_pause -= dt; return
 	var axis := Input.get_axis("r_left","r_right")
@@ -144,7 +144,7 @@ func _physics_process(dt: float) -> void:
 			Reforged.magazine += amount; Reforged.ammo -= amount
 	if Input.is_action_just_pressed("r_reload"): reload()
 	if Input.is_action_just_pressed("r_swap") and attack_time <= 0:
-		Reforged.weapon = (Reforged.weapon + 1)%4; refresh_weapon()
+		Reforged.weapon = (Reforged.weapon + 1)%Reforged.WEAPONS.size(); refresh_weapon()
 	if Input.is_action_just_pressed("r_heal") and Reforged.potions > 0 and health < Reforged.max_health():
 		Reforged.potions -= 1; health = minf(Reforged.max_health(),health+60)
 		game.audio.play("save",-5); game.burst(position+Vector3.UP,Color(.1,1,.6),12); Reforged.commit()
@@ -192,7 +192,8 @@ func _physics_process(dt: float) -> void:
 			if step_clock<=0: game.audio.play("step",-10); step_clock=.3
 		else: play_clip("idle")
 	visual.rotation.y=lerp_angle(visual.rotation.y,facing*PI/2,dt*18)
-	if Reforged.weapon==2 and weapon_mesh:weapon_mesh.global_rotation=Vector3(0,0,-facing*PI/2)
+	if Reforged.weapon in [2,6] and weapon_mesh:weapon_mesh.global_rotation=Vector3(0,0,-facing*PI/2)
+	if Reforged.weapon==5 and weapon_mesh:weapon_mesh.global_rotation=Vector3(0,0,-facing*PI/2+.22*facing)
 	move_and_slide(); position.z=0
 	if is_on_floor() and not was_grounded: game.audio.play("land",-5)
 	was_grounded=is_on_floor()
@@ -208,7 +209,7 @@ func begin_attack(special: bool) -> void:
 		if not Reforged.skills.has(Reforged.WEAPONS[Reforged.weapon]+"_3"):
 			game.toast("按 T 学习本武器的终阶技能"); return
 		if skill_cooldown > 0: return
-	if Reforged.weapon==2:
+	if Reforged.weapon in [2,6]:
 		var needed := 3 if special else 1
 		if Reforged.magazine<needed:
 			game.audio.play("empty"); reload(); return
@@ -219,51 +220,54 @@ func begin_attack(special: bool) -> void:
 	if uppercut:velocity.y=9.0
 	if special: skill_cooldown=3.0 if Reforged.skills.has("overclock") else 4.0
 	if combo_window<=0: combo=0
-	else: combo=(combo+1)%(4 if Reforged.weapon==3 else 3)
-	attack_total=([.34,.57,.3,.23][Reforged.weapon]) * (1.5 if special else 1.0)
+	else: combo=(combo+1)%(4 if Reforged.weapon in [3,4] else 3)
+	attack_total=([.34,.57,.3,.23,.20,.43,.36][Reforged.weapon]) * (1.5 if special else 1.0)
 	attack_time=attack_total; attack_done=false
 	if anim: anim.stop()
 
 func attack_clip() -> String:
 	if Reforged.weapon==2:return "shoot"
+	if Reforged.weapon==6:return "crossbow_shoot"
 	if uppercut:return "uppercut"
 	var family: String=Reforged.WEAPONS[Reforged.weapon]
-	if skill_attack:return {"blade":"blade_3","hammer":"slam","gauntlet":"gauntlet_4"}.get(family,"skill")
+	if skill_attack:return {"blade":"blade_3","hammer":"slam","gauntlet":"gauntlet_4","dual":"dual_4","spear":"spear_3"}.get(family,"skill")
 	if airborne_attack:return "air_"+family
 	return family+"_"+str(combo+1)
 
 func resolve_attack() -> void:
 	var damage := Reforged.attack_damage() * (1.5 if combo==2 else 1.0)
-	if not is_on_floor() and Reforged.weapon in [0,3] and Reforged.skills.has(Reforged.WEAPONS[Reforged.weapon]+"_2"): damage*=1.4
+	if not is_on_floor() and Reforged.weapon in [0,3,4] and Reforged.skills.has(Reforged.WEAPONS[Reforged.weapon]+"_2"): damage*=1.4
 	if skill_attack: damage*=2.2
-	if Reforged.weapon==2:
+	if Reforged.weapon in [2,6]:
 		game.audio.play("shot"); game.shake=.09
 		weapon_mesh.global_rotation=Vector3(0,0,-facing*PI/2)
 		for i in range(3 if skill_attack else 1):
 			var muzzle:=weapon_mesh.to_global(Vector3(0,1.14,0));muzzle.z=0;muzzle.y+=i*.10
 			# A muzzle can overlap thin cover while the capsule remains outside it.
 			if game.clear_sight(position+Vector3(0,1.12+i*.10,0),muzzle):
-				game.projectile(muzzle,Vector3(facing*23,i*.8,0),damage,true,Color(.2,.9,1))
+				var pierce:bool=Reforged.weapon==6 and (skill_attack or Reforged.skills.has("crossbow_2"))
+				game.projectile(muzzle,Vector3(facing*(30 if Reforged.weapon==6 else 23),(i-1)*1.6 if Reforged.weapon==6 and skill_attack else i*.8,0),damage,true,Color(.7,.5,1) if Reforged.weapon==6 else Color(.2,.9,1),pierce)
 			else: game.burst(position+Vector3(facing*.4,1.12,0),Color(1,.5,.1),4)
 		return
 	game.audio.play("punch" if Reforged.weapon==3 else "slash")
-	var reach: float=[2.15,2.6,0.0,1.6][Reforged.weapon]
-	if skill_attack: reach=4.5
+	var reach: float=[2.15,2.6,0.0,1.6,1.7,3.6,0.0][Reforged.weapon]
+	if skill_attack: reach=6.0 if Reforged.weapon==5 else 4.5
 	game.slash(position+Vector3(facing*.7,1,0),facing,Color(1,.5,.12) if Reforged.weapon in [1,3] else Color(.15,.85,1),reach*.5)
 	if skill_attack and Reforged.weapon==0:
 		game.projectile(position+Vector3(0,1,0),Vector3(facing*15,0,0),damage,true,Color(.2,.85,1),true)
 	if skill_attack and Reforged.weapon==3: velocity.x=facing*14; wall_lock=.2
 	if skill_attack and Reforged.weapon==3:overdrive_remaining=4;overdrive_interval=.09
+	if skill_attack and Reforged.weapon==4:overdrive_remaining=3;overdrive_interval=.09
 	for e in game.enemies:
 		if not is_instance_valid(e) or e.dead: continue
 		var offset: Vector3 = e.position-position
-		if absf(offset.x)<reach+e.radius and absf(offset.y)<2.5 and (offset.x*facing>-.35 or (skill_attack and Reforged.weapon==1)):
+		if absf(offset.x)<reach+e.radius and absf(offset.y)<(1.5 if Reforged.weapon==5 else 2.5) and (offset.x*facing>-.35 or (skill_attack and Reforged.weapon in [1,4])):
 			if game.clear_sight(position+Vector3.UP,e.position+Vector3.UP):
-				e.take_hit(damage,facing,Reforged.weapon==1 and Reforged.skills.has("hammer_2"))
+				var dealt:float=e.take_hit(damage,facing,(Reforged.weapon==1 and Reforged.skills.has("hammer_2")) or (Reforged.weapon==5 and Reforged.skills.has("spear_2")))
 				# Stop the approach on contact so follow-up punches keep their target.
 				if skill_attack and Reforged.weapon==3:velocity.x=0
 				if uppercut and not e.is_boss:e.velocity.y=8
-				health=minf(Reforged.max_health(),health+damage*minf(.08,Reforged.stat("lifesteal")))
+				Reforged.recover_life(dealt)
 				hit_pause=.045; game.shake=.13
 	if skill_attack and Reforged.weapon==1:
 		game.burst(position,Color(1,.4,.08),28); game.audio.play("explosion",-6)

@@ -200,11 +200,12 @@ def drone():
 CLIPS=['idle','run','jump','fall','attack1','attack2','attack3','shoot','climb','dash','hurt','death','skill',
        'blade_1','blade_2','blade_3','hammer_1','hammer_2','hammer_3','gauntlet_1','gauntlet_2','gauntlet_3','gauntlet_4',
        'air_blade','air_hammer','air_gauntlet','uppercut','reload','stairs','swim','wall_slide','slam','roar','bite','tail_sweep','cast']
+HERO_CLIPS=['dual_1','dual_2','dual_3','dual_4','air_dual','spear_1','spear_2','spear_3','air_spear','crossbow_shoot']
 
 def animate(arm,kind):
     animal=kind in ('crocodile','dragon','behemoth')
     arm.animation_data_create()
-    for clip in CLIPS:
+    for clip in CLIPS+(HERO_CLIPS if kind=='hero' else []):
         action=bpy.data.actions.new(clip);arm.animation_data.action=action
         # 25 fps, one-second source clips; runtime adjusts to the attack duration.
         for frame in range(1,26,2):
@@ -227,6 +228,18 @@ def animate(arm,kind):
                 rot('thighL',.7);rot('thighR',-.5);rot('shinL',.9);rot('foreL',-.5);rot('armR',-.7)
                 rot('torso',.48 if clip=='dash' else -.12)
                 if clip=='wall_slide':rot('armL',2.1);rot('armR',1.9)
+            elif clip.startswith('dual') or clip=='air_dual':
+                n=int(clip[-1]) if clip[-1].isdigit() else 3
+                for side,sign in [('R',1),('L',-1)]:
+                    swing=hit if n%2 else settle
+                    rot('arm'+side,-.65-swing*(2.1 if sign==1 else 1.7),0,sign*.9*swing)
+                    rot('fore'+side,-.65);rot('torso',.15,0,(1 if n%2 else -1)*settle*.65)
+            elif clip.startswith('spear') or clip=='air_spear':
+                rot('armR',-1.1-hit*.5);rot('foreR',-.8+hit*.75);rot('armL',-1.05-hit*.6);rot('foreL',-.95+hit*.7)
+                rot('torso',.18+hit*.25,0,-hit*.35);rot('thighL',-.4*hit);rot('thighR',.35*hit)
+                b['root'].location.y=hit*.12
+            elif clip=='crossbow_shoot':
+                rot('armR',-1.55);rot('foreR',-.22);rot('armL',-1.48);rot('foreL',-.45);rot('torso',-.17*hit)
             elif clip.startswith('gauntlet') or clip in ('uppercut','air_gauntlet'):
                 n=int(clip[-1]) if clip[-1].isdigit() else 3
                 left=n%2==0;side='L' if left else 'R';other='R' if left else 'L'

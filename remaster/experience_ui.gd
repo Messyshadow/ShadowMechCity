@@ -10,14 +10,12 @@ static func paragraph(u: Node, parent: Control, value: String, rect: Rect2, size
 	return label
 
 static func title(u: Node) -> void:
-	var body:Control=u.shell("title","暗影机械城","SHADOW MECH CITY  /  REFORGED 0.3.0")
+	var body:Control=u.shell("title","暗影机械城","SHADOW MECH CITY  /  WINDOWS 开发试玩版 "+str(ProjectSettings.get_setting("application/config/version")))
 	u.text(body,"重铸余烬",Vector2(54,136),62,u.TEXT)
 	u.text(body,"停转的城市，仍有人守着光。",Vector2(59,226),22,u.GOLD)
 	paragraph(u,body,"来自晨曦温室的引航信号突然熄灭。\n沿着最后亮起的灯，寻找仍在运转的机械之心。",Rect2(61,280,515,78),18)
-	u.button(body,"继续旅程   /   Enter",Rect2(61,383,327,50),u.continue_journey,true).grab_focus()
-	u.button(body,"开始新旅程",Rect2(61,446,327,42),func():
-		if not u.title_new_armed:u.title_new_armed=true;u.toast("再次点击开始新旅程，将重置重制版进度。",5)
-		else:Reforged.new_game();u.game.load_room("hub","",true);u.open_story())
+	u.button(body,"检查存档" if Reforged.save_blocked else "继续旅程   /   Enter",Rect2(61,383,327,50),u.continue_journey,true).grab_focus()
+	u.button(body,"开始新旅程",Rect2(61,446,327,42),u.start_new_journey)
 	u.button(body,"设置",Rect2(61,504,154,42),func():u.open_settings("title"))
 	u.button(body,"操作与引导",Rect2(230,504,158,42),u.open_guide)
 	u.button(body,"退出游戏",Rect2(61,560,327,37),u.game.quit_game)
@@ -25,6 +23,18 @@ static func title(u: Node) -> void:
 	u.text(body,"猎魂者 / HUNTER",Vector2(730,517),18,u.CYAN)
 	u.text(body,"八个区域  ·  四十个房间",Vector2(690,551),19,u.TEXT)
 	u.text(body,"存档点："+str(World.ROOMS[Reforged.checkpoint_room].name),Vector2(665,588),14,u.GOLD)
+
+static func save_recovery(u: Node) -> void:
+	var body:Control=u.shell("save_recovery","进度需要检查","SAVE RECOVERY  /  原存档已保留")
+	u.text(body,"暂时无法读取存档",Vector2(55,143),34,u.GOLD)
+	paragraph(u,body,"游戏没有找到可读取的进度或备份。自动保存已暂停，避免新进度覆盖原文件。\n\n你可以先退出游戏，保留存档文件并检查磁盘，或恢复自己的备份后点击重新读取。",Rect2(55,213,1008,137),22)
+	paragraph(u,body,"如果要重新开始，请返回主菜单，连续点击两次「开始新旅程」。游戏会先保留现有文件的副本；只有副本保存成功后，才会建立新进度。",Rect2(55,367,1008,96),20)
+	u.button(body,"重新读取存档",Rect2(55,520,294,49),func():
+		if Reforged.load_game():
+			u.game.load_room(Reforged.checkpoint_room,"",true);u.open_title();u.toast("存档已恢复，可以继续旅程。",6)
+		else:u.toast("仍无法读取存档，原文件保持不变。",6),true).grab_focus()
+	u.button(body,"返回主菜单",Rect2(379,520,294,49),u.open_title)
+	u.button(body,"退出游戏",Rect2(703,520,294,49),u.game.quit_game)
 
 static func settings(u: Node, source: String) -> void:
 	u.settings_return=source
@@ -64,17 +74,18 @@ static func skills(u: Node) -> void:
 	u.text(body,"技能点  %d"%Reforged.points,Vector2(843,112),23,u.GOLD)
 	var ids:Array=[]
 	if u.skill_page=="战斗":
-		for i in range(4):
-			u.button(body,Reforged.WEAPON_NAMES[i],Rect2(30+i*182,165,173,43),func():u.skill_family=i;u.skill_selection="";u.open_skills(),i==u.skill_family)
+		for i in range(Reforged.WEAPONS.size()):
+			u.button(body,Reforged.WEAPON_NAMES[i],Rect2(30+(i%4)*182,161+(i/4 as int)*43,173,37),func():u.skill_family=i;u.skill_selection="";u.open_skills(),i==u.skill_family)
 		for i in range(1,4):ids.append(Reforged.WEAPONS[u.skill_family]+"_"+str(i))
 	elif u.skill_page=="身法":ids=["stride","dash_flow","triple_jump","wall_drive","glide","water_drive"]
 	else:ids=["shadow_guard","shadow_step","shadow_edge","core_shell","fast_loader","overclock"]
 	if u.skill_selection not in ids:u.skill_selection=ids[0]
-	u.plate(body,Rect2(30,230,733,372),Color(.034,.061,.082))
+	u.plate(body,Rect2(30,254 if u.skill_page=="战斗" else 230,733,348 if u.skill_page=="战斗" else 372),Color(.034,.061,.082))
 	var positions:Dictionary={}
 	for i in range(ids.size()):positions[ids[i]]=Vector2(51+(i%3)*235,315+(i/3 as int)*164)
 	if u.skill_page=="战斗":
-		u.text(body,"武器分支 / "+Reforged.WEAPON_NAMES[u.skill_family],Vector2(51,252),20,u.CYAN)
+		u.text(body,"武器分支 / "+Reforged.WEAPON_NAMES[u.skill_family],Vector2(51,267),20,u.CYAN)
+		u.button(body,"当前武器" if Reforged.weapon==u.skill_family else "装备本武器",Rect2(563,263,179,37),func():Reforged.weapon=u.skill_family;u.game.player.refresh_weapon();Reforged.commit();u.open_skills(),true)
 		paragraph(u,body,"连线表示学习顺序；选中节点后，在右侧学习。\n第三阶解锁本武器的 K 技能。",Rect2(51,466,645,87),18)
 	elif u.skill_page=="身法":
 		u.text(body,"疾行与腾空",Vector2(51,252),19,u.CYAN);u.text(body,"壁行与环境移动",Vector2(51,424),19,u.CYAN)
@@ -120,8 +131,33 @@ static func story(u: Node) -> void:
 static func guide(u: Node) -> void:
 	var body:Control=u.shell("guide","操作与旅途指南","FIELD MANUAL  /  随时按 N 查看任务，按 M 查看地图")
 	paragraph(u,body,"移动与探索\n\nA / D 移动，空格跳跃与二段跳。\n贴墙时再按空格蹬墙；Shift 冲刺。\nW / S 沿楼梯、检修梯和升降机上下行。\n靠近入口或 NPC 按 E 交互。\n\n亮边平台可以站立；橙色预警即将攻击。\n等待攻击落空后的收招，再靠近反击。",Rect2(44,132,501,404),21)
-	paragraph(u,body,"战斗与成长\n\nJ 连击，Q 切换四种武器。\nT 查看技能树，学习第三阶后按 K 释放。\n蒸汽炮弹药有限，R 装填；H 使用药剂。\nI 查看装备和强化，M 缩放与拖动地图。\n\n青色终端按 E 保存并补给。死亡返回该点。\n商人首谈赠护符，已卖装备可从回购页找回。",Rect2(621,132,501,404),21)
+	paragraph(u,body,"战斗与成长\n\nJ 连击，Q 切换七种武器。\nT 查看技能树、装备武器，终阶技能使用 K。\n蒸汽炮与弓弩共享有限弹药，R 装填。\nI 装备和强化；M 地图；H 使用药剂。\nC 部署 / 回收伙伴，G 编成阵容。\n\n青色终端按 E 保存补给；死亡返回该点。\n商人赠护符，已售装备可以回购。",Rect2(621,132,501,404),21)
 	u.button(body,"重新显示情境教学",Rect2(46,558,300,43),func():Reforged.tutorial.clear();Reforged.set_setting("tutorial",true);u.close();u.toast("教学已重置，将根据实际操作逐步推进。"),true)
+
+static func companions(u:Node) -> void:
+	var body:Control=u.shell("companions","量子伙伴阵列","COMPANIONS  /  C 部署或回收 · G 阵容 · 同型号不能重复上阵")
+	var data=Reforged.SquadData
+	if not data.PROFILES.has(u.companion_selection):u.companion_selection="hound"
+	u.text(body,"出战位  %d / 3     技能点  %d"%[int(Reforged.squad.slots),Reforged.points],Vector2(34,110),22,u.GOLD)
+	var i:=0
+	for id in data.PROFILES:
+		var profile:Dictionary=data.PROFILES[id];var selected:bool=Reforged.squad.loadout.has(id)
+		var row:Panel=u.plate(body,Rect2(34,164+i*96,649,85));i+=1
+		u.button(row,profile.name,Rect2(12,11,238,34),func():u.companion_selection=id;u.open_companions(),id==u.companion_selection)
+		u.text(row,profile.role+"    生命 %d"%int(profile.hp),Vector2(24,53),15,u.TEXT)
+		u.button(row,"移出阵容" if selected else "加入阵容" if Reforged.squad.loadout.size()<int(Reforged.squad.slots) else "替换出战" if int(Reforged.squad.slots)==1 else "出战位已满",Rect2(463,24,168,36),func():
+			if Reforged.assign_companion(id):u.game.companions.refresh();u.open_companions()
+			else:u.toast("至少保留一台伙伴；阵容已满时请先移出另一台。"),selected)
+	var cost:int=data.slot_cost(int(Reforged.squad.slots))
+	var expand:Button=u.button(body,"出战位已全开" if cost==0 else "解锁下一出战位 · %d 技能点"%cost,Rect2(34,568,649,40),func():
+		if Reforged.expand_squad():u.open_companions()
+		else:u.toast("技能点不足"),cost>0 and Reforged.points>=cost)
+	expand.disabled=cost==0 or Reforged.points<cost
+	u.make_preview(body,Rect2(728,126,373,248),"idle","ally_"+u.companion_selection)
+	var selected_profile:Dictionary=data.PROFILES[u.companion_selection]
+	u.text(body,selected_profile.name,Vector2(735,363),25,u.CYAN)
+	paragraph(u,body,"伙伴只在玩家附近索敌。受击会损失独立生命，损毁后需要 12 秒重构。\n\n多机同时部署时降低单机输出；热量满时暂停攻击和修复。关闭菜单后计时继续。",Rect2(735,406,368,129),17)
+	u.button(body,"回收全部伙伴" if Reforged.squad.deployed else "部署当前阵容",Rect2(735,562,368,46),func():u.game.companions.toggle();u.open_companions(),true)
 
 static func journal(u: Node) -> void:
 	var body:Control=u.shell("journal","旅途记录","QUEST JOURNAL  /  主线与委托")

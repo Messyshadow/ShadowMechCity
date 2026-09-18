@@ -7,6 +7,7 @@ var max_hp := 65.0
 var hp := 65.0
 var dead := false
 var radius := .42
+var body_height := 1.8
 var visual: Node3D
 var anim: AnimationPlayer
 var phase := 1
@@ -35,6 +36,7 @@ func _ready() -> void:
 	radius=1.1 if kind in ["crocodile","behemoth"] else .7 if is_boss else .38
 	var c := CollisionShape3D.new(); var shape := CapsuleShape3D.new()
 	shape.radius=radius; shape.height=(1.25 if kind in ["crocodile","behemoth"] else 1.8)*scale_factor
+	body_height=shape.height
 	c.shape=shape; c.position.y=shape.height*.5; add_child(c)
 	visual=game.model(kind); add_child(visual); visual.scale=Vector3.ONE*scale_factor
 	anim=visual.find_child("AnimationPlayer",true,false)
@@ -94,6 +96,7 @@ func _physics_process(dt: float) -> void:
 				velocity.x=direction*(12 if is_boss else 8)
 				clip("dash")
 				if absf(dx)<radius+.7 and absf(dy)<2: game.player.take_damage(27 if is_boss else 16,direction)
+				game.companions.area_damage(position,radius+.7,2,27 if is_boss else 16)
 				if timer<=0 or is_on_wall() or not safe_step(direction): recover()
 			"leap":
 				clip("dash")
@@ -194,22 +197,27 @@ func execute_attack() -> void:
 			if active < 5:
 				for s in [-1,1]: game.spawn_enemy("sentry",Vector3(clampf(position.x+s*3,2,game.room_width-2),.1,0))
 			game.burst(position+Vector3.UP,Color(.7,.15,1),24)
+	if attack_id in ["slam","melee","bite"]:
+		game.companions.area_damage(position+Vector3(direction*(0 if attack_id=="slam" else 1.4),0,0),5.2 if attack_id=="slam" else 2.0,.9 if attack_id=="slam" else 2.0,30 if is_boss else 14)
 	if attack_id in ["slam","melee"]:clip("slam" if attack_id=="slam" else "blade_1",1.8,true)
 	recover()
 
 func recover() -> void:
 	state="recover"; timer=(1.2 if is_boss else .9)*( .72 if phase==2 else 1.0)
 
-func take_hit(amount: float, knock: float, break_armor := false) -> void:
-	if dead: return
+func take_hit(amount: float, knock: float, break_armor := false, attacker_position := Vector3.INF) -> float:
+	if dead: return 0.0
+	amount=maxf(0,amount)
 	if Reforged.skills.has("shadow_edge") and state=="recover":amount*=1.2
-	if kind=="warden" and state!="recover" and not break_armor and (game.player.position.x-position.x)*facing>0:
+	var attacker:Vector3=game.player.position if not attacker_position.is_finite() else attacker_position
+	if kind=="warden" and state!="recover" and not break_armor and (attacker.x-position.x)*facing>0:
 		amount*=.4;game.burst(position+Vector3(facing*.5,1,0),Color(.35,.8,1),10)
 		game.toast("盾面减伤 · 绕后，或等待盾击收招",1.8)
 	hit_flash=.12;hit_stop=.055
 	if anim:anim.speed_scale=1;anim.stop();clip("hurt",1.5)
-	hp-=amount
-	game.damage_number(position+Vector3.UP*(3.5 if is_boss else 2),int(amount))
+	var dealt:=minf(hp,amount)
+	hp=maxf(0,hp-amount)
+	game.damage_number(position+Vector3.UP*(3.5 if is_boss else 2),ceili(dealt))
 	game.burst(position+Vector3.UP,Color(1,.62,.18),8); game.audio.play("hit",-5)
 	if not is_boss:
 		stun=.65 if break_armor else .23; velocity.x=knock*4
@@ -223,3 +231,4 @@ func take_hit(amount: float, knock: float, break_armor := false) -> void:
 		else: Reforged.reward(false)
 		var tw := create_tween();tw.tween_interval(.35); tw.tween_property(visual,"scale",Vector3.ONE*.001,.55)
 		tw.tween_callback(queue_free)
+	return dealt

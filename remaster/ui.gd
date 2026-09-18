@@ -36,6 +36,9 @@ var skill_selection := ""
 var settings_return := "pause"
 var tutorial_label: Label
 var tutorial_back: Panel
+var squad_label:Label
+var squad_back:Panel
+var companion_selection:="hound"
 const INK:=Color(.027,.043,.062,.97)
 const CYAN:=Color(.22,.83,.91)
 const GOLD:=Color(.97,.68,.28)
@@ -62,6 +65,8 @@ func _ready() -> void:
 	text(keys,"E 交互       I 背包       T 技能       M 地图       N 任务       Esc 暂停       F11 全屏",Vector2(16,26),12,Color(.62,.73,.80))
 	tutorial_back=plate(hud,Rect2(24,202,340,98),Color(.027,.043,.062,.85));tutorial_back.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	tutorial_label=text(tutorial_back,"",Vector2(12,9),16,GOLD);tutorial_label.size=Vector2(316,83);tutorial_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	squad_back=plate(hud,Rect2(24,312,318,109),Color(.027,.043,.062,.84));squad_back.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	squad_label=text(squad_back,"",Vector2(10,8),14,Color(.66,.9,.86))
 	toast_label=text(root,"",Vector2(175,610),18,GOLD);toast_label.size=Vector2(930,36);toast_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	boss_title=text(hud,"",Vector2(360,535),17,GOLD);boss_title.size=Vector2(560,26);boss_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	boss_health=bar(hud,Rect2(360,562,560,7),Color(.95,.34,.16))
@@ -103,11 +108,14 @@ func icon(parent: Node, id: String, rect: Rect2) -> TextureRect:
 
 func _process(dt: float) -> void:
 	if not is_instance_valid(game.player):return
-	if is_instance_valid(preview_weapon) and preview_family=="cannon":preview_weapon.global_rotation=Vector3(PI/2,0,0)
+	if is_instance_valid(preview_weapon) and preview_family in ["cannon","crossbow"]:preview_weapon.global_rotation=Vector3(PI/2,0,0)
+	if is_instance_valid(preview_weapon) and preview_family=="spear":preview_weapon.global_rotation=Vector3(0,0,-PI/2+.15)
+	if is_instance_valid(game.companions):
+		squad_label.text=game.companions.hud_text();squad_back.size.y=35+Reforged.squad.loadout.size()*21 if Reforged.squad.deployed else 35
 	health.max_value=Reforged.max_health();health.value=Reforged.hp
 	hp_label.text="猎魂者  %d / %d"%[ceili(Reforged.hp),int(Reforged.max_health())]
 	stats.text="Lv.%02d    ◈ %d    技能点 %d    药剂 %d"%[Reforged.level,Reforged.coins,Reforged.points,Reforged.potions]
-	ammo.text=Reforged.WEAPON_NAMES[Reforged.weapon]+("    弹匣 %d / 8  ·  备弹 %d"%[Reforged.magazine,Reforged.ammo] if Reforged.weapon==2 else "    J 连击 / 空中攻击")
+	ammo.text=Reforged.WEAPON_NAMES[Reforged.weapon]+("    弹匣 %d / 8  ·  备弹 %d"%[Reforged.magazine,Reforged.ammo] if Reforged.weapon in [2,6] else "    J 连击 / 空中攻击")
 	if game.player.reload_time>0:ammo.text+="  装填中…"
 	var step:Array=Reforged.tutorial_step()
 	tutorial_label.visible=bool(Reforged.settings.tutorial) and not step.is_empty() and not panel_open
@@ -127,6 +135,13 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_F11:
 		Reforged.set_setting("fullscreen",not Reforged.settings.fullscreen)
 		if panel_kind=="settings":open_settings(settings_return)
+		get_viewport().set_input_as_handled();return
+	if Reforged.save_blocked:
+		if event.is_action_pressed("r_pause"):open_title();get_viewport().set_input_as_handled()
+		return
+	if event.is_action_pressed("r_roster"):
+		if panel_kind=="companions":close()
+		else:open_companions()
 		get_viewport().set_input_as_handled();return
 	if event.is_action_pressed("r_journal"):
 		if panel_kind=="journal":close()
@@ -158,7 +173,8 @@ func fade(black: bool) -> void:
 	root.move_child(transition,-1)
 	var tw:=create_tween();tw.tween_property(transition,"color:a",1.0 if black else 0.0,.22);await tw.finished
 
-func close() -> void:
+func close(replacing := false) -> void:
+	if Reforged.save_blocked and not replacing:open_save_recovery();return
 	if panel:panel.queue_free();panel=null
 	panel_open=false;panel_kind="";hud.visible=true;skill_preview=null;preview_model=null;preview_weapon=null;map_view=null
 	preview_offhand=null;preview_family=""
@@ -167,7 +183,7 @@ func close() -> void:
 	Reforged.save_game()
 
 func shell(kind: String, title: String, subtitle: String) -> Control:
-	close();panel_open=true;panel_kind=kind;hud.visible=false
+	close(true);panel_open=true;panel_kind=kind;hud.visible=false
 	if is_instance_valid(game.world):game.world.process_mode=Node.PROCESS_MODE_DISABLED
 	if is_instance_valid(game.player):game.player.process_mode=Node.PROCESS_MODE_DISABLED
 	panel=Control.new();root.add_child(panel);panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -182,8 +198,19 @@ func open_title() -> void:
 	Experience.title(self)
 
 func continue_journey() -> void:
+	if Reforged.save_blocked:open_save_recovery();return
 	if not Reforged.story.get("intro_seen",false):open_story()
 	else:close()
+
+func open_save_recovery() -> void:Experience.save_recovery(self)
+
+func start_new_journey() -> void:
+	if not title_new_armed:
+		title_new_armed=true
+		toast("再次点击开始新旅程：先保留损坏文件副本，再建立新进度。" if Reforged.save_blocked else "再次点击开始新旅程，将重置重制版进度。",6)
+		return
+	if not Reforged.begin_new_journey():toast("无法保留存档副本。原进度未更改，请检查存档目录是否可写。",8);return
+	title_new_armed=false;game.load_room("hub","",true);open_story()
 
 func open_settings(source := "pause") -> void:Experience.settings(self,source)
 func return_from_settings() -> void:
@@ -193,6 +220,7 @@ func open_story() -> void:Experience.story(self)
 func open_guide() -> void:Experience.guide(self)
 func open_journal() -> void:Experience.journal(self)
 func open_npc() -> void:Experience.npc(self)
+func open_companions() -> void:Experience.companions(self)
 
 func open_pause() -> void:
 	var body:=shell("pause","旅途暂停","PROGRESS SAVED  /  存档点决定重生位置")
@@ -308,10 +336,11 @@ func make_preview(parent: Control, rect: Rect2, clip_name: String, model_id := "
 	var l:=DirectionalLight3D.new();world.add_child(l);l.rotation_degrees=Vector3(-35,-35,0);l.light_energy=2;l.light_color=Color(.5,.8,1)
 	var fill:=DirectionalLight3D.new();world.add_child(fill);fill.rotation_degrees=Vector3(-15,130,0);fill.light_energy=1.4;fill.light_color=Color(1,.5,.2)
 	if model_id!="hero":cam.size=3.3;cam.look_at(Vector3(0,1.3,0))
+	if model_id.begins_with("ally_"):cam.size=2.0;cam.look_at(Vector3(0,.58,0))
 	preview_model=game.model(model_id);world.add_child(preview_model)
 	preview_socket=preview_model
 	var skeletons:=preview_model.find_children("*","Skeleton3D",true,false)
-	if not skeletons.is_empty():
+	if not skeletons.is_empty() and model_id=="hero":
 		var socket:=BoneAttachment3D.new();skeletons[0].add_child(socket);socket.bone_name="foreR";preview_socket=socket
 	if model_id=="hero":
 		preview_weapon=game.model(Reforged.WEAPONS[Reforged.weapon]);preview_socket.add_child(preview_weapon);preview_weapon.position=Vector3(0,.32,0);preview_weapon.rotation.x=-1.5;preview_weapon.scale=Vector3.ONE*.8
@@ -322,22 +351,25 @@ func make_preview(parent: Control, rect: Rect2, clip_name: String, model_id := "
 		skill_preview.get_animation(clip_name).loop_mode=Animation.LOOP_LINEAR;skill_preview.play(clip_name)
 
 func preview_skill(id: String, notify := true) -> void:
-	var clip_name:="shoot" if id.begins_with("cannon") else "uppercut" if id=="gauntlet_2" else "gauntlet_4" if id=="gauntlet_3" else "air_blade" if id=="blade_2" else "slam" if id=="hammer_3" else id
+	var clip_name:="crossbow_shoot" if id.begins_with("crossbow") else "shoot" if id.begins_with("cannon") else "uppercut" if id=="gauntlet_2" else "gauntlet_4" if id=="gauntlet_3" else "air_blade" if id=="blade_2" else "slam" if id=="hammer_3" else id
 	if skill_preview and skill_preview.has_animation(clip_name):
 		skill_preview.get_animation(clip_name).loop_mode=Animation.LOOP_LINEAR;skill_preview.play(clip_name,.1)
 	if preview_weapon:preview_weapon.queue_free()
 	preview_weapon=game.model(str(Reforged.SKILLS[id][2]));preview_socket.add_child(preview_weapon)
 	preview_weapon.position=Vector3(0,.32,0);preview_weapon.rotation.x=-1.5;preview_weapon.scale=Vector3.ONE*.8
 	preview_family=str(Reforged.SKILLS[id][2]);update_preview_offhand()
+	if preview_family=="spear":
+		var cameras:=preview_model.get_parent().find_children("*","Camera3D",false,false)
+		if not cameras.is_empty():cameras[0].size=3.5;cameras[0].look_at(Vector3(.4,1.05,0))
 	if notify:toast(str(Reforged.SKILLS[id][0])+"："+str(Reforged.SKILLS[id][1]),4)
 
 func update_preview_offhand() -> void:
 	if is_instance_valid(preview_offhand):preview_offhand.queue_free()
-	if preview_family!="gauntlet":return
+	if preview_family not in ["gauntlet","dual"]:return
 	var skeletons:=preview_model.find_children("*","Skeleton3D",true,false)
 	if skeletons.is_empty():return
 	var socket:=BoneAttachment3D.new();skeletons[0].add_child(socket);socket.bone_name="foreL"
-	preview_offhand=game.model("gauntlet");socket.add_child(preview_offhand)
+	preview_offhand=game.model(preview_family);socket.add_child(preview_offhand)
 	preview_offhand.position=Vector3(0,.32,0);preview_offhand.rotation.x=-1.5;preview_offhand.scale=Vector3.ONE*.8
 
 func open_skills() -> void:

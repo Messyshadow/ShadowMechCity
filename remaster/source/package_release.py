@@ -28,7 +28,7 @@ def main():
     for name in payload[:2]:
         if not (BUILD / name).is_file() or (BUILD / name).stat().st_size == 0:
             raise RuntimeError(f"Export the Windows build first: {name}")
-    shutil.copyfile(ROOT / "remaster" / "README.md", BUILD / "操作说明.md")
+    shutil.copyfile(ROOT / "remaster" / "PLAYER_GUIDE.md", BUILD / "操作说明.md")
     shutil.copyfile(ROOT / "remaster" / "RELEASE_NOTES.md", BUILD / "RELEASE_NOTES.md")
     (BUILD / "开始前请读.txt").write_text(
         f"暗影机械城 · 重铸余烬 {version} 开发版\n\n"
@@ -37,6 +37,8 @@ def main():
         "A/D 移动；空格跳跃、二段跳、蹬墙；J 攻击；K 技能；Q 换武器；\n"
         "Shift 冲刺；R 装填；H 治疗；E 交互；I 背包；T 技能；M 地图；N 任务。\n"
         "W/S 使用楼梯、梯井、升降机和排水管；Esc 暂停或关闭面板。\n\n"
+        "C 部署/回收机器人伙伴；G 调整最多三台的伙伴阵容。\n"
+        "七种武器可用 Q 切换，或在 T 技能树中直接装备。\n\n"
         "首次与中央车站的商人赫克对话可领取吸血护符。\n"
         "在同步终端按 E 保存并补给；死亡回到最后激活的存档点。\n"
         "背包可强化装备，出售的装备可从商人回购栏买回。\n\n"

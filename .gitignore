@@ -46,6 +46,11 @@ export_credentials.cfg
 !/remaster/qa/release_visual.log
 /remaster/source/*.blend1
 /remaster/source/__pycache__/
+!/remaster/qa/RELEASE_0_5_0.md
+!/remaster/qa/arsenal_test_*.log
+!/remaster/qa/arsenal_visual*.log
+!/remaster/qa/arsenal_*.png
+!/remaster/qa/published_0_5_0*
 
 # Imported translations (automatically generated from CSV files)
 *.translation

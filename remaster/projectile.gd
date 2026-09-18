@@ -5,6 +5,7 @@ var damage := 12.0
 var friendly := false
 var life := 3.0
 var piercing := false
+var lifesteal := true
 var hit_ids: Array[int] = []
 var sweep_origin := Vector3.INF
 
@@ -22,12 +23,16 @@ func _physics_process(dt: float) -> void:
 	if friendly:
 		for e in game.enemies:
 			if not is_instance_valid(e) or e.dead or hit_ids.has(e.get_instance_id()): continue
-			var hit := Vector3(e.position.x,e.position.y+(1.8 if e.is_boss else 1),0)
-			if segment_distance(hit,previous,position)<(1.45 if e.is_boss else .7):
-				hit_ids.append(e.get_instance_id()); e.take_hit(damage,signf(velocity.x))
-				Reforged.hp=minf(Reforged.max_health(),Reforged.hp+damage*minf(.08,Reforged.stat("lifesteal")))
+			var lower:Vector3=e.position+Vector3.UP*e.radius
+			var upper:Vector3=e.position+Vector3.UP*(e.body_height-e.radius)
+			var closest:=Geometry3D.get_closest_points_between_segments(previous,position,lower,upper)
+			if closest[0].distance_to(closest[1])<e.radius+.10:
+				hit_ids.append(e.get_instance_id())
+				var dealt:float=e.take_hit(damage,signf(velocity.x),false,previous)
+				if lifesteal:Reforged.recover_life(dealt)
 				if not piercing: queue_free(); return
 	else:
+		if game.companions.intercept(previous,position,damage):queue_free();return
 		if segment_distance(game.player.position+Vector3.UP,previous,position)<.65:
 			game.player.take_damage(damage,signf(velocity.x)); queue_free()
 

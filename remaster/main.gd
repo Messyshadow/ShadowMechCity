@@ -5,6 +5,7 @@ const EnemyScript = preload("res://remaster/enemy.gd")
 const ProjectileScript = preload("res://remaster/projectile.gd")
 const AudioScript = preload("res://remaster/audio.gd")
 const UIScript = preload("res://remaster/ui.gd")
+const CompanionsScript = preload("res://remaster/companions.gd")
 const LevelDesign = preload("res://remaster/level_design.gd")
 const REGION_COLORS := {"city":Color(.16,.73,.85),"mine":Color(1,.49,.17),"water":Color(.13,.86,.61),"factory":Color(1,.37,.10),"temple":Color(.83,.66,.32),"void":Color(.53,.36,1),"castle":Color(.46,.63,.88),"dawn":Color(.65,.91,.48)}
 const BOSS_MODELS := {"temple_sanctum":"guardian","mine_boss":"behemoth","water_boss":"crocodile","boss":"titan","void_throne":"dragon","castle_knights":"knight","castle_throne":"king"}
@@ -12,6 +13,7 @@ var world: Node3D
 var player: CharacterBody3D
 var camera: Camera3D
 var ui: CanvasLayer
+var companions:Node
 var audio: Node
 var room_id := "hub"
 var room: Dictionary = {}
@@ -50,6 +52,7 @@ func _ready() -> void:
 	audio=Node.new(); audio.set_script(AudioScript); add_child(audio)
 	setup_environment()
 	ui=CanvasLayer.new(); ui.set_script(UIScript); ui.game=self; add_child(ui)
+	companions=Node.new();companions.set_script(CompanionsScript);companions.game=self;add_child(companions)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--remaster-room="): room_override=arg.get_slice("=",1)
 		if arg.begins_with("--remaster-capture="): capture_path=arg.get_slice("=",1)
@@ -57,12 +60,15 @@ func _ready() -> void:
 		if arg=="--remaster-test": Reforged.persistence_enabled=false
 	load_room(room_override if World.ROOMS.has(room_override) else Reforged.checkpoint_room, "", true)
 	if room_override.is_empty(): ui.open_title()
-	if panel_override in ["open_title","open_inventory","open_skills","open_map","open_shop","open_settings","open_journal","open_npc","open_story"]:ui.call(panel_override)
+	if Reforged.save_blocked:ui.open_save_recovery()
+	if not Reforged.save_notice.is_empty():ui.toast(Reforged.save_notice,8)
+	if panel_override in ["open_title","open_inventory","open_skills","open_map","open_shop","open_settings","open_journal","open_npc","open_story","open_companions"]:ui.call(panel_override)
 	if not capture_path.is_empty():capture_timer=4.0;player.invulnerable=10
 
 func register_input() -> void:
 	var keys := {"r_left":[KEY_A,KEY_LEFT],"r_right":[KEY_D,KEY_RIGHT],"r_up":[KEY_W,KEY_UP],"r_down":[KEY_S,KEY_DOWN],"r_jump":[KEY_SPACE],"r_attack":[KEY_J],"r_skill":[KEY_K],"r_dash":[KEY_SHIFT,KEY_L],"r_swap":[KEY_Q],"r_reload":[KEY_R],"r_heal":[KEY_H],"r_interact":[KEY_E],"r_map":[KEY_M],"r_inventory":[KEY_I,KEY_U],"r_skills":[KEY_T],"r_pause":[KEY_ESCAPE]}
 	keys["r_journal"]=[KEY_N]
+	keys["r_companion"]=[KEY_C];keys["r_roster"]=[KEY_G]
 	for id in keys:
 		if InputMap.has_action(id): continue
 		InputMap.add_action(id)
@@ -171,6 +177,7 @@ func load_room(id: String, from := "", initial := false) -> void:
 		boss.max_hp=340.0+float(room.boss.get("hp",120))*.8
 		boss.hp=boss.max_hp
 	build_interactables()
+	if companions:companions.refresh()
 	Reforged.visited[id]=true;Reforged.save_game()
 	transition_cooldown=1; transitioning=false
 	camera.position=Vector3(clampf(spawn.x,8,room_width-8),5,22)
@@ -386,6 +393,7 @@ func _physics_process(dt: float) -> void:
 			burst(pos+Vector3.UP*.25,strike.color,22);audio.play("explosion",-12);shake=.1
 			var height:=4.4 if bool(strike.column) else 1.0
 			if absf(player.position.x-pos.x)<float(strike.width)*.5 and player.position.y<pos.y+height and player.position.y>pos.y-1.8:player.take_damage(strike.damage,signf(player.position.x-pos.x))
+			companions.area_damage(pos,float(strike.width)*.5,height,strike.damage)
 			if bool(strike.column):
 				var pillar:=cube(world,pos+Vector3.UP*2.2,Vector3(.20,4.4,.20),strike.color,true)
 				var tw:=pillar.create_tween();tw.tween_property(pillar,"scale",Vector3(.05,1,.05),.25);tw.tween_callback(pillar.queue_free)
@@ -404,6 +412,7 @@ func _physics_process(dt: float) -> void:
 		if cycle>3.4:
 			if int(time*16)%3==0:burst(Vector3(h.x,.4,0),Color(1,.42,.14),2)
 			if absf(player.position.x-float(h.x))<.8 and player.position.y<3.4:player.take_damage(16,signf(player.position.x-float(h.x)))
+			companions.area_damage(Vector3(h.x,0,0),.8,3.4,16)
 	for p in pickups.duplicate():
 		if not is_instance_valid(p.node):continue
 		p.node.rotation.y+=dt
@@ -575,11 +584,11 @@ func clear_sight(a: Vector3, b: Vector3) -> bool:
 	var q:=PhysicsRayQueryParameters3D.create(a,b,1)
 	return get_world_3d().direct_space_state.intersect_ray(q).is_empty()
 
-func projectile(pos: Vector3, vel: Vector3, damage: float, friendly: bool, color: Color, piercing := false) -> void:
-	var p:=Node3D.new();p.set_script(ProjectileScript);p.game=self;p.position=pos;p.velocity=vel;p.damage=damage;p.friendly=friendly;p.piercing=piercing
+func projectile(pos: Vector3, vel: Vector3, damage: float, friendly: bool, color: Color, piercing := false, lifesteal := true) -> void:
+	var p:=Node3D.new();p.set_script(ProjectileScript);p.game=self;p.position=pos;p.velocity=vel;p.damage=damage;p.friendly=friendly;p.piercing=piercing;p.lifesteal=lifesteal
 	# Check the first shot segment from the hunter to the barrel, so a nearby
 	# enemy cannot be skipped when the rendered barrel extends past its body.
-	if friendly:p.sweep_origin=Vector3(player.position.x,pos.y,0)
+	if friendly and lifesteal:p.sweep_origin=Vector3(player.position.x,pos.y,0)
 	world.add_child(p);cube(p,Vector3.ZERO,Vector3(.7,.15,.15) if not piercing else Vector3(.4,1.5,.18),color,true)
 	var light:=OmniLight3D.new();p.add_child(light);light.light_color=color;light.light_energy=.65;light.omni_range=2
 
