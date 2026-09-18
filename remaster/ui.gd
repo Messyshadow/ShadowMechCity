@@ -1,4 +1,6 @@
 extends CanvasLayer
+const World=preload("res://remaster/world_data.gd")
+const Experience=preload("res://remaster/experience_ui.gd")
 const MapScript=preload("res://remaster/map.gd")
 var game: Node3D
 var root: Control
@@ -28,6 +30,12 @@ var preview_socket: Node3D
 var map_view: Control
 var preview_family := ""
 var preview_offhand: Node3D
+var skill_page := "战斗"
+var skill_family := 0
+var skill_selection := ""
+var settings_return := "pause"
+var tutorial_label: Label
+var tutorial_back: Panel
 const INK:=Color(.027,.043,.062,.97)
 const CYAN:=Color(.22,.83,.91)
 const GOLD:=Color(.97,.68,.28)
@@ -51,7 +59,9 @@ func _ready() -> void:
 	hint=text(hud,"",Vector2(220,568),20,GOLD);hint.size=Vector2(840,36);hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	var keys:=plate(hud,Rect2(24,651,1232,47))
 	text(keys,"A D 移动    空格 二段跳 / 蹬墙    W S 梯井 / 升降机    J 连击    K 技能    Shift 冲刺    Q 换武器    R 装填    H 治疗",Vector2(16,5),15,TEXT)
-	text(keys,"E 交互       I 背包       T 技能       M 地图       Esc 暂停",Vector2(16,26),12,Color(.42,.57,.65))
+	text(keys,"E 交互       I 背包       T 技能       M 地图       N 任务       Esc 暂停       F11 全屏",Vector2(16,26),12,Color(.62,.73,.80))
+	tutorial_back=plate(hud,Rect2(24,202,340,98),Color(.027,.043,.062,.85));tutorial_back.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	tutorial_label=text(tutorial_back,"",Vector2(12,9),16,GOLD);tutorial_label.size=Vector2(316,83);tutorial_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	toast_label=text(root,"",Vector2(175,610),18,GOLD);toast_label.size=Vector2(930,36);toast_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	boss_title=text(hud,"",Vector2(360,535),17,GOLD);boss_title.size=Vector2(560,26);boss_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	boss_health=bar(hud,Rect2(360,562,560,7),Color(.95,.34,.16))
@@ -99,6 +109,10 @@ func _process(dt: float) -> void:
 	stats.text="Lv.%02d    ◈ %d    技能点 %d    药剂 %d"%[Reforged.level,Reforged.coins,Reforged.points,Reforged.potions]
 	ammo.text=Reforged.WEAPON_NAMES[Reforged.weapon]+("    弹匣 %d / 8  ·  备弹 %d"%[Reforged.magazine,Reforged.ammo] if Reforged.weapon==2 else "    J 连击 / 空中攻击")
 	if game.player.reload_time>0:ammo.text+="  装填中…"
+	var step:Array=Reforged.tutorial_step()
+	tutorial_label.visible=bool(Reforged.settings.tutorial) and not step.is_empty() and not panel_open
+	tutorial_back.visible=tutorial_label.visible
+	if not step.is_empty():tutorial_label.text="旅途提示\n"+str(step[1])
 	room_label.text=str(game.room.get("name",""))
 	objective_label.text="当前目标 / OBJECTIVE\n"+game.objective()
 	boss_health.visible=is_instance_valid(game.boss) and not game.boss.dead and not panel_open
@@ -110,8 +124,17 @@ func _process(dt: float) -> void:
 	banner_time=maxf(0,banner_time-dt);banner.visible=banner_time>0 and not panel_open;banner.modulate.a=minf(1,banner_time)
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode==KEY_F11:
+		Reforged.set_setting("fullscreen",not Reforged.settings.fullscreen)
+		if panel_kind=="settings":open_settings(settings_return)
+		get_viewport().set_input_as_handled();return
+	if event.is_action_pressed("r_journal"):
+		if panel_kind=="journal":close()
+		else:open_journal()
+		get_viewport().set_input_as_handled();return
 	if event.is_action_pressed("r_pause"):
-		if panel_open:close()
+		if panel_kind=="settings":return_from_settings()
+		elif panel_open:close()
 		else:open_pause()
 		get_viewport().set_input_as_handled();return
 	if event.is_action_pressed("r_inventory"):
@@ -123,7 +146,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("r_map"):
 		if panel_kind=="map":close()
 		else:open_map()
-	if panel_kind=="title" and event is InputEventKey and event.pressed and event.physical_keycode==KEY_ENTER:close()
+	if panel_kind=="title" and event is InputEventKey and event.pressed and event.physical_keycode==KEY_ENTER:continue_journey()
 
 func toast(value: String, seconds := 3.2) -> void:
 	toast_label.text=value;toast_time=seconds;root.move_child(toast_label,-1)
@@ -151,31 +174,35 @@ func shell(kind: String, title: String, subtitle: String) -> Control:
 	var shade:=ColorRect.new();panel.add_child(shade);shade.color=Color(.006,.016,.029,.8);shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var body:=plate(panel,Rect2(54,40,1172,640))
 	text(body,title,Vector2(28,20),30,TEXT);text(body,subtitle,Vector2(29,63),14,Color(.42,.61,.69))
-	button(body,"关闭  Esc",Rect2(1020,22,123,38),close)
+	button(body,"返回  Esc" if kind=="settings" else "关闭  Esc",Rect2(1020,22,123,38),return_from_settings if kind=="settings" else close)
 	root.move_child(toast_label,-1)
 	return body
 
 func open_title() -> void:
-	var body:=shell("title","暗影机械城","SHADOW MECH CITY  /  REFORGED")
-	text(body,"重 铸 余 烬",Vector2(55,133),56,TEXT)
-	text(body,"在停转的巨城里，找回最后一束光。",Vector2(60,216),22,GOLD)
-	text(body,"3D 横版动作冒险\n七大区域 · 七位核心守卫 · 四条武器分支\n从中央车站出发，回收核心，重启机械城。",Vector2(60,284),19,TEXT)
-	button(body,"继续探索   /   Enter",Rect2(60,431,290,51),close,true).grab_focus()
-	button(body,"开始新旅程",Rect2(60,497,290,44),func():
-		if not title_new_armed:
-			title_new_armed=true;toast("再次点击「开始新旅程」以重置重制版进度。旧版存档保留。",5)
-		else:
-			Reforged.new_game();game.load_room("hub","",true);close())
-	make_preview(body,Rect2(635,107,455,460),"idle")
-	text(body,"A / D 移动   ·   空格跳跃   ·   J 攻击   ·   E 交互",Vector2(61,569),15,Color(.44,.63,.7))
+	Experience.title(self)
+
+func continue_journey() -> void:
+	if not Reforged.story.get("intro_seen",false):open_story()
+	else:close()
+
+func open_settings(source := "pause") -> void:Experience.settings(self,source)
+func return_from_settings() -> void:
+	if settings_return=="title":open_title()
+	else:open_pause()
+func open_story() -> void:Experience.story(self)
+func open_guide() -> void:Experience.guide(self)
+func open_journal() -> void:Experience.journal(self)
+func open_npc() -> void:Experience.npc(self)
 
 func open_pause() -> void:
 	var body:=shell("pause","旅途暂停","PROGRESS SAVED  /  存档点决定重生位置")
-	text(body,"当前存档点\n"+str(Rooms.ROOMS[Reforged.checkpoint_room].name),Vector2(45,139),23,CYAN)
+	text(body,"当前存档点\n"+str(World.ROOMS[Reforged.checkpoint_room].name),Vector2(45,139),23,CYAN)
 	button(body,"返回旅途",Rect2(45,242,300,48),close,true).grab_focus()
 	button(body,"返回最后存档点",Rect2(45,309,300,45),func():close();game.respawn())
-	button(body,"声音："+("关闭" if Reforged.mute else "开启"),Rect2(45,371,300,45),func():Reforged.mute=not Reforged.mute;Reforged.commit();open_pause())
-	button(body,"保存并退出",Rect2(45,433,300,45),func():Reforged.save_game();game.get_tree().quit())
+	button(body,"设置 · 音量 / 全屏 / 亮度",Rect2(45,371,300,45),func():open_settings("pause"))
+	button(body,"任务与新手指南",Rect2(45,433,300,45),open_journal)
+	button(body,"保存并返回主菜单",Rect2(45,495,300,45),open_title)
+	button(body,"保存并退出",Rect2(45,556,300,40),game.quit_game)
 	text(body,"生存指南\n\n连按 J 衔接连击，空中也能攻击。\n贴墙按空格可蹬墙；W / S 沿梯井攀爬。\n蒸汽炮弹药有限，R 装填，H 使用治疗剂。\n橙色地面表示敌人即将出招，跳跃或冲刺躲避。\n同步存档终端会补给，死亡返回该终端。",Vector2(450,146),20,TEXT)
 
 func item_stats(it: Dictionary) -> String:
@@ -247,7 +274,7 @@ func open_shop(tab := "buy") -> void:
 	for i in range(3):
 		var id:String=["buy","sell","buyback"][i]
 		button(body,["购买补给","出售装备","回购物品"][i],Rect2(30+i*195,110,180,43),func():open_shop(id),tab==id)
-	text(body,"「活着回来，货和故事我都收。\n白装不要扔，卖给我就行。」\n\n首次见面赠送：余烬吸血护符\n命中恢复伤害量的 3% 生命\n\n药剂恢复 60 生命\n弹药箱补充 24 发备用子弹\n存档终端可获得最低补给",Vector2(775,199),19,TEXT)
+	text(body,"「活着回来，货和故事我都收。」\n\n余烬护符："+("已领取" if Reforged.merchant_gift else "首次交谈赠送")+"\n\n持有药剂  %d / 9\n备用弹药  %d / 120\n\n已装备物品不会被出售。\n回购保留原属性与强化等级。\n同步终端提供最低补给。"%[Reforged.potions,Reforged.ammo],Vector2(775,199),17,TEXT)
 	icon(body,"amulet",Rect2(840,442,150,150))
 	if tab=="buy":
 		var ids:=["potion","ammo","armor","gloves"]
@@ -258,9 +285,12 @@ func open_shop(tab := "buy") -> void:
 			var row:=plate(body,Rect2(30,y,685,94));icon(row,["potion","cannon","armor","gauntlet"][i],Rect2(8,7,76,76))
 			text(row,labels[i],Vector2(105,14),20,CYAN)
 			text(row,["恢复 60 生命 / 上限 9 瓶","24 发备弹 / 上限 120 发","护甲 +2.5 / 生命 +9","攻击 +4"][i],Vector2(105,49),15,TEXT)
-			button(row,"购买 ◈"+str(prices[i]),Rect2(520,25,135,39),func():
-				if not Reforged.buy(ids[i]):toast("金币不足或补给已满")
-				open_shop("buy"),true)
+			var full:bool=(ids[i]=="ammo" and Reforged.ammo>=120) or (ids[i]=="potion" and Reforged.potions>=9)
+			var affordable:bool=Reforged.coins>=prices[i]
+			var purchase:=button(row,"已满" if full else "金币不足" if not affordable else "购买 ◈"+str(prices[i]),Rect2(520,25,135,39),func():
+				var success:bool=Reforged.buy(ids[i]);open_shop("buy")
+				toast("已购入 "+labels[i]+" · -%d 金币"%prices[i] if success else "金币不足或补给已满"),not full and affordable)
+			purchase.disabled=full or not affordable
 	else:
 		var list:=item_scroll(body,Rect2(30,175,690,374))
 		var items:Array=Reforged.inventory if tab=="sell" else Reforged.buyback
@@ -269,7 +299,7 @@ func open_shop(tab := "buy") -> void:
 		if tab=="sell":button(body,"一键出售未装备白装",Rect2(30,565,285,42),func():
 			var n:=Reforged.sell_white();open_shop("sell");toast("已出售 %d 件白装，可在回购栏找回"%n),true)
 
-func make_preview(parent: Control, rect: Rect2, clip_name: String) -> void:
+func make_preview(parent: Control, rect: Rect2, clip_name: String, model_id := "hero") -> void:
 	var container:=SubViewportContainer.new();parent.add_child(container);container.position=rect.position;container.size=rect.size
 	container.stretch=true;container.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	var viewport:=SubViewport.new();viewport.size=Vector2i(rect.size);container.add_child(viewport);viewport.own_world_3d=true;viewport.transparent_bg=true;viewport.render_target_update_mode=SubViewport.UPDATE_ALWAYS
@@ -277,19 +307,21 @@ func make_preview(parent: Control, rect: Rect2, clip_name: String) -> void:
 	var cam:=Camera3D.new();world.add_child(cam);cam.position=Vector3(2.3,1.4,4);cam.look_at(Vector3(0,1.05,0));cam.projection=Camera3D.PROJECTION_ORTHOGONAL;cam.size=2.8
 	var l:=DirectionalLight3D.new();world.add_child(l);l.rotation_degrees=Vector3(-35,-35,0);l.light_energy=2;l.light_color=Color(.5,.8,1)
 	var fill:=DirectionalLight3D.new();world.add_child(fill);fill.rotation_degrees=Vector3(-15,130,0);fill.light_energy=1.4;fill.light_color=Color(1,.5,.2)
-	preview_model=game.model("hero");world.add_child(preview_model)
+	if model_id!="hero":cam.size=3.3;cam.look_at(Vector3(0,1.3,0))
+	preview_model=game.model(model_id);world.add_child(preview_model)
 	preview_socket=preview_model
 	var skeletons:=preview_model.find_children("*","Skeleton3D",true,false)
 	if not skeletons.is_empty():
 		var socket:=BoneAttachment3D.new();skeletons[0].add_child(socket);socket.bone_name="foreR";preview_socket=socket
-	preview_weapon=game.model(Reforged.WEAPONS[Reforged.weapon]);preview_socket.add_child(preview_weapon);preview_weapon.position=Vector3(0,.32,0);preview_weapon.rotation.x=-1.5;preview_weapon.scale=Vector3.ONE*.8
-	preview_family=Reforged.WEAPONS[Reforged.weapon]
-	update_preview_offhand()
+	if model_id=="hero":
+		preview_weapon=game.model(Reforged.WEAPONS[Reforged.weapon]);preview_socket.add_child(preview_weapon);preview_weapon.position=Vector3(0,.32,0);preview_weapon.rotation.x=-1.5;preview_weapon.scale=Vector3.ONE*.8
+		preview_family=Reforged.WEAPONS[Reforged.weapon]
+		update_preview_offhand()
 	skill_preview=preview_model.find_child("AnimationPlayer",true,false)
 	if skill_preview and skill_preview.has_animation(clip_name):
 		skill_preview.get_animation(clip_name).loop_mode=Animation.LOOP_LINEAR;skill_preview.play(clip_name)
 
-func preview_skill(id: String) -> void:
+func preview_skill(id: String, notify := true) -> void:
 	var clip_name:="shoot" if id.begins_with("cannon") else "uppercut" if id=="gauntlet_2" else "gauntlet_4" if id=="gauntlet_3" else "air_blade" if id=="blade_2" else "slam" if id=="hammer_3" else id
 	if skill_preview and skill_preview.has_animation(clip_name):
 		skill_preview.get_animation(clip_name).loop_mode=Animation.LOOP_LINEAR;skill_preview.play(clip_name,.1)
@@ -297,7 +329,7 @@ func preview_skill(id: String) -> void:
 	preview_weapon=game.model(str(Reforged.SKILLS[id][2]));preview_socket.add_child(preview_weapon)
 	preview_weapon.position=Vector3(0,.32,0);preview_weapon.rotation.x=-1.5;preview_weapon.scale=Vector3.ONE*.8
 	preview_family=str(Reforged.SKILLS[id][2]);update_preview_offhand()
-	toast(str(Reforged.SKILLS[id][0])+"："+str(Reforged.SKILLS[id][1]),4)
+	if notify:toast(str(Reforged.SKILLS[id][0])+"："+str(Reforged.SKILLS[id][1]),4)
 
 func update_preview_offhand() -> void:
 	if is_instance_valid(preview_offhand):preview_offhand.queue_free()
@@ -309,21 +341,7 @@ func update_preview_offhand() -> void:
 	preview_offhand.position=Vector3(0,.32,0);preview_offhand.rotation.x=-1.5;preview_offhand.scale=Vector3.ONE*.8
 
 func open_skills() -> void:
-	var body:=shell("skills","猎魂者战斗协议","COMBAT PROTOCOLS  /  选择节点预览动作，学习后立即生效")
-	text(body,"可用技能点："+str(Reforged.points),Vector2(29,100),20,GOLD)
-	for branch in range(4):
-		var x:=30+branch*202
-		icon(body,Reforged.WEAPONS[branch],Rect2(x+42,149,100,87))
-		text(body,Reforged.WEAPON_NAMES[branch],Vector2(x+5,243),18,CYAN)
-		for tier in range(1,4):
-			var id:String=Reforged.WEAPONS[branch]+"_"+str(tier);var d:Array=Reforged.SKILLS[id]
-			var known:bool=Reforged.skills.has(id);var y:=283+(tier-1)*99
-			button(body,("✓ " if known else "")+str(d[0]),Rect2(x,y,182,40),func():preview_skill(id),known)
-			button(body,"已学习" if known else "学习 · %d 点"%int(d[4]),Rect2(x,y+45,182,29),func():
-				if not Reforged.learn(id):toast("需要足够技能点，并先学习上一个节点")
-				open_skills();preview_skill(id)).disabled=known
-	make_preview(body,Rect2(863,145,275,344),"attack1")
-	text(body,"动作演示\n近战 · 空中 · 武器技能\n\n学习第 3 阶解锁 K 技能\n技能冷却 4 秒",Vector2(872,500),15,TEXT)
+	Experience.skills(self)
 
 func open_map() -> void:
 	var body:=shell("map","机械城 · 完整世界地图","WORLD ATLAS  /  滚轮缩放 · 左键拖动 · 保留完整房间名称")
@@ -333,10 +351,10 @@ func open_map() -> void:
 	button(body,"+ 放大",Rect2(168,575,125,37),func():map_view.set_zoom(map_view.zoom*1.2))
 	button(body,"定位当前位置",Rect2(308,575,170,37),func():map_view.center_player(),true)
 	button(body,"全图",Rect2(493,575,90,37),func():map_view.fit_all())
-	text(body,"探索 %d / %d     核心 %d / 7     ◇ 最后存档点"%[Reforged.visited.size(),Rooms.ROOMS.size(),Reforged.bosses.size()],Vector2(623,582),16,GOLD)
+	text(body,"探索 %d / %d     核心 %d / 7     ◇ 最后存档点"%[Reforged.visited.size(),World.ROOMS.size(),Reforged.bosses.size()],Vector2(623,582),16,GOLD)
 
 func show_ending() -> void:
 	var body:=shell("ending","光核重新点亮","THE CITY BREATHES AGAIN")
 	text(body,"机械城，醒来了。",Vector2(80,153),48,GOLD)
-	text(body,"你切断了虚空君王的控制，七座炉心重新开始跳动。\n赫克的商铺会继续亮着灯，未探索的秘室仍等待着你。\n\n回收核心 %d / 7     探索房间 %d / %d\n等级 %d     倒下 %d 次"%[Reforged.bosses.size(),Reforged.visited.size(),Rooms.ROOMS.size(),Reforged.level,Reforged.deaths],Vector2(85,247),22,TEXT)
+	text(body,"你切断了虚空君王的控制，七座炉心重新开始跳动。\n赫克的商铺会继续亮着灯，未探索的秘室仍等待着你。\n\n回收核心 %d / 7     探索房间 %d / %d\n等级 %d     倒下 %d 次"%[Reforged.bosses.size(),Reforged.visited.size(),World.ROOMS.size(),Reforged.level,Reforged.deaths],Vector2(85,247),22,TEXT)
 	button(body,"继续探索机械城",Rect2(85,473,290,51),close,true)

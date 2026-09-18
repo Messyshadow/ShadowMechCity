@@ -1,11 +1,12 @@
 extends Node3D
+const World = preload("res://remaster/world_data.gd")
 const ActorScript = preload("res://remaster/actor.gd")
 const EnemyScript = preload("res://remaster/enemy.gd")
 const ProjectileScript = preload("res://remaster/projectile.gd")
 const AudioScript = preload("res://remaster/audio.gd")
 const UIScript = preload("res://remaster/ui.gd")
 const LevelDesign = preload("res://remaster/level_design.gd")
-const REGION_COLORS := {"city":Color(.16,.73,.85),"mine":Color(1,.49,.17),"water":Color(.13,.86,.61),"factory":Color(1,.37,.10),"temple":Color(.83,.66,.32),"void":Color(.53,.36,1),"castle":Color(.46,.63,.88)}
+const REGION_COLORS := {"city":Color(.16,.73,.85),"mine":Color(1,.49,.17),"water":Color(.13,.86,.61),"factory":Color(1,.37,.10),"temple":Color(.83,.66,.32),"void":Color(.53,.36,1),"castle":Color(.46,.63,.88),"dawn":Color(.65,.91,.48)}
 const BOSS_MODELS := {"temple_sanctum":"guardian","mine_boss":"behemoth","water_boss":"crocodile","boss":"titan","void_throne":"dragon","castle_knights":"knight","castle_throne":"king"}
 var world: Node3D
 var player: CharacterBody3D
@@ -38,6 +39,11 @@ var panel_override := ""
 var platforms: Array = []
 var strikes: Array = []
 var environment: Environment
+var npc_position := Vector3(14.4,0,0)
+var beacon_position := Vector3.ZERO
+var beacon_lamp: OmniLight3D
+var beacon_glow: MeshInstance3D
+var beacon_label: Label3D
 
 func _ready() -> void:
 	register_input()
@@ -49,13 +55,14 @@ func _ready() -> void:
 		if arg.begins_with("--remaster-capture="): capture_path=arg.get_slice("=",1)
 		if arg.begins_with("--remaster-panel="): panel_override=arg.get_slice("=",1)
 		if arg=="--remaster-test": Reforged.persistence_enabled=false
-	load_room(room_override if Rooms.ROOMS.has(room_override) else Reforged.checkpoint_room, "", true)
+	load_room(room_override if World.ROOMS.has(room_override) else Reforged.checkpoint_room, "", true)
 	if room_override.is_empty(): ui.open_title()
-	if panel_override in ["open_title","open_inventory","open_skills","open_map","open_shop"]:ui.call(panel_override)
+	if panel_override in ["open_title","open_inventory","open_skills","open_map","open_shop","open_settings","open_journal","open_npc","open_story"]:ui.call(panel_override)
 	if not capture_path.is_empty():capture_timer=4.0;player.invulnerable=10
 
 func register_input() -> void:
 	var keys := {"r_left":[KEY_A,KEY_LEFT],"r_right":[KEY_D,KEY_RIGHT],"r_up":[KEY_W,KEY_UP],"r_down":[KEY_S,KEY_DOWN],"r_jump":[KEY_SPACE],"r_attack":[KEY_J],"r_skill":[KEY_K],"r_dash":[KEY_SHIFT,KEY_L],"r_swap":[KEY_Q],"r_reload":[KEY_R],"r_heal":[KEY_H],"r_interact":[KEY_E],"r_map":[KEY_M],"r_inventory":[KEY_I,KEY_U],"r_skills":[KEY_T],"r_pause":[KEY_ESCAPE]}
+	keys["r_journal"]=[KEY_N]
 	for id in keys:
 		if InputMap.has_action(id): continue
 		InputMap.add_action(id)
@@ -67,18 +74,29 @@ func setup_environment() -> void:
 	var env := WorldEnvironment.new(); add_child(env)
 	var e := Environment.new();env.environment=e;environment=e
 	e.background_mode=Environment.BG_COLOR; e.background_color=Color(.022,.039,.065)
-	e.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color=Color(.26,.34,.43);e.ambient_light_energy=.32
+	e.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color=Color(.49,.58,.68);e.ambient_light_energy=.66
 	e.tonemap_mode=Environment.TONE_MAPPER_FILMIC
 	e.fog_enabled=true; e.fog_light_color=Color(.035,.069,.09);e.fog_density=.013
-	e.ssao_enabled=true;e.ssao_radius=1.2;e.ssao_intensity=2.0
+	e.ssao_enabled=true;e.ssao_radius=.85;e.ssao_intensity=1.15
 	e.glow_enabled=true; e.glow_intensity=.35
 	var sun:=DirectionalLight3D.new();add_child(sun);sun.rotation_degrees=Vector3(-42,-28,0)
 	sun.light_color=Color(.68,.79,.9);sun.light_energy=1.05;sun.shadow_enabled=true
 	var fill:=DirectionalLight3D.new();add_child(fill);fill.rotation_degrees=Vector3(-20,140,0)
-	fill.light_color=Color(1,.54,.24);fill.light_energy=.45
+	fill.light_color=Color(.67,.79,1);fill.light_energy=.85
 	camera=Camera3D.new();add_child(camera);camera.projection=Camera3D.PROJECTION_PERSPECTIVE
 	camera.fov=37;camera.far=160;camera.current=true
 	camera.position=Vector3(8,5,21);camera.rotation_degrees=Vector3(-7,0,0)
+	apply_visibility()
+
+func apply_visibility() -> void:
+	if environment:
+		environment.adjustment_enabled=true;environment.adjustment_brightness=float(Reforged.settings.brightness)
+		environment.adjustment_contrast=1.04;environment.adjustment_saturation=.98
+
+func quit_game() -> void:
+	Reforged.save_game();Reforged.save_settings()
+	get_tree().create_timer(.25).timeout.connect(get_tree().quit)
+	queue_free()
 
 func model(id: String) -> Node3D:
 	if not meshes.has(id): meshes[id]=load("res://remaster/assets/models/"+id+".glb")
@@ -109,6 +127,7 @@ func deck(x: float, y: float, width: float, depth := 2.8) -> void:
 	solid(Vector3(x,y-.22,0),Vector3(width,.44,depth))
 	var node:=model("platform");world.add_child(node);node.position=Vector3(x,y,0)
 	node.scale=Vector3(width/4,1,depth/2.8)
+	var edge:=cube(world,Vector3(x,y+.012,depth*.5),Vector3(width,.038,.045),Color(.29,.53,.58),true);edge.transparency=.40
 
 func label3(text: String, pos: Vector3, color := Color(.7,.9,1), size := 32) -> Label3D:
 	var l:=Label3D.new();world.add_child(l);l.text=text;l.position=pos;l.font_size=size;l.pixel_size=.008
@@ -116,11 +135,11 @@ func label3(text: String, pos: Vector3, color := Color(.7,.9,1), size := 32) -> 
 	return l
 
 func load_room(id: String, from := "", initial := false) -> void:
-	if not Rooms.ROOMS.has(id): return
+	if not World.ROOMS.has(id): return
 	if is_instance_valid(world):
 		remove_child(world);world.queue_free()
 	if is_instance_valid(player): remove_child(player);player.queue_free()
-	room_id=id;room=Rooms.ROOMS[id];room_width=maxf(24,float(room.bounds[2])/64.0)
+	room_id=id;room=World.ROOMS[id];room_width=maxf(24,float(room.bounds[2])/64.0)
 	world=Node3D.new();world.name="RebuiltWorld";add_child(world)
 	enemies.clear();doors.clear();ladders.clear();pickups.clear();gears.clear();hazards.clear();movers.clear();platforms.clear();strikes.clear();boss=null
 	build_background(str(room.theme))
@@ -235,10 +254,10 @@ func door_x(d: Dictionary) -> float:
 
 func build_doors() -> void:
 	for src in room.get("doors",[]):
-		if not Rooms.ROOMS.has(str(src.to)):continue
+		if not World.ROOMS.has(str(src.to)):continue
 		var d:Dictionary=src.duplicate(true);d.x=door_x(d);doors.append(d)
 		var x:float=d.x
-		var target:=str(Rooms.ROOMS[str(d.to)].name)
+		var target:=str(World.ROOMS[str(d.to)].name)
 		if d.side in ["left","right"]:
 			var arch:=model("arch");world.add_child(arch);arch.position=Vector3(x,0,-.65);arch.scale=Vector3(.63,.78,.7)
 			label3(("←  " if d.side=="left" else "→  ")+target,Vector3(x,3.85,.4),Color(.68,.86,.91),22)
@@ -326,6 +345,18 @@ func build_interactables() -> void:
 		label3("拾荒商人 · 赫克\nE  交谈 / 交易",merchant_position+Vector3(0,2.9,0),Color(.96,.71,.36),25)
 		for i in range(3):cube(world,Vector3(9+i*.55,.35,-.8),Vector3(.5,.7,.7),Color(.27,.17,.08))
 		label3("中央车站 / CENTRAL TERMINAL",Vector3(13,7,-2.5),Color(.72,.82,.83),42)
+		var guide:=model("surveyor");world.add_child(guide);guide.position=npc_position;guide.rotation.y=-.45
+		var animation:AnimationPlayer=guide.find_child("AnimationPlayer",true,false)
+		if animation:animation.get_animation("idle").loop_mode=Animation.LOOP_LINEAR;animation.play("idle")
+		label3("巡线员 · 莉娅\nE  交谈 / 委托",npc_position+Vector3(0,2.95,0),Color(.69,.95,.48),24)
+	if room_id=="dawn_beacon":
+		beacon_position=Vector3(room_width-4,0,0)
+		var beacon:=model("console");world.add_child(beacon);beacon.position=beacon_position
+		var tower:=model("beacon_tower");world.add_child(tower);tower.position=beacon_position+Vector3(-2,0,-4)
+		beacon_glow=cube(world,tower.position+Vector3(0,4.8,0),Vector3(.8,.95,.8),Color(.8,1,.48),true)
+		beacon_lamp=OmniLight3D.new();world.add_child(beacon_lamp);beacon_lamp.position=beacon_glow.position;beacon_lamp.light_color=Color(.85,1,.55);beacon_lamp.light_energy=4;beacon_lamp.omni_range=13
+		beacon_label=label3("",beacon_position+Vector3(0,3,0),Color(.8,1,.5),25)
+		update_beacon_visual()
 	var sources:Array=room.get("items",[]).duplicate()
 	if room.get("hidden_room",false):sources.append([room_width*32,float(room.bounds[3])-45,"chest",""])
 	for i in range(sources.size()):
@@ -344,6 +375,8 @@ func spawn_enemy(kind: String, pos: Vector3, is_boss := false) -> Node3D:
 
 func _physics_process(dt: float) -> void:
 	if not is_instance_valid(player) or ui.panel_open or transitioning:return
+	for pair in [["r_left","move"],["r_right","move"],["r_jump","jump"],["r_dash","dash"],["r_attack","attack"]]:
+		if Input.is_action_just_pressed(pair[0]) and not Reforged.tutorial.get(pair[1],false):Reforged.tutorial[pair[1]]=true;Reforged.save_game()
 	time+=dt;transition_cooldown=maxf(0,transition_cooldown-dt)
 	for strike in strikes.duplicate():
 		strike.remaining-=dt
@@ -383,6 +416,14 @@ func _physics_process(dt: float) -> void:
 	if in_water != player.water:
 		audio.play("splash");burst(player.position,Color(.1,.65,.7),16);player.water=in_water
 	var hint:=""
+	if room_id=="hub" and player.position.distance_to(npc_position)<1.65:
+		ui.hint.text="E  与莉娅交谈 · 晨曦温室委托"
+		if Input.is_action_just_pressed("r_interact"):ui.open_npc()
+		return
+	if room_id=="dawn_beacon" and player.position.distance_to(beacon_position)<1.8:
+		ui.hint.text="E  重启引航灯"
+		if Input.is_action_just_pressed("r_interact"):activate_beacon()
+		return
 	var nearest_door:Dictionary={}
 	var interaction_distance:=player.position.distance_to(save_position)
 	if room_id=="hub":interaction_distance=minf(interaction_distance,player.position.distance_to(merchant_position))
@@ -392,7 +433,7 @@ func _physics_process(dt: float) -> void:
 		if distance<1.5 and distance<interaction_distance:
 			nearest_door=d;interaction_distance=distance
 	if not nearest_door.is_empty():
-		hint="E  前往 "+str(Rooms.ROOMS[str(nearest_door.to)].name)
+		hint="E  前往 "+str(World.ROOMS[str(nearest_door.to)].name)
 		if Input.is_action_just_pressed("r_interact"):use_door(nearest_door)
 	elif player.position.distance_to(save_position)<1.8:
 		hint="E  同步存档 · 恢复生命、药剂和弹药"
@@ -412,7 +453,7 @@ func _process(dt: float) -> void:
 	var target:=Vector3(clampf(player.position.x+player.facing*1.5,8,room_width-8),maxf(4.8,player.position.y+2.5),21)
 	camera.position=camera.position.lerp(target,1.0-exp(-dt*5))
 	shake=maxf(0,shake-dt)
-	if shake>0:camera.position+=Vector3(randf_range(-shake,shake),randf_range(-shake,shake),0)
+	if shake>0:camera.position+=Vector3(randf_range(-shake,shake),randf_range(-shake,shake),0)*float(Reforged.settings.shake)
 	if capture_timer>0:
 		capture_timer-=dt
 		if capture_timer<=0:
@@ -472,7 +513,7 @@ func use_door(d: Dictionary) -> void:
 
 func respawn() -> void:
 	Reforged.respawn();load_room(Reforged.checkpoint_room,"",true)
-	toast("从存档点重生 · "+str(Rooms.ROOMS[room_id].name))
+	toast("从存档点重生 · "+str(World.ROOMS[room_id].name))
 
 func boss_defeated(e: Node3D) -> void:
 	for strike in strikes:
@@ -483,11 +524,33 @@ func boss_defeated(e: Node3D) -> void:
 	if room_id=="castle_throne":ui.show_ending.call_deferred()
 
 func objective() -> String:
+	if Reforged.story.get("beacon_accepted",false) and not Reforged.story.get("beacon_claimed",false):
+		if Reforged.story.get("beacon_online",false):return "委托：返回中央车站，向莉娅报告\nN 查看任务 / M 查看地图"
+		var next:=next_hop(room_id,"dawn_beacon")
+		return "委托：重启晨曦温室的引航灯\n"+("清理守卫，在终端按 E" if room_id=="dawn_beacon" else "路线 → "+str(World.ROOMS[next].name) if next!="" else "M 查看地图")
+	return main_objective()
+
+func activate_beacon() -> bool:
+	if room_id!="dawn_beacon":return false
+	for enemy in enemies:
+		if is_instance_valid(enemy) and not enemy.dead:toast("先清理灯塔里的失控守卫，再重启终端。");return false
+	if not Reforged.story.get("beacon_online",false):
+		Reforged.story["beacon_online"]=true;Reforged.commit();audio.play("save");burst(beacon_position+Vector3.UP,Color(.7,1,.4),36)
+	update_beacon_visual()
+	toast("引航灯已重启 · 返回中央车站向莉娅报告",5);return true
+
+func update_beacon_visual() -> void:
+	if room_id!="dawn_beacon" or not is_instance_valid(beacon_lamp):return
+	var online:bool=Reforged.story.get("beacon_online",false)
+	beacon_lamp.visible=online;beacon_glow.visible=online
+	beacon_label.text="引航灯已重启\n返回车站向莉娅报告" if online else "引航终端\nE  清理守卫后重启"
+
+func main_objective() -> String:
 	if not Reforged.merchant_gift:return "与中央车站的赫克交谈，领取余烬护符"
 	for id in ["temple_sanctum","mine_boss","water_boss","boss","void_throne","castle_knights","castle_throne"]:
 		if not Reforged.bosses.has(id):
 			var next:=next_hop(room_id,id)
-			return "回收核心："+str(Rooms.ROOMS[id].name)+( "\n路线 → "+str(Rooms.ROOMS[next].name) if next!="" and next!=room_id else "\n观察橙色前摇，利用跳跃与冲刺反击")
+			return "回收核心："+str(World.ROOMS[id].name)+( "\n路线 → "+str(World.ROOMS[next].name) if next!="" and next!=room_id else "\n观察橙色前摇，利用跳跃与冲刺反击")
 	return "光核已重启 · 探索七处秘室，完成机械城图鉴"
 
 func next_hop(start: String, target: String) -> String:
@@ -495,7 +558,7 @@ func next_hop(start: String, target: String) -> String:
 	var q:Array=[start];var previous:Dictionary={start:""}
 	while not q.is_empty():
 		var id:String=q.pop_front()
-		for d in Rooms.ROOMS[id].get("doors",[]):
+		for d in World.ROOMS[id].get("doors",[]):
 			var dest:=str(d.to)
 			if previous.has(dest):continue
 			previous[dest]=id

@@ -1,6 +1,6 @@
 # 暗影机械城 · 重铸余烬
 
-当前开发版 **0.2.0**：角色与 Boss 独立造型、分武器动作、区域场景、楼梯／排水管、装备对比与强化。详见 [开发验收记录](qa/REVISION_0_2_0.md) 和 [发布验收记录](qa/RELEASE_0_2_0.md)。完整重制仍在进行。
+当前开发版 **0.3.0**：提高场景可见度、重排主菜单、增加可保存设置、三大技能分页、晨曦温室和 NPC 委托。详见 [开发验收记录](qa/EXPERIENCE_0_3_0.md) 和 [发布验收记录](qa/RELEASE_0_3_0.md)。完整重制仍在进行。
 
 这是一套可运行的 **Godot 4.7 / 3D 横版平台动作重制版**。场景、角色、敌人、武器、建筑模块均为 Blender 建模并导出的 GLB；实际使用 CharacterBody3D、骨骼动画、3D 碰撞、灯光和粒子，角色活动限制在横版平面。
 
@@ -8,8 +8,8 @@
 
 - 工程根目录双击 `play_game.bat`，或打开 `project.godot` 按 F5。
 - 独立版本：`build/Reforged/ShadowMechCityReforged.exe`，需要同目录的 `.pck`。
-- 最新本机包：`build/Reforged/ShadowMechCityReforged.exe`，版本 **0.2.0**。
-- 本机发布目录：`E:\Godot\release\暗影机械城重制版`；发布包：`E:\Godot\release\暗影机械城重制版-0.2.0.zip`。
+- 最新本机包：`build/Reforged/ShadowMechCityReforged.exe`，版本 **0.3.0**。
+- 本机发布目录：`E:\Godot\release\暗影机械城重制版`；发布包：`E:\Godot\release\暗影机械城重制版-0.3.0.zip`。
 - 原 2D 版本代码和资源保留，双击 `play_classic.bat` 可运行。
 - 重制版使用独立文件 `remaster_v1.json`，不改写原版 `save.json`。保存位置沿用原项目的用户数据目录。
 
@@ -17,12 +17,13 @@
 
 | 系统 | 内容 |
 |---|---|
-| 世界 | 原有七个区域、37 个命名房间和探索连接；七处秘室；区域建筑、移动平台、周期蒸汽、水面与通行标识 |
-| 3D 资产 | 42 个 Blender 模型，包括猎魂者、商人、三类普通敌人、七位 Boss、建筑与装备；10 张 512px 装备渲染图 |
-| 动作 | 12 个角色各含 36 段骨骼动画；分武器连击、空中攻击、双拳套、升龙、射击装填、楼梯、爬梯与技能预览 |
-| 敌人 | 接近、瞄准、攻击预警、出招、收招、受击硬直；近战、炮手和飞行单位；避免主动走出平台 |
+| 世界 | 八个区域、40 个命名房间；新增晨曦温室三房间；七处秘室；区域建筑、移动平台、周期蒸汽、水面与通行标识 |
+| 3D 资产 | 47 个 Blender 模型，包括猎魂者、商人、巡线员、五类普通敌人、七位 Boss、建筑与装备；10 张 512px 装备渲染图 |
+| 动作 | 15 个角色各含 36 段骨骼动画；分武器连击、空中攻击、双拳套、升龙、射击装填、楼梯、爬梯与技能预览 |
+| 敌人 | 接近、瞄准、攻击预警、出招、收招、受击硬直；新增正面减伤盾卫和蓄力冲锋潜袭者；命中闪光、短暂停顿、保留死亡动作 |
 | Boss | 七位核心守卫，按角色组合冲锋、震地、弹幕、低位波束、召唤；半血进入第二阶段 |
 | 战斗分支 | 长刃、重锤、蒸汽炮、动力拳套，12 个技能节点；拳套四连击、W+J 升龙、过载多段攻击 |
+| 技能分页 | 战斗、身法、暗影 / 机械；共 24 节点，前置连线、详情和 3D 预览；三段跳、滑翔、蹬墙、水下推进、冲刺强化、受击保护、收招反击、生命强化、快速装填和超频均有实际效果 |
 | 弹药 | 8 发弹匣，有限备弹，R 装填；商人售弹，击败敌人回收弹药 |
 | 商人 | 赫克首次交谈赠送并自动装备 3% 吸血护符；买补给/装备、卖装备、批量卖白装、独立永久回购栏；回购保留原 UID 与属性 |
 | 掉落 | 后续仅护符随机掉落有 2% 概率附带吸血，取消通用装备的高频吸血；吸血合计上限 8% |
@@ -30,6 +31,8 @@
 | 装备 | 六槽装备概览、替换属性对比、最高 +5 强化；出售、回购和读档保持强化属性 |
 | 地图 | 完整房间名称、探索状态、核心/秘室/存档点标记，滚轮缩放、拖动、当前位置和全图按钮 |
 | 剧情引导 | 首次商人赠礼 → 四区域核心 → 天龙王座 → 王城骑士 → 虚空君王；任务文本指出下一相邻房间；通关结尾 |
+| NPC 委托 | 巡线员莉娅「让灯再次亮起」：前往温室、清理守卫、重启灯塔、返回交付；80 金币 / 2 技能点，仅可领取一次，进度保存 |
+| 设置与教学 | F11 全屏、独立分项音量、静音、亮度、镜头震动、教学开关；设置单独保存；序章、操作指南、情境提示、N 任务记录 |
 | 声音 | 20 段原创合成音效；新增七区域与 Boss 共 8 段立体声循环配乐 |
 
 ## 通道修正
@@ -49,19 +52,21 @@
 | R / H | 装填 / 治疗 |
 | E | 交易、存档、水平房间入口 |
 | I / U、T、M | 背包、技能、地图 |
+| N / F11 | 任务记录 / 全屏切换 |
 | Esc | 关闭面板 / 暂停 |
 
 ## 可编辑来源与复现
 
 - `source/*.blend`：可编辑 Blender 源文件，含角色骨架和动作；`source/build_assets.py` 生成基础建筑、装备模型与图标。
 - `source/build_cast.py`：重建 12 个角色与 Boss，各含 36 段动画；`source/build_architecture.py` 重建 8 个区域建筑模块。
+- `source/build_experience_assets.py`：重建盾卫、潜袭者、莉娅、花箱和引航灯塔；三个新增角色各含 36 段动画。
 - `source/build_score.py`：生成七个区域与 Boss 的原创立体声循环配乐；装备图标提高到 512px。
 - `assets/models/*.glb`：运行时模型。无需安装 Blender 即可玩导出版。
 - `source/build_audio.py`：Python 标准库生成原创音效。
 - `state.gd`：独立存档、交易、回购、成长和装备。
-- `main.gd`：3D 世界、双向通道、任务线路；房间名称与连接引用原 `scripts/rooms.gd`。
+- `main.gd`：3D 世界、双向通道、任务线路；`world_data.gd` 独立复制原房间图后扩展，保留 2D 原版的 37 房间。
 - `actor.gd` / `enemy.gd`：玩家与敌人动作、战斗、Boss AI。
-- `ui.gd` / `map.gd`：面板及 3D 动作预览。
+- `ui.gd` / `experience_ui.gd` / `map.gd`：面板、三大技能分页、设置、对话与 3D 动作预览。
 
 资产重建命令（在工程根目录运行）：
 
@@ -69,6 +74,7 @@
 & 'D:\Blender\blender-4.2.9-windows-x64\blender.exe' -b -t 6 -P remaster/source/build_assets.py
 & 'D:\Blender\blender-4.2.9-windows-x64\blender.exe' -b -t 6 -P remaster/source/build_cast.py
 & 'D:\Blender\blender-4.2.9-windows-x64\blender.exe' -b -t 6 -P remaster/source/build_architecture.py
+& 'D:\Blender\blender-4.2.9-windows-x64\blender.exe' -b -t 6 -P remaster/source/build_experience_assets.py
 python remaster/source/build_audio.py
 python remaster/source/build_score.py
 ```
@@ -80,9 +86,10 @@ $env:APPDATA = Join-Path $PWD '.godot-user'
 & 'E:\SourceCode\Games\engine\big_engine\godot\bin\godot.windows.editor.x86_64.console.exe' --headless --path . --fixed-fps 60 --script remaster/tests/test_remaster.gd -- --remaster-test
 & 'E:\SourceCode\Games\engine\big_engine\godot\bin\godot.windows.editor.x86_64.console.exe' --headless --path . --fixed-fps 60 --script remaster/tests/test_combat_release.gd -- --remaster-test
 & 'E:\SourceCode\Games\engine\big_engine\godot\bin\godot.windows.editor.x86_64.console.exe' --headless --path . --fixed-fps 60 --script remaster/tests/test_revision.gd -- --remaster-test
+& 'E:\SourceCode\Games\engine\big_engine\godot\bin\godot.windows.editor.x86_64.console.exe' --headless --path . --fixed-fps 60 --script remaster/tests/test_experience.gd -- --remaster-test
 ```
 
-0.2.0 发布检查共 **392 项通过**（286 项世界/系统检查 + 18 项实际伤害/碰撞/进度检查 + 88 项新增动作/关卡/强化/Boss 检查）。独立发布包另经 GPU 启动和文件完整性校验。0.1.0 的历史记录保留在 `qa/RELEASE_2026-09-18.md`。
+0.3.0 游戏检查共 **548 项通过**（287 项世界/系统检查 + 18 项实际伤害/碰撞/进度检查 + 88 项动作/关卡/强化/Boss 检查 + 155 项新区域/技能/设置/委托/文字布局检查）。实机截图与 Windows 全屏切换另行验证。历史发布记录保留在 `qa/`。
 
 导出 `Windows Desktop Remaster` 后，运行 `python remaster/source/package_release.py` 更新启动说明、操作说明、版本说明、SHA-256 清单及版本 ZIP，并逐项校验压缩内容。生成文件留在 `build/`，不加入源码 Git。
 
@@ -90,6 +97,6 @@ $env:APPDATA = Join-Path $PWD '.godot-user'
 
 这是可玩重制开发版，采用原创、风格化机械造型；模型精度、布景密度和动作细腻程度尚未达到参考图的写实成品水准。原版的召唤伙伴及更多旧武器/技能没有迁入这套新战斗系统，仍可在 2D 原版运行。0.2.0 已新增装备强化。本版声音和配乐为原创程序合成，后续仍需听音混音与拟音精修。
 
-自动化检查覆盖存档往返、交易不可复制、技能前置、37 个场景、所有上下通道的实际按键通行、七位 Boss 出招/转阶段、弹药限制、死亡复活及菜单构建。画面另外通过实际 GPU 运行截图检查；这不等同于整轮人工通关和长时间性能测试。
+自动化检查覆盖存档往返、交易与委托奖励不可复制、技能前置与实际运动效果、40 个场景及新区域所有往返入口、七位 Boss 出招/转阶段、弹药限制、死亡复活及菜单构建。画面另外通过实际 GPU 运行截图检查；这不等同于整轮人工通关和长时间性能测试。旧版双刀、长枪、弓弩及召唤伙伴仍未迁入，本版保留四种武器分支。
 
 查看了用户提供的 [开源游戏目录](https://github.com/bobeff/open-source-games)；此实现没有复制其中游戏的代码或素材。新增模型、图标、音效均由本工程脚本生成。

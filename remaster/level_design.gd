@@ -39,6 +39,9 @@ const PROFILES := {
 	"secret_temple_orbit": [2.7,4.9,"none","stairs","orrery"],
 	"secret_void_observatory": [2.6,4.8,"none","lift","observatory"],
 	"secret_castle_ossuary": [2.6,4.9,"none","stairs","ossuary"],
+	"dawn_garden":[2.5,4.7,"none","lift","garden"],
+	"dawn_conduit":[2.6,4.8,"rune","stairs","prism"],
+	"dawn_beacon":[2.6,4.9,"none","ladder","beacon"],
 }
 
 static func profile(id: String) -> Array:
@@ -62,6 +65,7 @@ static func platforms(id: String, width: float, shafts: Array) -> Array:
 	return result
 
 static func enemy_kind(theme: String, index: int) -> String:
+	if theme=="dawn":return "warden" if index%2==0 else "stalker"
 	var formations:={"mine":["sentry","drone","sentry"],"water":["drone","gunner","sentry"],"factory":["gunner","sentry","drone"],"temple":["sentry","gunner","sentry"],"void":["drone","gunner","drone"],"castle":["sentry","gunner","sentry"]}
 	var choices:Array=formations.get(theme,["sentry"])
 	return str(choices[index%choices.size()])

@@ -1,0 +1,41 @@
+{
+  "version": "0.3.0",
+  "files": [
+    {
+      "name": "ShadowMechCityReforged.exe",
+      "bytes": 68143616,
+      "sha256": "3eb2a720afee7eed45737cc53e2cf23610277ea472d95ec5368779a42b8d9bb2"
+    },
+    {
+      "name": "ShadowMechCityReforged.pck",
+      "bytes": 60230084,
+      "sha256": "8ea9a461b9e0e693412e1fa040f27bfa7f82e84969f349a41777b4a7708f67fc"
+    },
+    {
+      "name": "开始前请读.txt",
+      "bytes": 1010,
+      "sha256": "810e8db685634d76ff92d22db276ce8d3889e03c44350ff91b12078d96e8da25"
+    },
+    {
+      "name": "操作说明.md",
+      "bytes": 8854,
+      "sha256": "a3f25b640cc57597673cf0ab174db895861570c57e7542e8d3c7c3edbeab0333"
+    },
+    {
+      "name": "RELEASE_NOTES.md",
+      "bytes": 4645,
+      "sha256": "1670612f2ba490403d1d5d46d23714d59d3e7f023bf87ba6d057cb3a5038737a"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 442,
+      "sha256": "c3586fe24f1928bb8b96f4ac4bc872e196b9049e6b115983206a7c476fba0da4"
+    }
+  ],
+  "archive": {
+    "name": "ShadowMechCityReforged-0.3.0.zip",
+    "bytes": 85468725,
+    "sha256": "776554cb428abd5fecda9016509893ac9dc79537f0411623d48b6bf0385aad47"
+  },
+  "zip_verified": true
+}

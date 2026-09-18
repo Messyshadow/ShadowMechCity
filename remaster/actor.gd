@@ -149,19 +149,22 @@ func _physics_process(dt: float) -> void:
 		Reforged.potions -= 1; health = minf(Reforged.max_health(),health+60)
 		game.audio.play("save",-5); game.burst(position+Vector3.UP,Color(.1,1,.6),12); Reforged.commit()
 	if Input.is_action_just_pressed("r_dash") and dash_cooldown <= 0:
-		dash_time=.18; dash_cooldown=.65; invulnerable=.24; game.audio.play("dash")
+		dash_time=.18; dash_cooldown=.45 if Reforged.skills.has("dash_flow") else .65; invulnerable=.36 if Reforged.skills.has("shadow_step") else .24; game.audio.play("dash")
 	if dash_time > 0:
 		dash_time -= dt; velocity=Vector3(facing*18,0,0); play_clip("dash")
 		game.trail(position+Vector3.UP,Color(.03,.65,.9))
 	else:
-		if wall_lock <= 0: velocity.x = move_toward(velocity.x,axis*(4.2 if water else 7.2),dt*48)
+		var movement_speed:=4.2*(1.35 if Reforged.skills.has("water_drive") else 1.0) if water else 7.2*(1.12 if Reforged.skills.has("stride") else 1.0)
+		if wall_lock <= 0: velocity.x = move_toward(velocity.x,axis*movement_speed,dt*48)
 		velocity.y -= (13 if water else 25)*dt
+		if Reforged.skills.has("glide") and velocity.y < -2.5 and Input.is_action_pressed("r_jump"):velocity.y=-2.5
 		if axis != 0 and attack_time <= 0: facing=signf(axis)
 		if is_on_wall() and velocity.y < -2 and axis != 0: velocity.y=-2.0
-		if jump_buffer > 0 and (coyote > 0 or jumping < 2 or is_on_wall()):
+		if jump_buffer > 0 and (coyote > 0 or jumping < (3 if Reforged.skills.has("triple_jump") else 2) or is_on_wall()):
 			if is_on_wall() and coyote <= 0:
 				velocity.x=get_wall_normal().x*8; facing=signf(velocity.x); wall_lock=.22
 				velocity.y=12.0; jumping=1; game.audio.play("wall_jump")
+				if Reforged.skills.has("wall_drive"):velocity.x*=1.2;velocity.y*=1.2
 			else:
 				velocity.y=11.7 if not water else 8.5
 				jumping = 1 if coyote > 0 else jumping+1; game.audio.play("jump")
@@ -197,7 +200,7 @@ func _physics_process(dt: float) -> void:
 
 func reload() -> void:
 	if reload_time<=0 and Reforged.magazine<8 and Reforged.ammo>0:
-		reload_time=.9; game.audio.play("reload")
+		reload_time=.6 if Reforged.skills.has("fast_loader") else .9; game.audio.play("reload")
 
 func begin_attack(special: bool) -> void:
 	if reload_time > 0: return
@@ -214,7 +217,7 @@ func begin_attack(special: bool) -> void:
 	airborne_attack=not is_on_floor()
 	uppercut=Reforged.weapon==3 and Input.is_action_pressed("r_up") and not special
 	if uppercut:velocity.y=9.0
-	if special: skill_cooldown=4.0
+	if special: skill_cooldown=3.0 if Reforged.skills.has("overclock") else 4.0
 	if combo_window<=0: combo=0
 	else: combo=(combo+1)%(4 if Reforged.weapon==3 else 3)
 	attack_total=([.34,.57,.3,.23][Reforged.weapon]) * (1.5 if special else 1.0)
@@ -268,7 +271,7 @@ func resolve_attack() -> void:
 func take_damage(amount: float, direction: float) -> void:
 	if invulnerable>0 or death_time>0 or game.ui.panel_open or game.transitioning: return
 	health-=maxf(1,amount-Reforged.stat("armor"))
-	invulnerable=.85; velocity=Vector3(direction*5,4,0); wall_lock=.2
+	invulnerable=1.1 if Reforged.skills.has("shadow_guard") else .85; velocity=Vector3(direction*5,4,0); wall_lock=.2
 	game.shake=.2; game.audio.play("hurt"); game.burst(position+Vector3.UP,Color(1,.15,.1),10)
 	if health<=0:
 		health=0; death_time=1.2; climbing=false; attack_time=0

@@ -1,14 +1,14 @@
 extends RefCounted
-## Seven distinct compositions, with the playable lane brighter than the background.
+## Eight region compositions, with the playable lane brighter than the background.
 static func place(g: Node3D, id: String, pos: Vector3, scale := Vector3.ONE) -> Node3D:
 	var n:Node3D=g.model(id);g.world.add_child(n);n.position=pos;n.scale=scale;return n
 
 static func build(g: Node3D, theme: String) -> void:
 	var tint:Color=g.REGION_COLORS[theme]
 	var width:float=g.room_width
-	var sky:Color={"city":Color(.038,.07,.095),"mine":Color(.038,.03,.027),"water":Color(.022,.065,.057),"factory":Color(.065,.034,.025),"temple":Color(.055,.055,.06),"void":Color(.027,.02,.065),"castle":Color(.041,.048,.08)}[theme]
+	var sky:Color={"city":Color(.060,.10,.14),"mine":Color(.055,.049,.044),"water":Color(.038,.087,.083),"factory":Color(.088,.055,.043),"temple":Color(.076,.077,.093),"void":Color(.043,.037,.09),"castle":Color(.066,.079,.12),"dawn":Color(.20,.32,.35)}[theme]
 	g.environment.background_color=sky;g.environment.fog_light_color=sky.lightened(.05)
-	g.environment.fog_density=.018 if theme in ["mine","water"] else .009
+	g.environment.fog_density=.012 if theme in ["mine","water"] else .006
 	# A dark, distant silhouette layer gives the foreground room breathing space.
 	if theme in ["city","factory","void","castle"]:
 		for i in range(-2,8):
@@ -19,9 +19,18 @@ static func build(g: Node3D, theme: String) -> void:
 		for i in range(-1,7):
 			var rock:=place(g,"rock_wall",Vector3(i*7,-1,-10),Vector3(1.4,1.6,1.0))
 			rock.rotation.z=sin(float(i)*1.7)*.13
-			for mesh in rock.find_children("*","MeshInstance3D",true,false):mesh.material_override=g.mat(Color(.048,.065,.08))
+			for mesh in rock.find_children("*","MeshInstance3D",true,false):mesh.material_override=g.mat(Color(.085,.105,.125))
 	# Strong region-specific landmarks; none occupy the movement plane.
 	match theme:
+		"dawn":
+			for i in range(5):
+				place(g,"gothic_arch",Vector3(i*8,0,-7),Vector3(1.15,1.15,1))
+				place(g,"garden_planter",Vector3(i*7+2,0,-3.4),Vector3.ONE*1.15)
+				g.cube(g.world,Vector3(i*8+3,5.5,-9),Vector3(4.6,7,.12),Color(.19,.36,.40))
+			var sun:=DirectionalLight3D.new();g.world.add_child(sun);sun.rotation_degrees=Vector3(-48,-34,0);sun.light_color=Color(1,.87,.64);sun.light_energy=.8
+			if g.room_id=="dawn_garden":place(g,"station_clock",Vector3(width*.58,5.6,-5),Vector3.ONE*1.4)
+			elif g.room_id=="dawn_conduit":
+				for i in range(3):place(g,"turbine",Vector3(5+i*9,2,-4.5),Vector3.ONE*1.2)
 		"city":
 			for i in range(3):
 				place(g,"gantry",Vector3(i*12,0,-4.8))
@@ -62,7 +71,7 @@ static func build(g: Node3D, theme: String) -> void:
 	for x in range(3,int(width),7):
 		place(g,"lamp",Vector3(x,3.9,-2.2))
 		var light:=OmniLight3D.new();g.world.add_child(light);light.position=Vector3(x,3.4,1.4)
-		light.light_color=Color(.91,.74,.46).lerp(tint,.25);light.light_energy=1.7;light.omni_range=8
+		light.light_color=Color(.91,.82,.64).lerp(tint,.16);light.light_energy=2.0;light.omni_range=9
 		g.cube(g.world,Vector3(x,-1.5,-.4),Vector3(.2,2.8,1.8),Color(.055,.075,.09))
 	# Back safety rail and front exposed structure establish spatial depth.
 	for x in range(0,int(width),4):

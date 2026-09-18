@@ -25,6 +25,12 @@ export_credentials.cfg
 !/remaster/qa/published_0_2_0.log
 !/remaster/qa/published_0_2_0_errors.log
 !/remaster/qa/published_0_2_0.png
+!/remaster/qa/EXPERIENCE_0_3_0.md
+!/remaster/qa/RELEASE_0_3_0.md
+!/remaster/qa/experience_test_*.log
+!/remaster/qa/experience_visual*.log
+!/remaster/qa/experience_*.png
+!/remaster/qa/published_0_3_0*
 !/remaster/qa/revision_tests.log
 !/remaster/qa/revision_combat_tests.log
 !/remaster/qa/revision_extended_tests.log

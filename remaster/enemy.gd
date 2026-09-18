@@ -22,6 +22,11 @@ var attack_count := 0
 var origin := Vector3.ZERO
 var health_bar: MeshInstance3D
 var target_x := 0.0
+var hit_flash := 0.0
+var hit_stop := 0.0
+var strike_pose := 0.0
+var flash_material: StandardMaterial3D
+var armor_meshes: Array[MeshInstance3D] = []
 
 func _ready() -> void:
 	collision_layer=4; collision_mask=1; axis_lock_linear_z=true; floor_snap_length=.4
@@ -33,6 +38,9 @@ func _ready() -> void:
 	c.shape=shape; c.position.y=shape.height*.5; add_child(c)
 	visual=game.model(kind); add_child(visual); visual.scale=Vector3.ONE*scale_factor
 	anim=visual.find_child("AnimationPlayer",true,false)
+	flash_material=StandardMaterial3D.new();flash_material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+	flash_material.albedo_color=Color(1,.70,.32,.65);flash_material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+	for mesh in visual.find_children("*","MeshInstance3D",true,false):armor_meshes.append(mesh)
 	if anim:
 		for id in ["idle","run","swim"]:
 			if anim.has_animation(id): anim.get_animation(id).loop_mode=Animation.LOOP_LINEAR
@@ -40,11 +48,21 @@ func _ready() -> void:
 	if not is_boss:
 		health_bar=game.cube(self,Vector3(0,2.45,.1),Vector3(1.1,.055,.045),Color(.95,.31,.12),true)
 
-func clip(id: String, speed := 1.0) -> void:
-	if anim and anim.has_animation(id) and anim.current_animation != id: anim.play(id,.1,speed)
+func clip(id: String, speed := 1.0, restart := false) -> void:
+	if anim and anim.has_animation(id) and (restart or anim.current_animation != id or not anim.is_playing()):
+		if restart:anim.stop()
+		anim.play(id,.1,speed)
 
 func _physics_process(dt: float) -> void:
 	if dead or game.ui.panel_open or game.transitioning: return
+	hit_flash=maxf(0,hit_flash-dt)
+	for mesh in armor_meshes:mesh.material_overlay=flash_material if hit_flash>0 else null
+	if hit_stop>0:
+		hit_stop-=dt
+		if anim:anim.speed_scale=0
+		return
+	if anim:anim.speed_scale=1
+	strike_pose=maxf(0,strike_pose-dt)
 	var target: Vector3=game.player.position
 	var dx: float=target.x-position.x
 	var dy: float=target.y-position.y
@@ -61,7 +79,7 @@ func _physics_process(dt: float) -> void:
 		match state:
 			"approach":
 				facing=signf(dx) if absf(dx)>.05 else facing
-				var range_x := 14.0 if kind in ["gunner","drone"] else (5.0 if is_boss else 2.1)
+				var range_x := 14.0 if kind in ["gunner","drone"] else 6.5 if kind=="stalker" else (5.0 if is_boss else 2.1)
 				if absf(dx)<range_x and absf(dy)<5 and timer<=0:
 					choose_attack()
 				elif absf(dx)<18:
@@ -83,7 +101,8 @@ func _physics_process(dt: float) -> void:
 					game.schedule_strike(Vector3(position.x,0,0),4.0,.28,30,Color(.63,.22,1),"俯冲落点 · 离开光圈")
 					recover()
 			"recover":
-				velocity.x=move_toward(velocity.x,0,dt*30); clip("idle")
+				velocity.x=move_toward(velocity.x,0,dt*30)
+				if strike_pose<=0:clip("idle")
 				if timer<=0: state="approach"; timer=.25
 	visual.rotation.y=lerp_angle(visual.rotation.y,facing*PI/2,dt*9)
 	move_and_slide(); position.z=0
@@ -110,7 +129,7 @@ func choose_attack() -> void:
 		}
 		var moves: Array=patterns.get(kind,["slam","volley"])
 		attack_id=moves[attack_index%moves.size()]; attack_index+=1
-	else: attack_id="volley" if kind in ["gunner","drone"] else "melee"
+	else: attack_id="volley" if kind in ["gunner","drone"] else "charge" if kind=="stalker" else "melee"
 	state="windup"; direction=facing;target_x=game.player.position.x;timer=(.92 if is_boss else .65)*( .78 if phase==2 else 1.0)
 	var range_x := 5.0 if attack_id in ["slam","melee"] else 11.0
 	game.telegraph(position+Vector3(direction*range_x*.5,.045,.0),range_x,timer,attack_id)
@@ -118,10 +137,11 @@ func choose_attack() -> void:
 
 func execute_attack() -> void:
 	attack_count+=1
+	strike_pose=.38
 	var dx: float=game.player.position.x-position.x
 	var dy: float=game.player.position.y-position.y
 	match attack_id:
-		"charge": state="charge"; timer=.65; return
+		"charge": state="charge"; timer=.65;clip("dash",1.0,true); return
 		"lunge": state="charge"; timer=.38 if phase==1 else .58;return
 		"dive":
 			state="leap";timer=1.2;velocity=Vector3(clampf((target_x-position.x)*1.6,-10,10),8,0);return
@@ -158,6 +178,7 @@ func execute_attack() -> void:
 			if phase==2:
 				for s in [-1,1]: game.projectile(position+Vector3(s,.45,0),Vector3(s*9,0,0),17,false,Color(1,.3,.1))
 		"volley":
+			clip("shoot",1.8,true)
 			var start := position+Vector3(direction*.8,1.4 if not is_boss else 2.1,0)
 			var aim: Vector3=(game.player.position+Vector3.UP-start).normalized()
 			for i in range(3 if is_boss else 1):
@@ -173,7 +194,7 @@ func execute_attack() -> void:
 			if active < 5:
 				for s in [-1,1]: game.spawn_enemy("sentry",Vector3(clampf(position.x+s*3,2,game.room_width-2),.1,0))
 			game.burst(position+Vector3.UP,Color(.7,.15,1),24)
-	if attack_id in ["slam","melee"]:clip("slam" if attack_id=="slam" else "blade_1",1.8)
+	if attack_id in ["slam","melee"]:clip("slam" if attack_id=="slam" else "blade_1",1.8,true)
 	recover()
 
 func recover() -> void:
@@ -181,6 +202,12 @@ func recover() -> void:
 
 func take_hit(amount: float, knock: float, break_armor := false) -> void:
 	if dead: return
+	if Reforged.skills.has("shadow_edge") and state=="recover":amount*=1.2
+	if kind=="warden" and state!="recover" and not break_armor and (game.player.position.x-position.x)*facing>0:
+		amount*=.4;game.burst(position+Vector3(facing*.5,1,0),Color(.35,.8,1),10)
+		game.toast("盾面减伤 · 绕后，或等待盾击收招",1.8)
+	hit_flash=.12;hit_stop=.055
+	if anim:anim.speed_scale=1;anim.stop();clip("hurt",1.5)
 	hp-=amount
 	game.damage_number(position+Vector3.UP*(3.5 if is_boss else 2),int(amount))
 	game.burst(position+Vector3.UP,Color(1,.62,.18),8); game.audio.play("hit",-5)
@@ -189,9 +216,10 @@ func take_hit(amount: float, knock: float, break_armor := false) -> void:
 	elif break_armor and state=="recover": timer+=.4
 	if hp<=0:
 		dead=true; collision_layer=0; collision_mask=0
+		for mesh in armor_meshes:mesh.material_overlay=null
 		game.audio.play("explosion",-3); game.burst(position+Vector3.UP,Color(1,.4,.08),24)
 		clip("death")
 		if is_boss: game.boss_defeated(self)
 		else: Reforged.reward(false)
-		var tw := create_tween(); tw.tween_property(visual,"scale",Vector3.ONE*.001,.8)
+		var tw := create_tween();tw.tween_interval(.35); tw.tween_property(visual,"scale",Vector3.ONE*.001,.55)
 		tw.tween_callback(queue_free)
