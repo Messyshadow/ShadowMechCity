@@ -81,3 +81,5 @@ mono_crash.*.json
 !/remaster/qa/exploration_visual*.log
 !/remaster/qa/exploration_*.png
 !/remaster/qa/published_0_6_0*
+!/remaster/qa/combat_audit*.log
+!/remaster/qa/combat_audit_*.png

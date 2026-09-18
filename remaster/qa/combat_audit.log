@@ -1,0 +1,21 @@
+Godot Engine v4.7.rc.custom_build.df6235838 (2026-06-12 18:38:52 UTC) - https://godotengine.org
+Vulkan 1.4.329 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5070 Laptop GPU
+
+COMBAT AUDIT CAPTURE blade_windup 0
+COMBAT AUDIT CAPTURE blade_impact 0
+COMBAT AUDIT CAPTURE blade_followup 0
+GROUND blade clips=["blade_1", "blade_2", "blade_3"] damage=63.0
+GROUND hammer clips=["hammer_1", "hammer_2", "hammer_3"] damage=105.0
+GROUND gauntlet clips=["gauntlet_1", "gauntlet_2", "gauntlet_3", "gauntlet_4"] damage=54.0
+GROUND dual clips=["dual_1", "dual_2", "dual_3", "dual_4"] damage=49.5
+GROUND spear clips=["spear_1", "spear_2", "spear_3"] damage=77.0
+COMBAT AUDIT CAPTURE air_dual_1 0
+COMBAT AUDIT CAPTURE air_dual_2 0
+AIR dual clips=["air_dual", "air_dual"] air position=(8.0, 4.770834, 0.0)
+PLAYER HURT hp=100.0 clip=jump velocity=(-5.0, 3.166667, 0.0) immunity=0.81666666666667
+COMBAT AUDIT CAPTURE player_hurt 0
+WARDEN frontal damage=8.0 flash=0.12 hit stop=0.055 stun=0.23 clip=hurt
+COMBAT AUDIT CAPTURE shield_impact 0
+WARDEN recovery damage=20.0
+PLAYER ACTIVE GUARD action=false block=false parry=false
+COMBAT AUDIT capture failures=0
