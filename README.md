@@ -2,6 +2,8 @@
 
 默认入口已切换到 3D 横版重制版。双击 `play_game.bat` 启动；独立运行版位于 `build/Reforged/`。新增 Blender 模型源文件、音效、玩法与测试说明见 [remaster/README.md](remaster/README.md)。
 
+当前版本 **0.2.0 开发版**：新角色与 Boss 模型、36 段角色动作、七区域布景、楼梯和排水管、装备对比与强化。392 项自动检查通过，发布记录见 [0.2.0 QA](remaster/qa/RELEASE_0_2_0.md)。完整重制仍在进行。
+
 原 2D 版本保留，使用 `play_classic.bat` 运行。以下为原版说明。
 
 ---

@@ -4,6 +4,7 @@ const EnemyScript = preload("res://remaster/enemy.gd")
 const ProjectileScript = preload("res://remaster/projectile.gd")
 const AudioScript = preload("res://remaster/audio.gd")
 const UIScript = preload("res://remaster/ui.gd")
+const LevelDesign = preload("res://remaster/level_design.gd")
 const REGION_COLORS := {"city":Color(.16,.73,.85),"mine":Color(1,.49,.17),"water":Color(.13,.86,.61),"factory":Color(1,.37,.10),"temple":Color(.83,.66,.32),"void":Color(.53,.36,1),"castle":Color(.46,.63,.88)}
 const BOSS_MODELS := {"temple_sanctum":"guardian","mine_boss":"behemoth","water_boss":"crocodile","boss":"titan","void_throne":"dragon","castle_knights":"knight","castle_throne":"king"}
 var world: Node3D
@@ -34,6 +35,9 @@ var capture_path := ""
 var capture_timer := 0.0
 var room_override := ""
 var panel_override := ""
+var platforms: Array = []
+var strikes: Array = []
+var environment: Environment
 
 func _ready() -> void:
 	register_input()
@@ -61,19 +65,19 @@ func register_input() -> void:
 func setup_environment() -> void:
 	get_viewport().msaa_3d=Viewport.MSAA_4X
 	var env := WorldEnvironment.new(); add_child(env)
-	var e := Environment.new();env.environment=e
+	var e := Environment.new();env.environment=e;environment=e
 	e.background_mode=Environment.BG_COLOR; e.background_color=Color(.022,.039,.065)
 	e.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR; e.ambient_light_color=Color(.26,.34,.43);e.ambient_light_energy=.32
 	e.tonemap_mode=Environment.TONE_MAPPER_FILMIC
 	e.fog_enabled=true; e.fog_light_color=Color(.035,.069,.09);e.fog_density=.013
 	e.ssao_enabled=true;e.ssao_radius=1.2;e.ssao_intensity=2.0
-	e.glow_enabled=true; e.glow_intensity=.7
+	e.glow_enabled=true; e.glow_intensity=.35
 	var sun:=DirectionalLight3D.new();add_child(sun);sun.rotation_degrees=Vector3(-42,-28,0)
 	sun.light_color=Color(.68,.79,.9);sun.light_energy=1.05;sun.shadow_enabled=true
 	var fill:=DirectionalLight3D.new();add_child(fill);fill.rotation_degrees=Vector3(-20,140,0)
 	fill.light_color=Color(1,.54,.24);fill.light_energy=.45
 	camera=Camera3D.new();add_child(camera);camera.projection=Camera3D.PROJECTION_PERSPECTIVE
-	camera.fov=40;camera.far=160;camera.current=true
+	camera.fov=37;camera.far=160;camera.current=true
 	camera.position=Vector3(8,5,21);camera.rotation_degrees=Vector3(-7,0,0)
 
 func model(id: String) -> Node3D:
@@ -118,7 +122,7 @@ func load_room(id: String, from := "", initial := false) -> void:
 	if is_instance_valid(player): remove_child(player);player.queue_free()
 	room_id=id;room=Rooms.ROOMS[id];room_width=maxf(24,float(room.bounds[2])/64.0)
 	world=Node3D.new();world.name="RebuiltWorld";add_child(world)
-	enemies.clear();doors.clear();ladders.clear();pickups.clear();gears.clear();hazards.clear();movers.clear();boss=null
+	enemies.clear();doors.clear();ladders.clear();pickups.clear();gears.clear();hazards.clear();movers.clear();platforms.clear();strikes.clear();boss=null
 	build_background(str(room.theme))
 	build_floor()
 	build_platforms()
@@ -131,14 +135,16 @@ func load_room(id: String, from := "", initial := false) -> void:
 			spawn=Vector3(float(door.x),.15,0)
 			if door.side=="left": spawn.x+=1.8
 			elif door.side=="right":spawn.x-=1.8
-			else:spawn.x+=1.25
+			else:spawn=safe_ground_spawn(float(door.x)+1.8)
 	player=CharacterBody3D.new();player.set_script(ActorScript);player.game=self;player.position=spawn;add_child(player)
 	player.name="Hunter";player.invulnerable=1.0
-	for data in room.get("enemies",[]):
-		var enemy_type:=str(data[2])
-		var kind: String="drone" if enemy_type in ["bat","jelly","void_eagle","void_wyvern"] else ("gunner" if "mage" in enemy_type or "cannon" in enemy_type or enemy_type=="priest" else "sentry")
-		var pos:=Vector3(float(data[0])/64.0,(float(room.bounds[3])-float(data[1]))/64.0,0)
-		spawn_enemy(kind,pos)
+	if not room.has("boss") and room_id!="hub" and not room.get("hidden_room",false):
+		for i in range(3 if room.theme in ["void","castle","factory"] else 2):
+			var x:=room_width*(.40+i*.19)
+			# Keep enemies away from the arrival and checkpoint corridor.
+			for l in ladders:
+				if absf(x-float(l.x))<2.0:x+=2.5
+			spawn_enemy(LevelDesign.enemy_kind(str(room.theme),i),safe_ground_spawn(x))
 	if room.has("boss") and not Reforged.bosses.has(id):
 		var kind: String=BOSS_MODELS.get(id,"guardian")
 		boss=spawn_enemy(kind,Vector3(room_width*.7,.1,0),true)
@@ -150,17 +156,26 @@ func load_room(id: String, from := "", initial := false) -> void:
 	transition_cooldown=1; transitioning=false
 	camera.position=Vector3(clampf(spawn.x,8,room_width-8),5,22)
 	ui.region_banner(str(room.name),str(room.theme))
+	if audio.has_method("set_region"):audio.set_region(str(room.theme),is_instance_valid(boss))
 
 func build_floor() -> void:
 	var cuts: Array[Vector2]=[]
 	for d in room.get("doors",[]):
 		if d.side=="down":
-			var x:=door_x(d); cuts.append(Vector2(x-1,x+1))
+			var x:=door_x(d)
+			if str(LevelDesign.profile(room_id)[3])=="stairs" and not bool(d.get("hidden",false)):
+				var exit_x:=x+3.2*(-1 if x>room_width*.55 else 1)
+				cuts.append(Vector2(minf(x,exit_x)-1,maxf(x,exit_x)+1))
+			else:cuts.append(Vector2(x-1,x+1))
 	for pit in room.get("pits",[]):
 		var x:=float(pit[0])/64.0;var width:=float(pit[1])/64.0
+		var crosses_passage:=false
+		for cut in cuts:
+			if x<cut.y+.5 and x+width>cut.x-.5:crosses_passage=true
+		if crosses_passage:continue
 		cuts.append(Vector2(x,x+width))
 		for px in range(int(ceil(width/2.8))): deck(x+.7+px*2.8,.5+(.6 if px%2 else 0),1.6)
-		cube(world,Vector3(x+width*.5,-2,0),Vector3(width,.08,2.7),Color(.9,.15,.015),true)
+		cube(world,Vector3(x+width*.5,-3.8,0),Vector3(width,.08,2.7),REGION_COLORS[room.theme].darkened(.4),room.theme in ["mine","factory","void"])
 	cuts.sort_custom(func(a,b):return a.x<b.x)
 	var left:=0.0
 	for cut in cuts:
@@ -178,17 +193,36 @@ func floor_strip(a: float, b: float) -> void:
 		var width:=minf(4,b-x);deck(x+width*.5,0,width);x+=width
 
 func build_platforms() -> void:
-	if room.has("boss"): return
-	for p in room.get("platforms",[]):
-		var width:=maxf(2.1,float(p[2])/64.0)
-		var x:=float(p[0])/64.0+width*.5
-		var y:float=maxf(2.8,(float(room.bounds[3])-float(p[1]))/64.0)
-		deck(x,y,width)
-	for p in room.get("walls",[]):
-		var h:=float(p[3])/64.0;var x:=float(p[0])/64.0;var y:float=(float(room.bounds[3])-float(p[1]))/64.0-h*.5
-		solid(Vector3(x,y,0),Vector3(.65,h,2.5))
-		cube(world,Vector3(x,y,0),Vector3(.65,h,2.5),Color(.14,.19,.22))
-		cube(world,Vector3(x+.34,y,1.28),Vector3(.055,h,.04),REGION_COLORS[room.theme],true)
+	var shafts:Array=[]
+	for d in room.get("doors",[]):
+		if d.side in ["up","down"]:shafts.append(door_x(d))
+	platforms=LevelDesign.platforms(room_id,room_width,shafts)
+	for p in platforms:deck(p.x,p.y,p.z)
+
+func surface_y(x: float, upper := false) -> float:
+	if upper:
+		var highest:=0.0
+		for p in platforms:
+			if absf(p.x-x)<p.z*.5-.25:highest=maxf(highest,p.y)
+		return highest
+	for pit in room.get("pits",[]):
+		var start:=float(pit[0])/64.0;var width:=float(pit[1])/64.0
+		if x>start and x<start+width:return 1.9
+	return 0.0
+
+func safe_ground_spawn(x: float) -> Vector3:
+	for attempt in range(8):
+		var moved:=false
+		for pit in room.get("pits",[]):
+			var a:=float(pit[0])/64.0;var b:=a+float(pit[1])/64.0
+			if x>a-.6 and x<b+.6:x=b+.9;moved=true
+		for l in ladders:
+			if l.door.side=="down":
+				var start:=minf(l.x,l.exit_x) if l.kind=="stairs" else float(l.x)
+				var end:=maxf(l.x,l.exit_x) if l.kind=="stairs" else float(l.x)
+				if x>start-1.7 and x<end+1.7:x=end+1.9;moved=true
+		if not moved:break
+	return Vector3(clampf(x,2,room_width-2),.1,0)
 
 func door_x(d: Dictionary) -> float:
 	if d.side=="left":return 1.0
@@ -210,10 +244,14 @@ func build_doors() -> void:
 			label3(("←  " if d.side=="left" else "→  ")+target,Vector3(x,3.85,.4),Color(.68,.86,.91),22)
 		else:
 			var up:bool=d.side=="up"
-			var is_lift:bool=room.theme in ["city","void","castle"] and not bool(d.get("hidden",false))
+			var passage:=str(LevelDesign.profile(room_id)[3])
+			if bool(d.get("hidden",false)) and passage!="pipe":passage="ladder"
+			var is_lift:bool=passage=="lift"
 			var low:=0.0 if up else -3.0
 			var high:=5.8 if up else 0.0
-			ladders.append({"x":x,"low":low,"high":high,"door":d,"lift":is_lift})
+			var run:=4.4 if up else 3.2
+			var exit_x:=x+run*(-1 if x>room_width*.55 else 1)
+			ladders.append({"x":x,"low":low,"high":high,"door":d,"lift":is_lift,"kind":passage,"exit_x":exit_x})
 			if is_lift:
 				for rail_x in [x-.85,x+.85]:
 					cube(world,Vector3(rail_x,(low+high)*.5,-.8),Vector3(.12,high-low+1,.14),Color(.15,.7,.88),true)
@@ -221,64 +259,36 @@ func build_doors() -> void:
 				var lift:=model("lift");world.add_child(lift);lift.position=Vector3(x,0,0);lift.scale=Vector3(.66,1,.8)
 				d["lift_node"]=lift
 				audio.machine(lift,"lift",-27)
+			elif passage=="stairs":
+				var steps:=20 if up else 12
+				for i in range(steps):
+					var u:=float(i+1)/steps
+					var sx:=lerpf(x,exit_x,u);var sy:=lerpf(0,high if up else low,u)
+					var tread:=model("platform");world.add_child(tread);tread.position=Vector3(sx,sy,-1.4);tread.scale=Vector3(.16,.42,.5)
+					if i%4==0:
+						cube(world,Vector3(sx,sy+.6,-2.1),Vector3(.045,1.2,.045),Color(.38,.28,.15))
+				var railing:=cube(world,Vector3((x+exit_x)*.5,(high if up else low)*.5+1.15,-2.1),Vector3(sqrt(run*run+pow(high-low,2)),.055,.055),Color(.54,.38,.18))
+				railing.rotation.z=atan2(high if up else low,exit_x-x)
+			elif passage=="pipe":
+				var shaft:=model("pipe");world.add_child(shaft);shaft.position=Vector3(x,low,-1.35);shaft.scale=Vector3(4,(high-low)/4,4)
+				for y in [low,high]:
+					var rim:=MeshInstance3D.new();var ring:=TorusMesh.new();ring.inner_radius=.78;ring.outer_radius=1.02;rim.mesh=ring;rim.material_override=mat(Color(.12,.37,.28));world.add_child(rim);rim.position=Vector3(x,y,.0)
+				var rail:=model("ladder");world.add_child(rail);rail.position=Vector3(x,low,-.2);rail.scale.y=(high-low)/4
 			else:
 				var ladder:=model("ladder");world.add_child(ladder);ladder.position=Vector3(x,low,-.30);ladder.scale.y=(high-low)/4
 			cube(world,Vector3(x,(low+high)*.5,-1.25),Vector3(2,high-low+1,.35),Color(.038,.055,.07))
 			if up:
-				deck(x+1.5,5.8,1.0)
+				deck(exit_x if passage=="stairs" else x+1.5,5.8,1.6)
 				# The rail itself is a guaranteed bidirectional route; ledges are optional.
-				deck(x+1.9,2.8,1.55)
+				if passage!="stairs":deck(x+1.9,2.8,1.55)
 			else:
-				deck(x,-3.15,2.0)
+				deck(exit_x if passage=="stairs" else x,-3.15,2.0)
 				for lip in [-1.05,1.05]:cube(world,Vector3(x+lip,.06,0),Vector3(.13,.15,2.9),Color(.95,.52,.08))
-			label3(("↑  W 上行" if up else "↓  S 下行")+(" · 升降机" if is_lift else " · 检修梯"),Vector3(x,2.6,1),Color(.96,.7,.25),25)
-			label3(target,Vector3(x,2.15,1),Color(.71,.82,.85),20)
+			label3(("↑ W" if up else "↓ S")+" · "+{"lift":"升降机","stairs":"楼梯","pipe":"排水管","ladder":"检修梯"}[passage],Vector3(x,2.6,1),Color(.96,.7,.25),29)
+			label3(target,Vector3(x,2.15,1),Color(.71,.82,.85),22)
 
 func build_background(theme: String) -> void:
-	var tint:Color=REGION_COLORS[theme]
-	for layer in range(2):
-		for i in range(-2,10):
-			var tower:=model("tower");world.add_child(tower)
-			tower.position=Vector3(i*6.8+layer*3,-4,-12-layer*16)
-			tower.scale=Vector3(.8+layer*.5,1.3+fmod(float(i*7+30),5)*.22,.8+layer*.5)
-	for x in range(0,int(room_width)+1,6):
-		var pipe:=model("pipe");world.add_child(pipe);pipe.position=Vector3(x,0,-3.2);pipe.scale=Vector3(1.5,2.7,1.5)
-		var gear:=model("gear");world.add_child(gear);gear.position=Vector3(x+2,5.8,-3.5);gear.scale=Vector3.ONE*1.5;gears.append(gear)
-		if x%12==0:audio.machine(gear,"gear",-28)
-		cube(world,Vector3(x+2,9,-3.7),Vector3(6,.18,.4),Color(.2,.25,.29))
-		cube(world,Vector3(x+2,8.85,-3.4),Vector3(3,.045,.06),tint,true)
-		var light:=OmniLight3D.new();world.add_child(light);light.position=Vector3(x+2,5,1.6)
-		light.light_color=tint;light.light_energy=1.1;light.omni_range=8
-	# Region landmarks are actual Blender geometry, separate from traversable collision.
-	for i in range(3):
-		var id:String={"city":"reactor","mine":"crystals","water":"turbine","factory":"reactor","temple":"buttress","void":"turbine","castle":"buttress"}[theme]
-		var landmark:=model(id);world.add_child(landmark)
-		landmark.position=Vector3(4+i*10,-.4,-4.8)
-		landmark.scale=Vector3.ONE*(1.4 if theme in ["mine","castle","temple"] else 1.0)
-		if theme=="water":
-			var pipe:=model("pipe");world.add_child(pipe);pipe.position=Vector3(i*10,4.1,-4.7);pipe.rotation.z=PI/2;pipe.scale=Vector3(2,2.5,2)
-	# Backside catwalks, safety rails and floor ribs give the room a built structure.
-	for x in range(0,int(room_width)+1,4):
-		cube(world,Vector3(x,0.1,-1.5),Vector3(.12,1.5,.12),Color(.27,.2,.09))
-		cube(world,Vector3(x+2,.82,-1.5),Vector3(4,.085,.085),Color(.46,.3,.09))
-		cube(world,Vector3(x,-1.25,-.5),Vector3(.24,2.2,1.8),Color(.065,.09,.11))
-		cube(world,Vector3(x+2,-2.3,-.5),Vector3(4,.3,1.8),Color(.05,.065,.075))
-	# Atmospheric dust catches the amber and cyan lights.
-	var dust:=CPUParticles3D.new();world.add_child(dust);dust.position=Vector3(room_width*.5,5,1)
-	dust.amount=90;dust.lifetime=10;dust.emission_shape=CPUParticles3D.EMISSION_SHAPE_BOX;dust.emission_box_extents=Vector3(room_width*.5,6,3)
-	dust.direction=Vector3.UP;dust.gravity=Vector3.ZERO;dust.initial_velocity_min=.06;dust.initial_velocity_max=.18
-	var mote:=SphereMesh.new();mote.radius=.018;mote.height=.036;mote.material=mat(Color(.29,.47,.49),true);dust.mesh=mote
-	# Foreground conduits establish depth without covering the playable silhouette.
-	for x in range(-1,int(room_width)+3,8):
-		var pipe:=model("pipe");world.add_child(pipe);pipe.position=Vector3(x,-4.1,2);pipe.rotation.z=PI/2
-		pipe.scale=Vector3(1.2,2,1.2)
-	if theme in ["castle","temple"]:
-		for x in range(2,int(room_width),6):
-			var arch:=model("arch");world.add_child(arch);arch.position=Vector3(x,0,-5);arch.scale=Vector3(1.4,2.4,1.2)
-	if theme=="void":
-		var ring:=MeshInstance3D.new();var tor:=TorusMesh.new();tor.inner_radius=3.8;tor.outer_radius=4.2;ring.mesh=tor
-		ring.material_override=mat(tint,true);world.add_child(ring);ring.position=Vector3(room_width*.5,8,-9);ring.rotation_degrees.x=90
-		gears.append(ring)
+	preload("res://remaster/scenery.gd").build(self,theme)
 
 func build_machines() -> void:
 	if room.theme=="water":
@@ -291,11 +301,14 @@ func build_machines() -> void:
 		var art:=model("lift");m.add_child(art);art.scale=Vector3(.94,1,.9)
 		var base:=Vector3(room_width*.53,.7,0);m.position=base
 		movers.append({"node":m,"base":base});audio.machine(m,"lift",-23)
-	if room.theme in ["factory","mine"] and not room.has("boss"):
-		var x:=room_width*.6
-		hazards.append({"x":x,"phase":0.0})
-		cube(world,Vector3(x,.04,0),Vector3(1.5,.09,2.5),Color(.23,.12,.035))
-		label3("周期蒸汽 · 观察橙色预警",Vector3(x,2.5,1),Color(.9,.54,.18),20)
+	var hazard:=str(LevelDesign.profile(room_id)[2])
+	if hazard in ["steam","rune","pulse"] and not room.has("boss"):
+		var x:=safe_ground_spawn(room_width*.56).x
+		var tint:Color={"steam":Color(1,.40,.08),"rune":Color(.35,.7,1),"pulse":Color(.64,.25,1)}[hazard]
+		var pad:=cube(world,Vector3(x,.055,0),Vector3(1.5,.09,2.5),tint.darkened(.78))
+		var beam:=cube(world,Vector3(x,1.7,0),Vector3(.16,3.4,.1),tint,true);beam.visible=false
+		var title:=label3({"steam":"蒸汽喷口","rune":"脉冲符文","pulse":"虚空电弧"}[hazard]+" · 等待熄灭",Vector3(x,3.7,0),tint,22)
+		hazards.append({"x":x,"phase":0.0,"pad":pad,"beam":beam,"color":tint,"label":title})
 
 func build_interactables() -> void:
 	save_position=Vector3(-999,0,0)
@@ -318,7 +331,9 @@ func build_interactables() -> void:
 	for i in range(sources.size()):
 		var p:Array=sources[i];var id:=room_id+":"+str(i)
 		if Reforged.collected.has(id):continue
-		var pos:=Vector3(float(p[0])/64.0,(float(room.bounds[3])-float(p[1]))/64.0,.1)
+		var x:=clampf(float(p[0])/64.0,3,room_width-3)
+		if not platforms.is_empty() and str(p[2])=="chest":x=platforms[platforms.size()-1].x
+		var pos:=Vector3(x,surface_y(x,true)+.9,.1)
 		var art:=model("amulet" if str(p[2])=="chest" else "ring");world.add_child(art);art.position=pos;art.scale=Vector3.ONE*.6
 		pickups.append({"id":id,"pos":pos,"node":art,"chest":str(p[2])=="chest"})
 
@@ -330,6 +345,18 @@ func spawn_enemy(kind: String, pos: Vector3, is_boss := false) -> Node3D:
 func _physics_process(dt: float) -> void:
 	if not is_instance_valid(player) or ui.panel_open or transitioning:return
 	time+=dt;transition_cooldown=maxf(0,transition_cooldown-dt)
+	for strike in strikes.duplicate():
+		strike.remaining-=dt
+		if is_instance_valid(strike.node):strike.node.scale.y=1.0+sin(strike.remaining*18)*.10
+		if strike.remaining<=0:
+			var pos:Vector3=strike.pos
+			burst(pos+Vector3.UP*.25,strike.color,22);audio.play("explosion",-12);shake=.1
+			var height:=4.4 if bool(strike.column) else 1.0
+			if absf(player.position.x-pos.x)<float(strike.width)*.5 and player.position.y<pos.y+height and player.position.y>pos.y-1.8:player.take_damage(strike.damage,signf(player.position.x-pos.x))
+			if bool(strike.column):
+				var pillar:=cube(world,pos+Vector3.UP*2.2,Vector3(.20,4.4,.20),strike.color,true)
+				var tw:=pillar.create_tween();tw.tween_property(pillar,"scale",Vector3(.05,1,.05),.25);tw.tween_callback(pillar.queue_free)
+			strike.node.queue_free();strike.label.queue_free();strikes.erase(strike)
 	for m in movers:
 		m.node.position=m.base+Vector3(0,(sin(time*.6)+1)*2.3,0)
 	for d in doors:
@@ -338,9 +365,12 @@ func _physics_process(dt: float) -> void:
 			d.lift_node.position.y=move_toward(d.lift_node.position.y,target,dt*5)
 	for h in hazards:
 		var cycle:=fmod(time,4.8)
+		h.beam.visible=cycle>3.4
+		h.pad.material_override=mat(h.color if cycle>2.3 else h.color.darkened(.78),cycle>2.3)
+		h.beam.transparency=.68
 		if cycle>3.4:
 			if int(time*16)%3==0:burst(Vector3(h.x,.4,0),Color(1,.42,.14),2)
-			if absf(player.position.x-float(h.x))<.8 and player.position.y<1.2:player.take_damage(16,signf(player.position.x-float(h.x)))
+			if absf(player.position.x-float(h.x))<.8 and player.position.y<3.4:player.take_damage(16,signf(player.position.x-float(h.x)))
 	for p in pickups.duplicate():
 		if not is_instance_valid(p.node):continue
 		p.node.rotation.y+=dt
@@ -391,7 +421,10 @@ func _process(dt: float) -> void:
 			await RenderingServer.frame_post_draw
 			var result:=get_viewport().get_texture().get_image().save_png(capture_path)
 			print("REMASTER_CAPTURE ",result," ",capture_path)
-			get_tree().quit()
+			# Let the scene and its active audio players release before the engine
+			# exits. The timer belongs to SceneTree and survives this scene.
+			get_tree().create_timer(.25).timeout.connect(get_tree().quit.bind(0 if result==OK else 1))
+			queue_free()
 
 func try_climb(vertical: float) -> bool:
 	if transition_cooldown>0:return false
@@ -408,6 +441,9 @@ func try_climb(vertical: float) -> bool:
 		if gate_reason(str(l.door.to))!="":toast(gate_reason(str(l.door.to)));return false
 		player.climbing=true;player.climb_x=l.x;player.climb_low=l.low;player.climb_high=l.high;player.climb_door=l.door
 		player.climb_lift=bool(l.lift)
+		player.climb_kind=str(l.get("kind","ladder"));player.climb_start_y=0.0
+		player.climb_entry_x=l.x;player.climb_exit_x=float(l.get("exit_x",l.x))
+		if player.climb_kind=="stairs":player.facing=signf(player.climb_exit_x-player.climb_entry_x)
 		player.velocity=Vector3.ZERO;player.position.x=l.x
 		if l.lift:audio.play("lift",-9)
 		return true
@@ -439,6 +475,10 @@ func respawn() -> void:
 	toast("从存档点重生 · "+str(Rooms.ROOMS[room_id].name))
 
 func boss_defeated(e: Node3D) -> void:
+	for strike in strikes:
+		strike.node.queue_free();strike.label.queue_free()
+	strikes.clear()
+	if audio.has_method("set_region"):audio.set_region(str(room.theme),false)
 	Reforged.bosses[room_id]=true;Reforged.reward(true);toast("核心回收 · "+e.boss_name+"  |  +150 金币",5)
 	if room_id=="castle_throne":ui.show_ending.call_deferred()
 
@@ -474,6 +514,9 @@ func clear_sight(a: Vector3, b: Vector3) -> bool:
 
 func projectile(pos: Vector3, vel: Vector3, damage: float, friendly: bool, color: Color, piercing := false) -> void:
 	var p:=Node3D.new();p.set_script(ProjectileScript);p.game=self;p.position=pos;p.velocity=vel;p.damage=damage;p.friendly=friendly;p.piercing=piercing
+	# Check the first shot segment from the hunter to the barrel, so a nearby
+	# enemy cannot be skipped when the rendered barrel extends past its body.
+	if friendly:p.sweep_origin=Vector3(player.position.x,pos.y,0)
 	world.add_child(p);cube(p,Vector3.ZERO,Vector3(.7,.15,.15) if not piercing else Vector3(.4,1.5,.18),color,true)
 	var light:=OmniLight3D.new();p.add_child(light);light.light_color=color;light.light_energy=.65;light.omni_range=2
 
@@ -484,9 +527,18 @@ func burst(pos: Vector3, color: Color, count: int) -> void:
 	var t:=create_tween();t.tween_interval(.9);t.tween_callback(p.queue_free)
 
 func slash(pos: Vector3, _direction: float, color: Color, radius: float) -> void:
-	var m:=MeshInstance3D.new();var mesh:=TorusMesh.new();mesh.inner_radius=radius*.86;mesh.outer_radius=radius
-	m.mesh=mesh;m.material_override=mat(color,true);world.add_child(m);m.position=pos;m.rotation_degrees.x=90;m.scale=Vector3(1,.7,1)
-	var tw:=create_tween();tw.tween_property(m,"scale",Vector3(1.3,.9,1.1),.16);tw.tween_callback(m.queue_free)
+	# Open arc with a tapered leading edge; the arc lies in the combat plane.
+	var verts:=PackedVector3Array();var colors:=PackedColorArray()
+	for i in range(24):
+		var angle_a:=lerpf(-1.2,1.45,float(i)/24);var angle_b:=lerpf(-1.2,1.45,float(i+1)/24)
+		var inner:=radius*(.72+float(i)/24*.18)
+		for v in [Vector3(cos(angle_a)*radius*_direction,sin(angle_a)*radius,0),Vector3(cos(angle_b)*radius*_direction,sin(angle_b)*radius,0),Vector3(cos(angle_a)*inner*_direction,sin(angle_a)*inner,0),Vector3(cos(angle_b)*radius*_direction,sin(angle_b)*radius,0),Vector3(cos(angle_b)*inner*_direction,sin(angle_b)*inner,0),Vector3(cos(angle_a)*inner*_direction,sin(angle_a)*inner,0)]:
+			verts.append(v);colors.append(Color(color,1.0-float(i)/28))
+	var arrays:Array=[];arrays.resize(Mesh.ARRAY_MAX);arrays[Mesh.ARRAY_VERTEX]=verts;arrays[Mesh.ARRAY_COLOR]=colors
+	var mesh:=ArrayMesh.new();mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES,arrays)
+	var material:=StandardMaterial3D.new();material.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED;material.cull_mode=BaseMaterial3D.CULL_DISABLED;material.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA;material.vertex_color_use_as_albedo=true;material.emission_enabled=true;material.emission=color;material.emission_energy_multiplier=1.6
+	var m:=MeshInstance3D.new();m.mesh=mesh;m.material_override=material;world.add_child(m);m.position=pos+Vector3(0,0,.35)
+	var tw:=m.create_tween();tw.tween_property(m,"scale",Vector3(1.25,1.25,1),.13);tw.parallel().tween_property(m,"transparency",1.0,.17);tw.tween_callback(m.queue_free)
 
 func trail(pos: Vector3, color: Color) -> void:
 	var m:=cube(world,pos,Vector3(.18,1.3,.15),color,true)
@@ -494,8 +546,13 @@ func trail(pos: Vector3, color: Color) -> void:
 
 func telegraph(pos: Vector3, width: float, duration: float, attack: String) -> void:
 	var m:=cube(world,pos,Vector3(width,.035,2.4),Color(.85,.18,.025),true)
-	var l:=label3({"slam":"震地 · 跳跃躲避","charge":"冲锋 · 越过敌人","beam":"低位弹幕 · 跳跃","volley":"瞄准 · 移动躲避","summon":"召唤增援","melee":"近战起手"}.get(attack,"预警"),pos+Vector3(0,1.2,0),Color(1,.51,.15),24)
-	var tw:=create_tween();tw.tween_interval(duration);tw.tween_callback(m.queue_free);tw.tween_callback(l.queue_free)
+	var l:=label3({"slam":"震地 · 跳跃躲避","charge":"冲锋 · 越过敌人","beam":"低位弹幕 · 跳跃","volley":"瞄准 · 移动躲避","summon":"召唤增援","melee":"近战起手","lunge":"骑士突刺 · 越过敌人","combo":"连续斩击 · 拉开距离","dive":"锁定俯冲 · 离开落点","bite":"巨鳄撕咬 · 后退","tail":"尾部蓄力 · 准备跳跃","tide":"潮汐 · 跳跃","rune":"符文唤醒 · 观察落点","rift":"空间撕裂 · 观察落点","rocks":"岩层崩落 · 持续移动","furnace":"炉压上升 · 避开喷口"}.get(attack,"预警"),pos+Vector3(0,1.2,0),Color(1,.51,.15),24)
+	var tw:=m.create_tween();tw.tween_interval(duration);tw.tween_callback(l.queue_free);tw.tween_callback(m.queue_free)
+
+func schedule_strike(pos: Vector3, width: float, delay: float, damage: float, color: Color, message: String, column := false) -> void:
+	var marker:=cube(world,pos+Vector3.UP*.035,Vector3(width,.035,2.4),color.darkened(.25),true)
+	var title:=label3(message,pos+Vector3.UP*1.7,Color(1,.73,.42),22)
+	strikes.append({"pos":pos,"width":width,"remaining":delay,"damage":damage,"color":color,"node":marker,"label":title,"column":column})
 
 func damage_number(pos: Vector3, value: int) -> void:
 	var l:=label3(str(value),pos,Color(1,.84,.39),32)

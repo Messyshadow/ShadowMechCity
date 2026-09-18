@@ -21,19 +21,20 @@ var warning: Node3D
 var attack_count := 0
 var origin := Vector3.ZERO
 var health_bar: MeshInstance3D
+var target_x := 0.0
 
 func _ready() -> void:
 	collision_layer=4; collision_mask=1; axis_lock_linear_z=true; floor_snap_length=.4
 	origin=position
-	var scale_factor := 2.0 if is_boss else 1.0
-	radius=.7 if is_boss else .38
+	var scale_factor:float={"dragon":1.8,"crocodile":1.9,"behemoth":1.95,"guardian":2.05,"king":2.1}.get(kind,2.0 if is_boss else 1.0)
+	radius=1.1 if kind in ["crocodile","behemoth"] else .7 if is_boss else .38
 	var c := CollisionShape3D.new(); var shape := CapsuleShape3D.new()
-	shape.radius=radius; shape.height=1.8*scale_factor
+	shape.radius=radius; shape.height=(1.25 if kind in ["crocodile","behemoth"] else 1.8)*scale_factor
 	c.shape=shape; c.position.y=shape.height*.5; add_child(c)
 	visual=game.model(kind); add_child(visual); visual.scale=Vector3.ONE*scale_factor
 	anim=visual.find_child("AnimationPlayer",true,false)
 	if anim:
-		for id in ["idle","run"]:
+		for id in ["idle","run","swim"]:
 			if anim.has_animation(id): anim.get_animation(id).loop_mode=Animation.LOOP_LINEAR
 	hp=max_hp
 	if not is_boss:
@@ -51,7 +52,7 @@ func _physics_process(dt: float) -> void:
 		phase=2; game.toast(boss_name+" · 核心过载，第二阶段")
 		game.burst(position+Vector3.UP*2,Color(1,.15,.05),32); game.audio.play("warning")
 	velocity.y-=25*dt
-	if kind=="drone" or (kind=="dragon" and state!="charge"):
+	if kind=="drone" or (kind=="dragon" and state not in ["charge","leap"]):
 		velocity.y=(origin.y+2.3+sin(Time.get_ticks_msec()*.0014)*.6-position.y)*3
 	if stun>0:
 		stun-=dt; velocity.x=move_toward(velocity.x,0,dt*12); clip("hurt")
@@ -69,13 +70,18 @@ func _physics_process(dt: float) -> void:
 					clip("run" if absf(velocity.x)>.2 else "idle")
 				else: velocity.x=0; clip("idle")
 			"windup":
-				velocity.x=0; clip("shoot" if attack_id in ["volley","beam"] else "attack3",.35)
+				velocity.x=0; clip("shoot" if attack_id in ["volley","beam","tide"] else "cast" if attack_id in ["rune","rift","summon","rocks"] else "bite" if attack_id=="bite" else "slam",.55)
 				if timer<=0: execute_attack()
 			"charge":
 				velocity.x=direction*(12 if is_boss else 8)
 				clip("dash")
 				if absf(dx)<radius+.7 and absf(dy)<2: game.player.take_damage(27 if is_boss else 16,direction)
 				if timer<=0 or is_on_wall() or not safe_step(direction): recover()
+			"leap":
+				clip("dash")
+				if (is_on_floor() and timer<.8) or timer<=0:
+					game.schedule_strike(Vector3(position.x,0,0),4.0,.28,30,Color(.63,.22,1),"俯冲落点 · 离开光圈")
+					recover()
 			"recover":
 				velocity.x=move_toward(velocity.x,0,dt*30); clip("idle")
 				if timer<=0: state="approach"; timer=.25
@@ -94,18 +100,18 @@ func choose_attack() -> void:
 	if not game.clear_sight(position+Vector3.UP,game.player.position+Vector3.UP): timer=.6; return
 	if is_boss:
 		var patterns := {
-			"titan":["slam","charge","volley"],
-			"guardian":["slam","beam","summon"],
-			"behemoth":["charge","slam","volley"],
-			"crocodile":["charge","volley","slam"],
-			"dragon":["volley","beam","charge"],
-			"knight":["charge","melee","summon"],
-			"king":["beam","slam","summon","charge","volley"],
+				"titan":["slam","furnace","charge"],
+				"guardian":["rune","slam","summon"],
+				"behemoth":["charge","rocks","slam"],
+				"crocodile":["bite","tail","tide"],
+				"dragon":["volley","dive","beam"],
+				"knight":["lunge","combo","summon"],
+				"king":["rift","beam","summon","slam","volley"],
 		}
 		var moves: Array=patterns.get(kind,["slam","volley"])
 		attack_id=moves[attack_index%moves.size()]; attack_index+=1
 	else: attack_id="volley" if kind in ["gunner","drone"] else "melee"
-	state="windup"; direction=facing; timer=(.92 if is_boss else .65)*( .78 if phase==2 else 1.0)
+	state="windup"; direction=facing;target_x=game.player.position.x;timer=(.92 if is_boss else .65)*( .78 if phase==2 else 1.0)
 	var range_x := 5.0 if attack_id in ["slam","melee"] else 11.0
 	game.telegraph(position+Vector3(direction*range_x*.5,.045,.0),range_x,timer,attack_id)
 	if is_boss: game.audio.play("warning",-8)
@@ -116,6 +122,30 @@ func execute_attack() -> void:
 	var dy: float=game.player.position.y-position.y
 	match attack_id:
 		"charge": state="charge"; timer=.65; return
+		"lunge": state="charge"; timer=.38 if phase==1 else .58;return
+		"dive":
+			state="leap";timer=1.2;velocity=Vector3(clampf((target_x-position.x)*1.6,-10,10),8,0);return
+		"bite":
+			clip("bite",2.0);game.slash(position+Vector3(direction*1.8,1.3,0),direction,Color(.12,.85,.5),2.2)
+			if absf(dx)<4.6 and dx*direction>-.3 and absf(dy)<1.8 and game.clear_sight(position+Vector3.UP,game.player.position+Vector3.UP):game.player.take_damage(28,direction)
+		"tail":
+			clip("tail_sweep",1.6);game.schedule_strike(Vector3(position.x,0,0),9.0,.25,26,Color(.12,.85,.5),"甩尾 · 跳跃躲避")
+		"tide":
+			for s in [-1,1]:
+				for i in range(phase+1):game.projectile(position+Vector3(s*(1+i*.65),.5,0),Vector3(s*8,0,0),20,false,Color(.07,.75,.58))
+			game.audio.play("splash",-3)
+		"rune","rift","rocks","furnace":
+			var count:=3 if phase==1 else 5
+			var spacing:=3.4 if attack_id=="furnace" else 2.6
+			var center:=position.x if attack_id=="furnace" else target_x
+			var color:=Color(1,.32,.07) if attack_id in ["furnace","rocks"] else Color(.63,.32,1)
+			for i in range(count):
+				var x:=clampf(center+(i-float(count-1)*.5)*spacing,1.5,game.room_width-1.5)
+				game.schedule_strike(Vector3(x,0,0),1.6,.55+i*.16,23,color,{"rune":"符文落点","rift":"虚空裂隙","rocks":"落石","furnace":"泄压口"}[attack_id]+" · 移开",true)
+			clip("cast",1.4)
+		"combo":
+			for i in range(2+phase):game.schedule_strike(Vector3(clampf(position.x+direction*(2+i*.7),1,game.room_width-1),0,0),2.2,.18+i*.34,19,Color(.55,.8,1),"骑士连斩 · 后退 / 冲刺")
+			clip("blade_3",1.8)
 		"melee":
 			game.slash(position+Vector3(direction,1.5,0),direction,Color(1,.2,.08),1.7 if is_boss else 1)
 			if absf(dx)<(3.4 if is_boss else 2.2) and dx*direction>-.4 and absf(dy)<2 and game.clear_sight(position+Vector3.UP,game.player.position+Vector3.UP):
@@ -143,7 +173,8 @@ func execute_attack() -> void:
 			if active < 5:
 				for s in [-1,1]: game.spawn_enemy("sentry",Vector3(clampf(position.x+s*3,2,game.room_width-2),.1,0))
 			game.burst(position+Vector3.UP,Color(.7,.15,1),24)
-	clip("attack2",1.8); recover()
+	if attack_id in ["slam","melee"]:clip("slam" if attack_id=="slam" else "blade_1",1.8)
+	recover()
 
 func recover() -> void:
 	state="recover"; timer=(1.2 if is_boss else .9)*( .72 if phase==2 else 1.0)

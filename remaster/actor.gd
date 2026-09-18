@@ -4,6 +4,8 @@ var game: Node3D
 var visual: Node3D
 var anim: AnimationPlayer
 var weapon_mesh: Node3D
+var offhand_mesh: Node3D
+var offhand_socket: BoneAttachment3D
 var facing := 1.0
 var invulnerable := 0.0
 var dash_time := 0.0
@@ -38,6 +40,11 @@ var lock_input := false
 var hit_pause := 0.0
 var wall_lock := 0.0
 var last_weapon := -1
+var airborne_attack := false
+var climb_kind := "ladder"
+var climb_start_y := 0.0
+var climb_entry_x := 0.0
+var climb_exit_x := 0.0
 var health: float:
 	get: return Reforged.hp
 	set(value): Reforged.hp = value
@@ -52,22 +59,27 @@ func _ready() -> void:
 	anim = visual.find_child("AnimationPlayer",true,false)
 	if anim:
 		for name in anim.get_animation_list():
-			if name in ["idle","run","climb","fall"]: anim.get_animation(name).loop_mode = Animation.LOOP_LINEAR
+			if name in ["idle","run","climb","fall","stairs","swim","wall_slide"]: anim.get_animation(name).loop_mode = Animation.LOOP_LINEAR
 	refresh_weapon()
 
 func refresh_weapon() -> void:
 	if weapon_mesh: weapon_mesh.queue_free()
+	if is_instance_valid(offhand_mesh):offhand_mesh.queue_free()
 	if not weapon_socket:
 		var skeletons:=visual.find_children("*","Skeleton3D",true,false)
 		if not skeletons.is_empty():
 			weapon_socket=BoneAttachment3D.new();skeletons[0].add_child(weapon_socket);weapon_socket.bone_name="foreR"
+			offhand_socket=BoneAttachment3D.new();skeletons[0].add_child(offhand_socket);offhand_socket.bone_name="foreL"
 	weapon_mesh = game.model(Reforged.WEAPONS[Reforged.weapon])
 	if weapon_socket:
 		weapon_socket.add_child(weapon_mesh);weapon_mesh.position=Vector3(0,.32,0)
 	else:
 		visual.add_child(weapon_mesh);weapon_mesh.position=Vector3(-.48,.86,.12)
 	weapon_mesh.scale = Vector3.ONE * (.72 if Reforged.weapon == 3 else .85)
-	weapon_mesh.rotation_degrees.x = 100
+	weapon_mesh.rotation.x = -1.5
+	if Reforged.weapon==3 and offhand_socket:
+		offhand_mesh=game.model("gauntlet");offhand_socket.add_child(offhand_mesh)
+		offhand_mesh.position=Vector3(0,.32,0);offhand_mesh.rotation.x=-1.5;offhand_mesh.scale=Vector3.ONE*.72
 	last_weapon = Reforged.weapon
 
 func play_clip(id: String, speed := 1.0) -> void:
@@ -76,6 +88,7 @@ func play_clip(id: String, speed := 1.0) -> void:
 
 func _physics_process(dt: float) -> void:
 	if last_weapon != Reforged.weapon: refresh_weapon()
+	if game.ui.panel_open or lock_input or game.transitioning: return
 	invulnerable = maxf(0,invulnerable-dt); dash_cooldown = maxf(0,dash_cooldown-dt)
 	skill_cooldown = maxf(0,skill_cooldown-dt); wall_lock = maxf(0,wall_lock-dt)
 	visual.visible = invulnerable <= 0 or int(invulnerable*18) % 2 == 0
@@ -83,8 +96,8 @@ func _physics_process(dt: float) -> void:
 		death_time -= dt; play_clip("death")
 		if death_time <= 0: game.respawn()
 		return
-	if game.ui.panel_open or lock_input: return
 	if weapon_mesh:weapon_mesh.visible=not climbing
+	if is_instance_valid(offhand_mesh):offhand_mesh.visible=not climbing
 	if overdrive_remaining>0:
 		overdrive_interval-=dt
 		if overdrive_interval<=0:
@@ -103,17 +116,23 @@ func _physics_process(dt: float) -> void:
 	else: coyote = maxf(0,coyote-dt)
 	if climbing:
 		velocity = Vector3(0, vertical*3.3, 0)
-		position.x = move_toward(position.x,climb_x,dt*10)
+		position.z=move_toward(position.z,-1.4 if climb_kind=="stairs" else 0.0,dt*6)
+		if climb_kind == "stairs":
+			if absf(vertical)>.1:facing=signf(climb_exit_x-climb_entry_x)*vertical*(1 if climb_door.side=="up" else -1)
+			var progress := inverse_lerp(climb_start_y,climb_high if climb_door.side=="up" else climb_low,position.y)
+			position.x = lerpf(climb_entry_x,climb_exit_x,clampf(progress,0,1))
+		else: position.x = move_toward(position.x,climb_x,dt*10)
 		# Climbing is constrained to a visible rail, deliberately ignores rim collision.
 		position.y = clampf(position.y + velocity.y*dt,climb_low,climb_high)
-		visual.rotation.y=PI if not climb_lift else facing*PI/2
-		play_clip("idle" if climb_lift else "climb",1.1 if vertical else 0.0)
+		visual.rotation.y=facing*PI/2 if climb_kind in ["stairs","pipe"] or climb_lift else PI
+		play_clip("idle" if climb_lift else "stairs" if climb_kind=="stairs" else "swim" if climb_kind=="pipe" else "climb",1.1 if vertical else 0.0)
 		step_clock -= dt
 		if absf(vertical) > .1 and step_clock <= 0 and not climb_lift: game.audio.play("climb",-7); step_clock=.3
 		if (vertical > 0 and position.y >= climb_high-.06) or (vertical < 0 and position.y <= climb_low+.06):
 			if not climb_door.is_empty() and ((climb_door.side == "up" and vertical > 0) or (climb_door.side == "down" and vertical < 0)):
 				game.use_door(climb_door); return
 			climbing = false; position.x += .95; position.y += .1
+			if climb_kind=="stairs":position=game.safe_ground_spawn(climb_entry_x-signf(climb_exit_x-climb_entry_x)*1.55)
 		if Input.is_action_just_pressed("r_jump"):
 			climbing = false; velocity = Vector3(facing*5,9,0); jumping=1; game.audio.play("jump")
 		return
@@ -157,19 +176,20 @@ func _physics_process(dt: float) -> void:
 		attack_time-=dt
 		if not attack_done and attack_time < attack_total*.6:
 			attack_done=true; resolve_attack()
-		play_clip("skill" if skill_attack else ("shoot" if Reforged.weapon==2 else "attack"+str(mini(combo+1,3))),1.0/attack_total)
-		if weapon_mesh: weapon_mesh.rotation.x=lerpf(-1.5,2.8,1.0-attack_time/attack_total)
+		play_clip(attack_clip(),1.0/attack_total)
 		if attack_time<=0:
 			combo_window=.65
 			if buffered_attack: buffered_attack=false; begin_attack(false)
 	else:
-		if weapon_mesh: weapon_mesh.rotation.x=lerp_angle(weapon_mesh.rotation.x,1.7,dt*12)
-		if not is_on_floor(): play_clip("jump" if velocity.y>0 else "fall")
+		if weapon_mesh: weapon_mesh.rotation.x=lerp_angle(weapon_mesh.rotation.x,-1.5,dt*12)
+		if reload_time > 0: play_clip("reload",1.1)
+		elif not is_on_floor(): play_clip("wall_slide" if is_on_wall() and velocity.y<0 else "jump" if velocity.y>0 else "fall")
 		elif absf(velocity.x)>.3:
 			play_clip("run",1.2); step_clock-=dt
 			if step_clock<=0: game.audio.play("step",-10); step_clock=.3
 		else: play_clip("idle")
 	visual.rotation.y=lerp_angle(visual.rotation.y,facing*PI/2,dt*18)
+	if Reforged.weapon==2 and weapon_mesh:weapon_mesh.global_rotation=Vector3(0,0,-facing*PI/2)
 	move_and_slide(); position.z=0
 	if is_on_floor() and not was_grounded: game.audio.play("land",-5)
 	was_grounded=is_on_floor()
@@ -191,6 +211,7 @@ func begin_attack(special: bool) -> void:
 			game.audio.play("empty"); reload(); return
 		Reforged.magazine-=needed
 	skill_attack=special
+	airborne_attack=not is_on_floor()
 	uppercut=Reforged.weapon==3 and Input.is_action_pressed("r_up") and not special
 	if uppercut:velocity.y=9.0
 	if special: skill_cooldown=4.0
@@ -200,14 +221,23 @@ func begin_attack(special: bool) -> void:
 	attack_time=attack_total; attack_done=false
 	if anim: anim.stop()
 
+func attack_clip() -> String:
+	if Reforged.weapon==2:return "shoot"
+	if uppercut:return "uppercut"
+	var family: String=Reforged.WEAPONS[Reforged.weapon]
+	if skill_attack:return {"blade":"blade_3","hammer":"slam","gauntlet":"gauntlet_4"}.get(family,"skill")
+	if airborne_attack:return "air_"+family
+	return family+"_"+str(combo+1)
+
 func resolve_attack() -> void:
 	var damage := Reforged.attack_damage() * (1.5 if combo==2 else 1.0)
 	if not is_on_floor() and Reforged.weapon in [0,3] and Reforged.skills.has(Reforged.WEAPONS[Reforged.weapon]+"_2"): damage*=1.4
 	if skill_attack: damage*=2.2
 	if Reforged.weapon==2:
 		game.audio.play("shot"); game.shake=.09
+		weapon_mesh.global_rotation=Vector3(0,0,-facing*PI/2)
 		for i in range(3 if skill_attack else 1):
-			var muzzle:=position+Vector3(facing*.8,1.12+i*.10,0)
+			var muzzle:=weapon_mesh.to_global(Vector3(0,1.14,0));muzzle.z=0;muzzle.y+=i*.10
 			# A muzzle can overlap thin cover while the capsule remains outside it.
 			if game.clear_sight(position+Vector3(0,1.12+i*.10,0),muzzle):
 				game.projectile(muzzle,Vector3(facing*23,i*.8,0),damage,true,Color(.2,.9,1))
@@ -236,7 +266,7 @@ func resolve_attack() -> void:
 		game.burst(position,Color(1,.4,.08),28); game.audio.play("explosion",-6)
 
 func take_damage(amount: float, direction: float) -> void:
-	if invulnerable>0 or death_time>0 or game.ui.panel_open: return
+	if invulnerable>0 or death_time>0 or game.ui.panel_open or game.transitioning: return
 	health-=maxf(1,amount-Reforged.stat("armor"))
 	invulnerable=.85; velocity=Vector3(direction*5,4,0); wall_lock=.2
 	game.shake=.2; game.audio.play("hurt"); game.burst(position+Vector3.UP,Color(1,.15,.1),10)

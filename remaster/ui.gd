@@ -26,6 +26,8 @@ var title_new_armed := false
 var preview_model: Node3D
 var preview_socket: Node3D
 var map_view: Control
+var preview_family := ""
+var preview_offhand: Node3D
 const INK:=Color(.027,.043,.062,.97)
 const CYAN:=Color(.22,.83,.91)
 const GOLD:=Color(.97,.68,.28)
@@ -91,6 +93,7 @@ func icon(parent: Node, id: String, rect: Rect2) -> TextureRect:
 
 func _process(dt: float) -> void:
 	if not is_instance_valid(game.player):return
+	if is_instance_valid(preview_weapon) and preview_family=="cannon":preview_weapon.global_rotation=Vector3(PI/2,0,0)
 	health.max_value=Reforged.max_health();health.value=Reforged.hp
 	hp_label.text="猎魂者  %d / %d"%[ceili(Reforged.hp),int(Reforged.max_health())]
 	stats.text="Lv.%02d    ◈ %d    技能点 %d    药剂 %d"%[Reforged.level,Reforged.coins,Reforged.points,Reforged.potions]
@@ -135,10 +138,15 @@ func fade(black: bool) -> void:
 func close() -> void:
 	if panel:panel.queue_free();panel=null
 	panel_open=false;panel_kind="";hud.visible=true;skill_preview=null;preview_model=null;preview_weapon=null;map_view=null
+	preview_offhand=null;preview_family=""
+	if is_instance_valid(game.world):game.world.process_mode=Node.PROCESS_MODE_INHERIT
+	if is_instance_valid(game.player):game.player.process_mode=Node.PROCESS_MODE_INHERIT
 	Reforged.save_game()
 
 func shell(kind: String, title: String, subtitle: String) -> Control:
 	close();panel_open=true;panel_kind=kind;hud.visible=false
+	if is_instance_valid(game.world):game.world.process_mode=Node.PROCESS_MODE_DISABLED
+	if is_instance_valid(game.player):game.player.process_mode=Node.PROCESS_MODE_DISABLED
 	panel=Control.new();root.add_child(panel);panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var shade:=ColorRect.new();panel.add_child(shade);shade.color=Color(.006,.016,.029,.8);shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var body:=plate(panel,Rect2(54,40,1172,640))
@@ -186,15 +194,26 @@ func item_scroll(parent: Control, rect: Rect2) -> VBoxContainer:
 	var list:=VBoxContainer.new();s.add_child(list);list.size_flags_horizontal=Control.SIZE_EXPAND_FILL;list.add_theme_constant_override("separation",8);return list
 
 func item_row(list: VBoxContainer, it: Dictionary, mode: String) -> void:
-	var row:=Panel.new();list.add_child(row);row.custom_minimum_size=Vector2(0,91)
+	var row:=Panel.new();list.add_child(row);row.custom_minimum_size=Vector2(0,116 if mode=="inventory" else 91)
 	row.add_theme_stylebox_override("panel",style(Color(.042,.066,.088),Color(.16,.26,.31)))
 	icon(row,item_icon(it),Rect2(9,6,75,75))
 	var rarity:Color=[Color(.7,.76,.8),CYAN,Color(.7,.47,1),GOLD][clampi(int(it.rarity),0,3)]
-	text(row,str(it.name),Vector2(92,12),18,rarity)
+	text(row,str(it.name)+("  +"+str(it.upgrade) if int(it.get("upgrade",0))>0 else ""),Vector2(92,12),18,rarity)
 	text(row,item_stats(it),Vector2(92,44),14,TEXT)
 	var is_equipped:bool=int(Reforged.equipped.get(it.slot,{}).get("uid",-1))==int(it.uid)
 	if mode=="inventory":
 		button(row,"已装备" if is_equipped else "装备",Rect2(530,23,90,37),func():Reforged.equip_item(int(it.uid));open_inventory(),not is_equipped).disabled=is_equipped
+		var current:Dictionary=Reforged.equipped.get(it.slot,{})
+		var delta_text:="当前装备" if is_equipped else "替换后："
+		if not is_equipped:
+			for key in ["attack","armor","health"]:
+				var delta:float=float(it.get(key,0))-float(current.get(key,0))
+				if not is_zero_approx(delta):delta_text+={"attack":"攻击","armor":"护甲","health":"生命"}[key]+"%+.1f  "%delta
+		text(row,delta_text,Vector2(92,78),13,CYAN)
+		var cost:=Reforged.upgrade_cost(it)
+		button(row,"已满级" if int(it.get("upgrade",0))>=5 else "强化 ◈%d"%cost,Rect2(514,70,108,31),func():
+			if Reforged.upgrade_item(int(it.uid)):game.audio.play("save",-8)
+			open_inventory()).disabled=int(it.get("upgrade",0))>=5 or Reforged.coins<cost
 	elif mode=="sell":
 		button(row,"已装备" if is_equipped else "出售 ◈"+str(it.price),Rect2(465,25,130,36),func():Reforged.sell(int(it.uid));open_shop("sell")).disabled=is_equipped
 	else:
@@ -203,11 +222,19 @@ func item_row(list: VBoxContainer, it: Dictionary, mode: String) -> void:
 			open_shop("buyback"))
 
 func open_inventory() -> void:
-	var body:=shell("inventory","行者装备库","EQUIPMENT  /  点击装备会替换同槽装备，原装备保留在背包")
+	var body:=shell("inventory","行者装备库","EQUIPMENT  /  装备对比 · 六个装备槽 · 强化最高 +5 · 出售后可向赫克回购")
 	text(body,"◈ %d   |   Lv.%d   |   生命 %d   护甲 %.1f   攻击 %.1f"%[Reforged.coins,Reforged.level,int(Reforged.max_health()),Reforged.stat("armor"),Reforged.attack_damage()],Vector2(28,100),17,GOLD)
-	var list:=item_scroll(body,Rect2(28,145,665,457))
+	var slot_names:=["面甲","胸甲","护手","铁靴","护符","戒指"]
+	for i in range(6):
+		var slot: String=Reforged.SLOTS[i];var it:Dictionary=Reforged.equipped.get(slot,{})
+		var tile:=plate(body,Rect2(28+i*111,137,102,62),Color(.047,.081,.102))
+		icon(tile,"gauntlet" if slot=="gloves" else slot,Rect2(3,8,40,40))
+		text(tile,slot_names[i],Vector2(46,8),13,TEXT)
+		text(tile,"空槽" if it.is_empty() else "已装备",Vector2(43,34),12,CYAN if not it.is_empty() else Color(.45,.5,.54))
+		tile.tooltip_text="尚未装备" if it.is_empty() else str(it.name)+"\n"+item_stats(it)
+	var list:=item_scroll(body,Rect2(28,213,665,389))
 	for it in Reforged.inventory:item_row(list,it,"inventory")
-	if Reforged.inventory.is_empty():text(body,"尚无装备，探索宝箱或到商人处购买。",Vector2(42,174),18,TEXT)
+	if Reforged.inventory.is_empty():text(body,"尚无装备，探索宝箱或到商人处购买。",Vector2(42,234),18,TEXT)
 	make_preview(body,Rect2(740,124,370,305),"idle")
 	text(body,"当前武器  /  "+Reforged.WEAPON_NAMES[Reforged.weapon],Vector2(738,454),20,CYAN)
 	for i in range(4):
@@ -255,17 +282,31 @@ func make_preview(parent: Control, rect: Rect2, clip_name: String) -> void:
 	var skeletons:=preview_model.find_children("*","Skeleton3D",true,false)
 	if not skeletons.is_empty():
 		var socket:=BoneAttachment3D.new();skeletons[0].add_child(socket);socket.bone_name="foreR";preview_socket=socket
-	preview_weapon=game.model(Reforged.WEAPONS[Reforged.weapon]);preview_socket.add_child(preview_weapon);preview_weapon.position=Vector3(0,.32,0);preview_weapon.rotation.x=1.7;preview_weapon.scale=Vector3.ONE*.8
+	preview_weapon=game.model(Reforged.WEAPONS[Reforged.weapon]);preview_socket.add_child(preview_weapon);preview_weapon.position=Vector3(0,.32,0);preview_weapon.rotation.x=-1.5;preview_weapon.scale=Vector3.ONE*.8
+	preview_family=Reforged.WEAPONS[Reforged.weapon]
+	update_preview_offhand()
 	skill_preview=preview_model.find_child("AnimationPlayer",true,false)
 	if skill_preview and skill_preview.has_animation(clip_name):
 		skill_preview.get_animation(clip_name).loop_mode=Animation.LOOP_LINEAR;skill_preview.play(clip_name)
 
 func preview_skill(id: String) -> void:
-	if skill_preview and skill_preview.has_animation("skill"):skill_preview.play("skill",.1)
+	var clip_name:="shoot" if id.begins_with("cannon") else "uppercut" if id=="gauntlet_2" else "gauntlet_4" if id=="gauntlet_3" else "air_blade" if id=="blade_2" else "slam" if id=="hammer_3" else id
+	if skill_preview and skill_preview.has_animation(clip_name):
+		skill_preview.get_animation(clip_name).loop_mode=Animation.LOOP_LINEAR;skill_preview.play(clip_name,.1)
 	if preview_weapon:preview_weapon.queue_free()
 	preview_weapon=game.model(str(Reforged.SKILLS[id][2]));preview_socket.add_child(preview_weapon)
-	preview_weapon.position=Vector3(0,.32,0);preview_weapon.rotation.x=1.7;preview_weapon.scale=Vector3.ONE*.8
+	preview_weapon.position=Vector3(0,.32,0);preview_weapon.rotation.x=-1.5;preview_weapon.scale=Vector3.ONE*.8
+	preview_family=str(Reforged.SKILLS[id][2]);update_preview_offhand()
 	toast(str(Reforged.SKILLS[id][0])+"："+str(Reforged.SKILLS[id][1]),4)
+
+func update_preview_offhand() -> void:
+	if is_instance_valid(preview_offhand):preview_offhand.queue_free()
+	if preview_family!="gauntlet":return
+	var skeletons:=preview_model.find_children("*","Skeleton3D",true,false)
+	if skeletons.is_empty():return
+	var socket:=BoneAttachment3D.new();skeletons[0].add_child(socket);socket.bone_name="foreL"
+	preview_offhand=game.model("gauntlet");socket.add_child(preview_offhand)
+	preview_offhand.position=Vector3(0,.32,0);preview_offhand.rotation.x=-1.5;preview_offhand.scale=Vector3.ONE*.8
 
 func open_skills() -> void:
 	var body:=shell("skills","猎魂者战斗协议","COMBAT PROTOCOLS  /  选择节点预览动作，学习后立即生效")

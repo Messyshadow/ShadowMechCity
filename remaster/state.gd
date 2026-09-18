@@ -112,6 +112,24 @@ func equip_item(uid: int) -> bool:
 			hp = minf(hp, max_health()); commit(); return true
 	return false
 
+func upgrade_cost(it: Dictionary) -> int:
+	return 35+int(it.get("upgrade",0))*30+int(it.rarity)*15
+
+func upgrade_item(uid: int) -> bool:
+	for it in inventory:
+		if int(it.uid)!=uid:continue
+		if int(it.get("upgrade",0))>=5:return false
+		var cost:=upgrade_cost(it)
+		if coins<cost:return false
+		coins-=cost;it["upgrade"]=int(it.get("upgrade",0))+1
+		if str(it.slot) in ["gloves","ring"]:it.attack=float(it.attack)+1.5
+		else:it.health=float(it.health)+3;it.armor=float(it.armor)+.5
+		# Enhancement never raises lifesteal. The same UID survives sale/buyback.
+		it.price=int(it.price)+int(cost*.4)
+		if int(equipped.get(it.slot,{}).get("uid",-1))==uid:equipped[it.slot]=it.duplicate(true)
+		commit();return true
+	return false
+
 func sell(uid: int) -> bool:
 	for i in range(inventory.size()):
 		var it: Dictionary = inventory[i]
@@ -204,6 +222,13 @@ func load_game() -> bool:
 		if data.get(key) is Dictionary: set(key, data[key])
 	for key in ["inventory","buyback"]:
 		if data.get(key) is Array: set(key, data[key])
+	# JSON represents every number as a float. Restore the item's integer fields
+	# so UID comparisons, prices and labels (e.g. +5) retain their original type.
+	for items in [inventory,buyback,equipped.values()]:
+		for it in items:
+			if it is Dictionary:
+				for key in ["uid","rarity","price","buyback_price","upgrade"]:
+					if it.has(key):it[key]=int(it[key])
 	merchant_gift = bool(data.get("merchant_gift",false)); mute = bool(data.get("mute",false))
 	checkpoint_room = str(data.get("checkpoint_room","hub"))
 	if not Rooms.ROOMS.has(checkpoint_room): checkpoint_room = "hub"

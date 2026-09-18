@@ -357,7 +357,7 @@ def prop(name):
 
 def render_icon(name):
     scene=bpy.context.scene;scene.render.engine='CYCLES';scene.cycles.samples=24
-    scene.render.resolution_x=256;scene.render.resolution_y=256;scene.render.resolution_percentage=100
+    scene.render.resolution_x=512;scene.render.resolution_y=512;scene.render.resolution_percentage=100
     scene.render.film_transparent=True
     scene.world.color=(.2,.2,.2)
     bpy.ops.object.camera_add(location=(2.5,-4,2.5));cam=bpy.context.object
@@ -368,8 +368,9 @@ def render_icon(name):
         bpy.context.object.data.color=color;bpy.context.object.data.shape='DISK';bpy.context.object.data.size=3
     scene.render.filepath=os.path.join(ROOT,'assets','icons',name+'.png');bpy.ops.render.render(write_still=True)
 
-for name in ['hero','merchant','sentry','gunner','drone','titan','king','knight','dragon','crocodile','guardian','behemoth']:
-    rig_character(name)
-for name in ['platform','tower','gear','pipe','ladder','lift','console','arch','blade','hammer','cannon','gauntlet','amulet','armor','boots','helmet','ring','potion','reactor','buttress','crystals','turbine']:
-    prop(name)
-print('ASSET BUILD COMPLETE',flush=True)
+if __name__ == '__main__':
+    for name in ['platform','tower','gear','pipe','ladder','lift','console','arch','blade','hammer','cannon','gauntlet','amulet','armor','boots','helmet','ring','potion','reactor','buttress','crystals','turbine']:
+        prop(name)
+    print('ENVIRONMENT / EQUIPMENT BUILD COMPLETE',flush=True)
+    # The cast now has distinct silhouettes and action sets. This file remains
+    # the shared modelling library; build_cast.py builds all animated actors.

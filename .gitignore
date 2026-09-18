@@ -20,6 +20,17 @@ export_credentials.cfg
 !/remaster/qa/.gdignore
 !/remaster/qa/REPORT.md
 !/remaster/qa/RELEASE_2026-09-18.md
+!/remaster/qa/REVISION_0_2_0.md
+!/remaster/qa/RELEASE_0_2_0.md
+!/remaster/qa/published_0_2_0.log
+!/remaster/qa/published_0_2_0_errors.log
+!/remaster/qa/published_0_2_0.png
+!/remaster/qa/revision_tests.log
+!/remaster/qa/revision_combat_tests.log
+!/remaster/qa/revision_extended_tests.log
+!/remaster/qa/revision_visual.log
+!/remaster/qa/revision_visual_errors.log
+!/remaster/qa/revision_*.png
 !/remaster/qa/release_qa_tests.log
 !/remaster/qa/release_combat_tests.log
 !/remaster/qa/published_smoke.log
@@ -28,6 +39,7 @@ export_credentials.cfg
 !/remaster/qa/final_tests.log
 !/remaster/qa/release_visual.log
 /remaster/source/*.blend1
+/remaster/source/__pycache__/
 
 # Imported translations (automatically generated from CSV files)
 *.translation

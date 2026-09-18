@@ -6,12 +6,14 @@ var friendly := false
 var life := 3.0
 var piercing := false
 var hit_ids: Array[int] = []
+var sweep_origin := Vector3.INF
 
 func _physics_process(dt: float) -> void:
 	if game.ui.panel_open or game.transitioning: return
 	life-=dt
 	if life<=0: queue_free(); return
 	var previous := position
+	if sweep_origin.is_finite():previous=sweep_origin;sweep_origin=Vector3.INF
 	position+=velocity*dt
 	var ray := PhysicsRayQueryParameters3D.create(previous,position,1)
 	ray.hit_from_inside=true
