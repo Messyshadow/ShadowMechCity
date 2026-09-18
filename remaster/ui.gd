@@ -137,6 +137,8 @@ func _process(dt: float) -> void:
 	stats.text="Lv.%02d    ◈ %d    技能点 %d    药剂 %d"%[Reforged.level,Reforged.coins,Reforged.points,Reforged.potions]
 	ammo.text=Reforged.WEAPON_NAMES[Reforged.weapon]+("    弹匣 %d / 8  ·  备弹 %d"%[Reforged.magazine,Reforged.ammo] if Reforged.weapon in [2,6] else "    J 连击 / 空中攻击")
 	if game.player.reload_time>0:ammo.text+="  装填中…"
+	if Reforged.ExplorationData.has_module(Reforged,"bomb"):
+		ammo.text+="\nF 脉冲炸弹 · "+("%.1f 秒"%game.exploration.cooldown if game.exploration.cooldown>0 else "就绪")
 	ammo.text=game.controls.prompt(ammo.text)
 	var step:Array=Reforged.tutorial_step()
 	tutorial_label.visible=bool(Reforged.settings.tutorial) and not step.is_empty() and not panel_open
@@ -255,6 +257,7 @@ func open_story() -> void:Experience.story(self)
 func open_guide() -> void:
 	guide_return=panel_kind;Experience.guide(self)
 func open_journal() -> void:Experience.journal(self)
+func open_collection(page:="记忆档案") -> void:preload("res://remaster/exploration_ui.gd").open(self,page)
 func open_npc() -> void:Experience.npc(self)
 func open_companions() -> void:Experience.companions(self)
 
@@ -420,7 +423,8 @@ func open_map() -> void:
 	button(body,"+ 放大",Rect2(168,575,125,37),func():map_view.set_zoom(map_view.zoom*1.2))
 	button(body,"定位当前位置",Rect2(308,575,170,37),func():map_view.center_player(),true)
 	button(body,"全图",Rect2(493,575,90,37),func():map_view.fit_all())
-	text(body,"探索 %d / %d     核心 %d / 7     ◇ 最后存档点"%[Reforged.visited.size(),World.ROOMS.size(),Reforged.bosses.size()],Vector2(623,582),16,GOLD)
+	var hearts:Vector2i=Reforged.ExplorationData.count(Reforged,"heart");var memories:Vector2i=Reforged.ExplorationData.count(Reforged,"memory")
+	text(body,"房间 %d / %d · 核心 %d / 7 · 生命 %d/%d · 记忆 %d/%d"%[Reforged.visited.size(),World.ROOMS.size(),Reforged.bosses.size(),hearts.x,hearts.y,memories.x,memories.y],Vector2(610,582),15,GOLD)
 
 func show_ending() -> void:
 	var body:=shell("ending","光核重新点亮","THE CITY BREATHES AGAIN")
@@ -474,6 +478,7 @@ func controller_button(code:int) -> void:
 		elif panel_kind=="title":continue_journey()
 		elif panel_kind in ["story","save_recovery"]:open_title()
 		elif panel_kind=="guide":open_title() if guide_return=="title" else open_journal()
+		elif panel_kind=="collection":open_journal()
 		elif panel_kind!="title":close()
 		return
 	if code in [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER] and panel_kind in CONTROLLER_PAGES:

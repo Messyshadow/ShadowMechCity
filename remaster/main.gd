@@ -8,6 +8,7 @@ const UIScript = preload("res://remaster/ui.gd")
 const CompanionsScript = preload("res://remaster/companions.gd")
 const ControlsScript = preload("res://remaster/controls.gd")
 const LevelDesign = preload("res://remaster/level_design.gd")
+const ExplorationScript = preload("res://remaster/exploration.gd")
 const REGION_COLORS := {"city":Color(.16,.73,.85),"mine":Color(1,.49,.17),"water":Color(.13,.86,.61),"factory":Color(1,.37,.10),"temple":Color(.83,.66,.32),"void":Color(.53,.36,1),"castle":Color(.46,.63,.88),"dawn":Color(.65,.91,.48)}
 const BOSS_MODELS := {"temple_sanctum":"guardian","mine_boss":"behemoth","water_boss":"crocodile","boss":"titan","void_throne":"dragon","castle_knights":"knight","castle_throne":"king"}
 var world: Node3D
@@ -16,6 +17,7 @@ var camera: Camera3D
 var ui: CanvasLayer
 var companions:Node
 var controls:Node
+var exploration:Node
 var audio: Node
 var room_id := "hub"
 var room: Dictionary = {}
@@ -57,6 +59,7 @@ func _ready() -> void:
 	ui=CanvasLayer.new(); ui.set_script(UIScript); ui.game=self; add_child(ui)
 	companions=Node.new();companions.set_script(CompanionsScript);companions.game=self;add_child(companions)
 	add_child(controls)
+	exploration=Node.new();exploration.set_script(ExplorationScript);exploration.game=self;add_child(exploration)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--remaster-room="): room_override=arg.get_slice("=",1)
 		if arg.begins_with("--remaster-capture="): capture_path=arg.get_slice("=",1)
@@ -66,7 +69,7 @@ func _ready() -> void:
 	if room_override.is_empty(): ui.open_title()
 	if Reforged.save_blocked:ui.open_save_recovery()
 	if not Reforged.save_notice.is_empty():ui.toast(Reforged.save_notice,8)
-	if panel_override in ["open_title","open_inventory","open_skills","open_map","open_shop","open_settings","open_journal","open_npc","open_story","open_companions"]:ui.call(panel_override)
+	if panel_override in ["open_title","open_inventory","open_skills","open_map","open_shop","open_settings","open_journal","open_npc","open_story","open_companions","open_collection"]:ui.call(panel_override)
 	if not capture_path.is_empty():capture_timer=4.0;player.invulnerable=10
 
 func register_input() -> void:
@@ -263,6 +266,7 @@ func build_doors() -> void:
 		var d:Dictionary=src.duplicate(true);d.x=door_x(d);doors.append(d)
 		var x:float=d.x
 		var target:=str(World.ROOMS[str(d.to)].name)
+		if not Reforged.ExplorationData.missing(Reforged,str(d.to)).is_empty():target+="\n需要探索模块 · N 查看位置"
 		if d.side in ["left","right"]:
 			var arch:=model("arch");world.add_child(arch);arch.position=Vector3(x,0,-.65);arch.scale=Vector3(.63,.78,.7)
 			label3(("←  " if d.side=="left" else "→  ")+target,Vector3(x,3.85,.4),Color(.68,.86,.91),22)
@@ -362,16 +366,7 @@ func build_interactables() -> void:
 		beacon_lamp=OmniLight3D.new();world.add_child(beacon_lamp);beacon_lamp.position=beacon_glow.position;beacon_lamp.light_color=Color(.85,1,.55);beacon_lamp.light_energy=4;beacon_lamp.omni_range=13
 		beacon_label=label3("",beacon_position+Vector3(0,3,0),Color(.8,1,.5),25)
 		update_beacon_visual()
-	var sources:Array=room.get("items",[]).duplicate()
-	if room.get("hidden_room",false):sources.append([room_width*32,float(room.bounds[3])-45,"chest",""])
-	for i in range(sources.size()):
-		var p:Array=sources[i];var id:=room_id+":"+str(i)
-		if Reforged.collected.has(id):continue
-		var x:=clampf(float(p[0])/64.0,3,room_width-3)
-		if not platforms.is_empty() and str(p[2])=="chest":x=platforms[platforms.size()-1].x
-		var pos:=Vector3(x,surface_y(x,true)+.9,.1)
-		var art:=model("amulet" if str(p[2])=="chest" else "ring");world.add_child(art);art.position=pos;art.scale=Vector3.ONE*.6
-		pickups.append({"id":id,"pos":pos,"node":art,"chest":str(p[2])=="chest"})
+	exploration.build()
 
 func spawn_enemy(kind: String, pos: Vector3, is_boss := false) -> Node3D:
 	var e:=CharacterBody3D.new();e.set_script(EnemyScript);e.game=self;e.kind=kind;e.is_boss=is_boss;e.position=pos
@@ -411,14 +406,7 @@ func _physics_process(dt: float) -> void:
 			if int(time*16)%3==0:burst(Vector3(h.x,.4,0),Color(1,.42,.14),2)
 			if absf(player.position.x-float(h.x))<.8 and player.position.y<3.4:player.take_damage(16,signf(player.position.x-float(h.x)))
 			companions.area_damage(Vector3(h.x,0,0),.8,3.4,16)
-	for p in pickups.duplicate():
-		if not is_instance_valid(p.node):continue
-		p.node.rotation.y+=dt
-		if player.position.distance_to(p.pos)<1.55:
-			Reforged.collected[p.id]=true;Reforged.coins+=55 if p.chest else 10
-			if p.chest:Reforged.inventory.append(Reforged.make_item(Reforged.SLOTS[randi()%6],1))
-			toast("发现精工装备与金币" if p.chest else "+10 金币");audio.play("save",-9)
-			p.node.queue_free();pickups.erase(p);Reforged.commit()
+	exploration.tick(dt)
 	var in_water:bool=room.theme=="water" and player.position.y<.35 and player.position.x>2 and player.position.x<room_width-2
 	if in_water != player.water:
 		audio.play("splash");burst(player.position,Color(.1,.65,.7),16);player.water=in_water
@@ -498,6 +486,11 @@ func try_climb(vertical: float) -> bool:
 	return false
 
 func gate_reason(target: String) -> String:
+	var missing:Array=Reforged.ExplorationData.missing(Reforged,target)
+	if not missing.is_empty():
+		var names:PackedStringArray=[]
+		for id in missing:names.append(str(Reforged.ExplorationData.MODULES[id][0]))
+		return "秘室检修口需要："+" / ".join(names)+" · N 查看探索模块"
 	if target=="castle_gate" and not Reforged.bosses.has("void_throne"):
 		return "王城封印：先击败虚空要塞·天龙王座的天龙机甲"
 	if target=="void_throne":

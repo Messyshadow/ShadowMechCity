@@ -11,7 +11,7 @@
 - 语言：简体中文
 - 标签建议：Action、Platformer、3D、Singleplayer、Robots
 - 定价建议：免费试玩；是否启用自愿付费支持，待发布者决定。
-- 上传文件：`ShadowMechCityReforged-0.5.2.zip`，标记 Windows。完整解压，EXE 与 PCK 同目录。
+- 上传文件：`ShadowMechCityReforged-0.6.0.zip`，标记 Windows。完整解压，EXE 与 PCK 同目录。
 
 ## 可用于页面的正文
 
@@ -19,7 +19,7 @@
 
 你在中央车站醒来，沿着废弃矿坑、腐化水道和机械要塞寻找失落的核心。与拾荒商人交易，接受巡线员的委托，带着量子伙伴走进黑暗深处。
 
-这是《暗影机械城》的 **3D 重制开发试玩版 0.5.2**，采用 Blender 建模和 Godot 引擎，保留横版平台跳跃。
+这是《暗影机械城》的 **3D 重制开发试玩版 0.6.0**，采用 Blender 建模和 Godot 引擎，保留横版平台跳跃。
 
 - 探索八个区域中的 40 个命名房间，挑战七位 Boss。
 - 使用长刃、重锤、蒸汽炮、动力拳套、双刀、长枪和弓弩。远程武器需要管理弹药。
@@ -39,8 +39,8 @@
 - `../qa/arsenal_squad.png`：晨曦温室与三机编队。
 - `../qa/arsenal_skills_4.png`：七武器分支、双刀技能预览。
 - `../qa/arsenal_roster_hound.png`：伙伴阵容。
-- `../qa/experience_open_shop.png`：0.3.0 商店，0.5.2 同界面；发布时优先替换为最终版对应截图。
-- `../qa/experience_map.png`：0.3.0 地图，0.5.2 房间图未变。
+- `../qa/experience_open_shop.png`：0.3.0 商店，0.6.0 同界面；发布时优先替换为最终版对应截图。
+- `../qa/experience_map.png`：0.3.0 地图，0.6.0 房间图未变。
 
 截图用于展示实际画面，不作为最低配置、帧率或完整人工通关证明。封面和最终公开页面需在发布账户内预览。
 

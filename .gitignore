@@ -76,3 +76,8 @@ mono_crash.*.json
 !/remaster/qa/device_visual*.log
 !/remaster/qa/device_*.png
 !/remaster/qa/published_0_5_2*
+!/remaster/qa/RELEASE_0_6_0.md
+!/remaster/qa/exploration_test_*.log
+!/remaster/qa/exploration_visual*.log
+!/remaster/qa/exploration_*.png
+!/remaster/qa/published_0_6_0*

@@ -12,6 +12,9 @@ var menu_direction := Vector2.ZERO
 var repeat_time := 0.0
 
 static func register_actions() -> void:
+	if not InputMap.has_action("r_bomb"):InputMap.add_action("r_bomb")
+	var bomb_key:=InputEventKey.new();bomb_key.physical_keycode=KEY_F
+	if not InputMap.action_has_event("r_bomb",bomb_key):InputMap.action_add_event("r_bomb",bomb_key)
 	for action in KEYS:
 		if not InputMap.has_action(action):InputMap.add_action(action)
 		for code in KEYS[action]:
@@ -90,9 +93,13 @@ func _process(dt:float) -> void:
 		if absf(zoom_axis)>.05:map.set_zoom(map.zoom*exp(zoom_axis*dt))
 
 func suppress_held_actions() -> void:
+	if Input.is_action_pressed("r_bomb"):blocked_actions["r_bomb"]=true
 	for action in KEYS:
 		if Input.is_action_pressed(action):blocked_actions[action]=true
 	menu_direction=Vector2.ZERO;repeat_time=.32
+
+func bomb_requested() -> bool:
+	return just_pressed("r_bomb") or (gamepad and pressed("r_down") and just_pressed("r_skill"))
 
 func just_pressed(action:String) -> bool:return not blocked_actions.has(action) and Input.is_action_just_pressed(action)
 func pressed(action:String) -> bool:return not blocked_actions.has(action) and Input.is_action_pressed(action)
@@ -113,6 +120,12 @@ func connection_changed(device:int,connected:bool) -> void:
 			game.ui.toast("当前手柄已断开，已暂停。另一只 Xbox 手柄仍可用，按 A 继续。" if gamepad else "Xbox 手柄已断开，已暂停并切回 PC 按键。重新连接后将自动切换。",6)
 
 func prompt(value:String) -> String:
+	if gamepad:
+		for pair in [["F","↓ + Y"],["W","左摇杆↑"]]:
+			var bomb_match:=RegEx.new();bomb_match.compile("(?<![A-Za-z0-9])"+pair[0]+"(?![A-Za-z0-9])")
+			# Existing combined W/S prompts are converted by the shared token map below.
+			if pair[0]=="W":value=value.replace("W / S","左摇杆↑↓").replace("W S","左摇杆↑↓").replace("↑ W","左摇杆↑")
+			value=bomb_match.sub(value,pair[1],true)
 	if not gamepad:return value
 	# Only replace standalone control tokens, never English words or NPC names.
 	var tokens:={"A D":"左摇杆","W S":"左摇杆↑↓","W / S":"左摇杆↑↓","A / D":"左摇杆","空格":"A","Shift":"B","J":"X","K":"Y","Q":"LB","R":"RT","H":"LT","E":"RB","C":"L3","G":"R3","T":"View → 技能","I":"View","N":"View → 任务","M":"View → 地图","Esc":"B"}

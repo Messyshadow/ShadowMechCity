@@ -2,6 +2,7 @@ extends Node
 const World = preload("res://remaster/world_data.gd")
 const SaveIO = preload("res://remaster/save_io.gd")
 const SquadData = preload("res://remaster/squad_data.gd")
+const ExplorationData = preload("res://remaster/exploration_data.gd")
 ## The remaster has its own save schema; the classic save is never overwritten.
 signal changed
 const SAVE := "user://remaster_v1.json"
@@ -112,7 +113,7 @@ func make_item(slot: String, rarity: int, lifesteal := false) -> Dictionary:
 	return it
 
 func max_health() -> float:
-	return 120.0 + float(level - 1) * 5 + stat("health") + (20.0 if skills.has("core_shell") else 0.0)
+	return 120.0 + float(level - 1) * 5 + stat("health") + (20.0 if skills.has("core_shell") else 0.0) + ExplorationData.count(self,"heart").x*10.0
 
 func stat(key: String) -> float:
 	var value := 0.0

@@ -1,6 +1,6 @@
 # 暗影机械城 · 重铸余烬
 
-当前开发试玩版 **0.5.2**：Xbox 操作与菜单导航、七武器家族、33 个技能节点、四种量子伙伴与最多三台编队，补强存档恢复和伤害结算。详见 [发布验收记录](qa/RELEASE_0_5_2.md) 和 [原设计与新需求对照表](../docs/REMASTER_ROADMAP.md)。完整重制仍在进行。
+当前开发试玩版 **0.6.0**：五种探索模块、炸弹破封板、六生命碎片、七记忆核心、八区域补给箱和档案分页；保留 Xbox 自动切换、七武器、33 技能及四种伙伴。详见 [发布验收记录](qa/RELEASE_0_6_0.md) 和 [原设计与新需求对照表](../docs/REMASTER_ROADMAP.md)。完整重制仍在进行。
 
 这是一套可运行的 **Godot 4.7 / 3D 横版平台动作重制版**。场景、角色、敌人、武器、建筑模块均为 Blender 建模并导出的 GLB；实际使用 CharacterBody3D、骨骼动画、3D 碰撞、灯光和粒子，角色活动限制在横版平面。
 
@@ -8,10 +8,14 @@
 
 - 工程根目录双击 `play_game.bat`，或打开 `project.godot` 按 F5。
 - 独立版本：`build/Reforged/ShadowMechCityReforged.exe`，需要同目录的 `.pck`。
-- 最新本机包：`build/Reforged/ShadowMechCityReforged.exe`，版本 **0.5.2**。
-- 本机发布目录：`E:\Godot\release\暗影机械城重制版`；发布包：`E:\Godot\release\暗影机械城重制版-0.5.2.zip`。
+- 最新本机包：`build/Reforged/ShadowMechCityReforged.exe`，版本 **0.6.0**。
+- 本机发布目录：`E:\Godot\release\暗影机械城重制版`；发布包：`E:\Godot\release\暗影机械城重制版-0.6.0.zip`。
 - 原 2D 版本代码和资源保留，双击 `play_classic.bat` 可运行。
 - 重制版使用独立文件 `remaster_v1.json`，不改写原版 `save.json`。保存位置沿用原项目的用户数据目录。
+
+## 探索更新（0.6.0）
+
+F / Xbox 下方向 + Y 使用拾取的炸弹模块；N → 城市档案查看模块位置、原版记忆和补给说明。三处封板可炸开，七秘室按探索条件开放，旧存档已到达的秘室保留访问权。地图显示收藏进度。新增七种资产可用 `remaster/source/build_exploration.py` 在 Blender 重建。
 
 ## 本次实现
 
@@ -98,13 +102,13 @@ $env:APPDATA = Join-Path $PWD '.godot-user'
 & 'E:\SourceCode\Games\engine\big_engine\godot\bin\godot.windows.editor.x86_64.console.exe' --headless --path . --fixed-fps 60 --script remaster/tests/test_experience.gd -- --remaster-test
 ```
 
-0.5.2 游戏检查共 **752 项通过**（287 项世界/系统 + 18 项实际战斗 + 88 项动作/关卡 + 155 项体验 + 38 项存档/伤害 + 77 项新武器/伙伴 + 59 项手柄 + 30 项设备切换）。新检查入口为 `tests/test_device_switch.gd`、`tests/test_controller.gd`、`tests/test_preview.gd` 与 `tests/test_arsenal.gd`，沿用上方命令方式。实机截图另行验证；历史发布记录保留在 `qa/`。
+0.6.0 游戏检查共 **934 项通过**（287 项世界/系统 + 18 项实际战斗 + 88 项动作/关卡 + 155 项体验 + 38 项存档/伤害 + 77 项新武器/伙伴 + 59 项手柄 + 30 项设备切换 + 182 项探索与补给）。新检查入口为 `tests/test_exploration.gd`、`tests/test_device_switch.gd`、`tests/test_controller.gd`、`tests/test_preview.gd` 与 `tests/test_arsenal.gd`，沿用上方命令方式。实机截图另行验证；历史发布记录保留在 `qa/`。
 
 导出 `Windows Desktop Remaster` 后，运行 `python remaster/source/package_release.py` 更新启动说明、操作说明、版本说明、SHA-256 清单及版本 ZIP，并逐项校验压缩内容。生成文件留在 `build/`，不加入源码 Git。
 
 ## 范围与现状
 
-这是可玩重制开发版，采用原创、风格化机械造型；模型精度、布景密度和动作细腻程度仍需精修。0.5.0 已迁入双刀/长枪/弓弩三家族与四种伙伴的战斗闭环，原版更多武器变体、组合主动技能、NPC/任务、能力门控与收藏仍未迁全。本版声音和配乐为原创程序合成，后续仍需听音混音与拟音精修。
+这是可玩重制开发版，采用原创、风格化机械造型；模型精度、布景密度和动作细腻程度仍需精修。0.5.0 已迁入双刀/长枪/弓弩三家族与四种伙伴的战斗闭环，原版更多武器变体、组合主动技能、NPC/任务和复杂环境机关仍未迁全；五模块、六生命碎片、七记忆核心与八补给箱已接入。本版声音和配乐为原创程序合成，后续仍需听音混音与拟音精修。
 
 自动化检查覆盖存档恢复、交易与委托奖励不可复制、技能前置与实际运动、40 个场景、新区域往返入口、七 Boss、弹药、死亡和菜单，以及新武器与伙伴参与七 Boss 战。画面另经 GPU 运行截图检查；这不等同于整轮人工通关、多硬件或长时间性能测试。量子升级完整流程、黑客入侵、虚拟空间和正式版发布验收仍待开发。
 

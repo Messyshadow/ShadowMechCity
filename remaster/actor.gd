@@ -110,6 +110,7 @@ func _physics_process(dt: float) -> void:
 		hit_pause -= dt; return
 	var axis:float = game.controls.axis("r_left","r_right")
 	var vertical:float = game.controls.axis("r_down","r_up")
+	var bomb_input:bool=game.controls.bomb_requested()
 	if game.controls.just_pressed("r_jump"): jump_buffer = .13
 	else: jump_buffer = maxf(0,jump_buffer-dt)
 	if is_on_floor(): coyote = .12; jumping = 0
@@ -136,7 +137,7 @@ func _physics_process(dt: float) -> void:
 		if game.controls.just_pressed("r_jump"):
 			climbing = false; velocity = Vector3(facing*5,9,0); jumping=1; game.audio.play("jump")
 		return
-	if absf(vertical) > .1 and attack_time <= 0 and game.try_climb(vertical): return
+	if not bomb_input and absf(vertical) > .1 and attack_time <= 0 and game.try_climb(vertical): return
 	if reload_time > 0:
 		reload_time -= dt
 		if reload_time <= 0:
@@ -154,12 +155,15 @@ func _physics_process(dt: float) -> void:
 		dash_time -= dt; velocity=Vector3(facing*18,0,0); play_clip("dash")
 		game.trail(position+Vector3.UP,Color(.03,.65,.9))
 	else:
-		var movement_speed:=4.2*(1.35 if Reforged.skills.has("water_drive") else 1.0) if water else 7.2*(1.12 if Reforged.skills.has("stride") else 1.0)
+		var movement_speed:=4.2*(1.35 if Reforged.ExplorationData.has_module(Reforged,"aqua") else 1.0) if water else 7.2*(1.12 if Reforged.skills.has("stride") else 1.0)
 		if wall_lock <= 0: velocity.x = move_toward(velocity.x,axis*movement_speed,dt*48)
 		velocity.y -= (13 if water else 25)*dt
-		if Reforged.skills.has("glide") and velocity.y < -2.5 and game.controls.pressed("r_jump"):velocity.y=-2.5
+		if Reforged.ExplorationData.has_module(Reforged,"glide") or Reforged.ExplorationData.has_module(Reforged,"shadow_glider"):
+			var descent:=-1.6 if Reforged.ExplorationData.has_module(Reforged,"shadow_glider") else -2.5
+			if velocity.y<descent and game.controls.pressed("r_jump"):velocity.y=descent
 		if axis != 0 and attack_time <= 0: facing=signf(axis)
 		if is_on_wall() and velocity.y < -2 and axis != 0: velocity.y=-2.0
+		if is_on_wall() and vertical>.2 and Reforged.collected.get("module_wall_climb",false)==true:velocity.y=2.5
 		if jump_buffer > 0 and (coyote > 0 or jumping < (3 if Reforged.skills.has("triple_jump") else 2) or is_on_wall()):
 			if is_on_wall() and coyote <= 0:
 				velocity.x=get_wall_normal().x*8; facing=signf(velocity.x); wall_lock=.22
@@ -173,7 +177,8 @@ func _physics_process(dt: float) -> void:
 	if game.controls.just_pressed("r_attack"):
 		if attack_time > 0: buffered_attack=true
 		else: begin_attack(false)
-	if game.controls.just_pressed("r_skill") and attack_time<=0: begin_attack(true)
+	if bomb_input and attack_time<=0:game.exploration.throw_bomb()
+	elif game.controls.just_pressed("r_skill") and attack_time<=0: begin_attack(true)
 	combo_window=maxf(0,combo_window-dt)
 	if attack_time>0:
 		attack_time-=dt

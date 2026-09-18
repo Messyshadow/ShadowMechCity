@@ -171,6 +171,7 @@ static func journal(u: Node) -> void:
 	paragraph(u,body,beacon_status()+"\n\n委托人：中央车站 · 巡线员莉娅\n奖励：80 金币、2 技能点\n路线：中央车站下行升降机 → 晨曦温室",Rect2(623,179,490,271),20)
 	u.button(body,"查看地图",Rect2(44,539,223,44),u.open_map,true)
 	u.button(body,"查看新手指南",Rect2(292,539,223,44),u.open_guide)
+	u.button(body,"城市档案 / 探索模块 / 补给",Rect2(623,539,490,44),u.open_collection,true)
 
 static func beacon_status() -> String:
 	if Reforged.story.get("beacon_claimed",false):return "委托完成。引航灯再次亮起，莉娅会继续守着这条线路。"

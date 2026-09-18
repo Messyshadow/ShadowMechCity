@@ -61,18 +61,21 @@ func _draw() -> void:
 	for id in nodes:
 		var d:Dictionary=World.ROOMS[id];var visited:bool=Reforged.visited.has(id)
 		var color:Color=game.REGION_COLORS[d.theme]
-		var rect:=Rect2(nodes[id],Vector2(292,68))
+		var rect:=Rect2(nodes[id],Vector2(292,87))
 		draw_style_box(style(Color(.055,.085,.115) if visited else Color(.035,.046,.062),color if id==game.room_id else color.darkened(.62)),rect)
 		var name_color:=Color(.85,.91,.94) if visited else Color(.45,.53,.6)
 		draw_string(font,nodes[id]+Vector2(12,28),str(d.name),HORIZONTAL_ALIGNMENT_LEFT,-1,18,name_color)
 		var tag:="已探索" if visited else "未探索"
 		if d.has("boss"):tag="核心已回收" if Reforged.bosses.has(id) else "BOSS · 核心守卫"
 		if d.get("hidden_room",false):tag="秘室 · 稀有战利品"
+		if d.get("hidden_room",false) and not Reforged.ExplorationData.missing(Reforged,id).is_empty():tag="秘室 · 需要探索模块"
 		if id=="hub":tag="赫克 · 商人 / 莉娅 · 委托"
 		if id=="dawn_beacon":tag="引航灯 · "+("已重启" if Reforged.story.get("beacon_online",false) else "委托目标")
 		if id==Reforged.checkpoint_room:tag+="  ◇ 存档点"
 		if id==game.room_id:tag="▶ 你在这里  ·  "+tag
+		var collection:Vector2i=Reforged.ExplorationData.count(Reforged,"",id)
 		draw_string(font,nodes[id]+Vector2(12,53),tag,HORIZONTAL_ALIGNMENT_LEFT,-1,14,color)
+		if collection.y>0:draw_string(font,nodes[id]+Vector2(12,75),"收藏与补给 %d / %d"%[collection.x,collection.y],HORIZONTAL_ALIGNMENT_LEFT,-1,13,Color(.63,.74,.79))
 
 func style(bg: Color, border: Color) -> StyleBoxFlat:
 	var s:=StyleBoxFlat.new();s.bg_color=bg;s.border_color=border;s.set_border_width_all(2);s.set_corner_radius_all(5);return s
