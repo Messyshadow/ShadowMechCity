@@ -1,6 +1,6 @@
 # 暗影机械城 · 重铸余烬
 
-当前开发试玩版 **0.5.1**：Xbox 操作与菜单导航、七武器家族、33 个技能节点、四种量子伙伴与最多三台编队，补强存档恢复和伤害结算。详见 [发布验收记录](qa/RELEASE_0_5_1.md) 和 [原设计与新需求对照表](../docs/REMASTER_ROADMAP.md)。完整重制仍在进行。
+当前开发试玩版 **0.5.2**：Xbox 操作与菜单导航、七武器家族、33 个技能节点、四种量子伙伴与最多三台编队，补强存档恢复和伤害结算。详见 [发布验收记录](qa/RELEASE_0_5_2.md) 和 [原设计与新需求对照表](../docs/REMASTER_ROADMAP.md)。完整重制仍在进行。
 
 这是一套可运行的 **Godot 4.7 / 3D 横版平台动作重制版**。场景、角色、敌人、武器、建筑模块均为 Blender 建模并导出的 GLB；实际使用 CharacterBody3D、骨骼动画、3D 碰撞、灯光和粒子，角色活动限制在横版平面。
 
@@ -8,8 +8,8 @@
 
 - 工程根目录双击 `play_game.bat`，或打开 `project.godot` 按 F5。
 - 独立版本：`build/Reforged/ShadowMechCityReforged.exe`，需要同目录的 `.pck`。
-- 最新本机包：`build/Reforged/ShadowMechCityReforged.exe`，版本 **0.5.1**。
-- 本机发布目录：`E:\Godot\release\暗影机械城重制版`；发布包：`E:\Godot\release\暗影机械城重制版-0.5.1.zip`。
+- 最新本机包：`build/Reforged/ShadowMechCityReforged.exe`，版本 **0.5.2**。
+- 本机发布目录：`E:\Godot\release\暗影机械城重制版`；发布包：`E:\Godot\release\暗影机械城重制版-0.5.2.zip`。
 - 原 2D 版本代码和资源保留，双击 `play_classic.bat` 可运行。
 - 重制版使用独立文件 `remaster_v1.json`，不改写原版 `save.json`。保存位置沿用原项目的用户数据目录。
 
@@ -38,7 +38,7 @@
 
 ## Xbox 手柄
 
-A 跳跃、X 普攻、Y 武器技能、B 冲刺；左摇杆 / 方向键移动攀爬。View 打开背包，LB / RB 切换背包、技能、地图、任务与伙伴；Menu 暂停。更多肩键、扳机、地图操作见 [玩家指南](PLAYER_GUIDE.md)。已验证模拟输入与实际画面，实体 USB / 蓝牙、长时间手感尚待测试；重绑与震动未实现。
+A 跳跃、X 普攻、Y 武器技能、B 冲刺；左摇杆 / 方向键移动攀爬。View 打开背包，LB / RB 切换背包、技能、地图、任务与伙伴；Menu 暂停。无手柄默认 PC 提示；检测到 Xbox / XInput 连接即自动切换，连接期间键鼠操作不会切回 PC，最后一只断开后恢复。更多肩键、扳机、地图操作见 [玩家指南](PLAYER_GUIDE.md)。已验证模拟输入与实际画面，实体 USB / 蓝牙、长时间手感尚待测试；重绑与震动未实现。
 
 ## 通道修正
 
@@ -98,7 +98,7 @@ $env:APPDATA = Join-Path $PWD '.godot-user'
 & 'E:\SourceCode\Games\engine\big_engine\godot\bin\godot.windows.editor.x86_64.console.exe' --headless --path . --fixed-fps 60 --script remaster/tests/test_experience.gd -- --remaster-test
 ```
 
-0.5.1 游戏检查共 **722 项通过**（287 项世界/系统 + 18 项实际战斗 + 88 项动作/关卡 + 155 项体验 + 38 项存档/伤害 + 77 项新武器/伙伴 + 59 项手柄）。新检查入口为 `tests/test_controller.gd`、`tests/test_preview.gd` 与 `tests/test_arsenal.gd`，沿用上方命令方式。实机截图另行验证；历史发布记录保留在 `qa/`。
+0.5.2 游戏检查共 **752 项通过**（287 项世界/系统 + 18 项实际战斗 + 88 项动作/关卡 + 155 项体验 + 38 项存档/伤害 + 77 项新武器/伙伴 + 59 项手柄 + 30 项设备切换）。新检查入口为 `tests/test_device_switch.gd`、`tests/test_controller.gd`、`tests/test_preview.gd` 与 `tests/test_arsenal.gd`，沿用上方命令方式。实机截图另行验证；历史发布记录保留在 `qa/`。
 
 导出 `Windows Desktop Remaster` 后，运行 `python remaster/source/package_release.py` 更新启动说明、操作说明、版本说明、SHA-256 清单及版本 ZIP，并逐项校验压缩内容。生成文件留在 `build/`，不加入源码 Git。
 

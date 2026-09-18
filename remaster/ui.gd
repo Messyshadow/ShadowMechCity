@@ -150,6 +150,7 @@ func _process(dt: float) -> void:
 		boss_title.text=game.boss.boss_name+"  /  阶段 "+str(game.boss.phase)
 		boss_health.max_value=game.boss.max_hp;boss_health.value=game.boss.hp
 	toast_time=maxf(0,toast_time-dt);toast_label.visible=toast_time>0
+	toast_label.position.y=4 if panel_open else 610
 	banner_time=maxf(0,banner_time-dt);banner.visible=banner_time>0 and not panel_open;banner.modulate.a=minf(1,banner_time)
 
 func _unhandled_input(event: InputEvent) -> void:

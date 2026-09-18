@@ -6,6 +6,7 @@ const AXES := {"r_left":[JOY_AXIS_LEFT_X,-1.0],"r_right":[JOY_AXIS_LEFT_X,1.0],"
 var game:Node3D
 var gamepad := false
 var active_device := -1
+var xbox_devices:Dictionary = {}
 var blocked_actions:Dictionary = {}
 var menu_direction := Vector2.ZERO
 var repeat_time := 0.0
@@ -27,24 +28,52 @@ static func register_actions() -> void:
 
 func _ready() -> void:
 	Input.joy_connection_changed.connect(connection_changed)
-	var pads:=Input.get_connected_joypads()
-	if not pads.is_empty():active_device=pads[0];gamepad=true
+	var devices:Dictionary={}
+	for device in Input.get_connected_joypads():
+		devices[device]={"name":Input.get_joy_name(device),"info":Input.get_joy_info(device)}
+	refresh_devices(devices)
+
+static func is_xbox_device(device_name:String,info:Dictionary) -> bool:
+	var name_lower:=(device_name+" "+str(info.get("raw_name",""))).to_lower()
+	# Godot's SDL backend returns IDs/indexes as decimal strings on Windows.
+	return "xbox" in name_lower or "xinput" in name_lower or int(info.get("vendor_id",0))==0x045e or (info.has("xinput_index") and int(info.xinput_index)>=0)
+
+func refresh_devices(devices:Dictionary) -> void:
+	xbox_devices.clear()
+	for device in devices:
+		var descriptor:Dictionary=devices[device]
+		if is_xbox_device(str(descriptor.get("name","")),descriptor.get("info",{})):xbox_devices[int(device)]=true
+	refresh_mode()
+
+func register_device(device:int,device_name:String,info:Dictionary,announce:=false) -> void:
+	if is_xbox_device(device_name,info):xbox_devices[device]=true
+	else:xbox_devices.erase(device)
+	refresh_mode()
+	if announce and xbox_devices.has(device):game.ui.toast("Xbox 手柄已连接，已自动切换按键提示。",5)
+
+func refresh_mode() -> void:
+	if not xbox_devices.has(active_device):active_device=-1 if xbox_devices.is_empty() else int(xbox_devices.keys()[0])
+	gamepad=not xbox_devices.is_empty()
+	menu_direction=Vector2.ZERO;repeat_time=0
 
 func _input(event:InputEvent) -> void:
 	if event is InputEventJoypadButton or event is InputEventJoypadMotion:
+		if not xbox_devices.has(event.device):return
 		if (event is InputEventJoypadButton and event.pressed) or (event is InputEventJoypadMotion and absf(event.axis_value)>.45):
-			gamepad=true;active_device=event.device
+			active_device=event.device
 		if game.ui.panel_open:
 			if event is InputEventJoypadButton and event.pressed:game.ui.controller_button(event.button_index)
 			get_viewport().set_input_as_handled()
-	elif (event is InputEventKey and event.pressed) or (event is InputEventMouseButton and event.pressed) or (event is InputEventMouseMotion and event.relative.length()>3):
-		gamepad=false
 
 func _process(dt:float) -> void:
 	for action in blocked_actions.keys():
 		if not Input.is_action_pressed(action):blocked_actions.erase(action)
 	if not game.ui.panel_open or not gamepad:menu_direction=Vector2.ZERO;return
-	var direction:=Vector2(Input.get_axis("r_left","r_right"),Input.get_axis("r_up","r_down"))
+	# Read only this pad here. Shared gameplay actions include keyboard arrows,
+	# which the GUI already handles; polling those would move menu focus twice.
+	var direction:=Vector2(Input.get_joy_axis(active_device,JOY_AXIS_LEFT_X),Input.get_joy_axis(active_device,JOY_AXIS_LEFT_Y))
+	direction.x+=int(Input.is_joy_button_pressed(active_device,JOY_BUTTON_DPAD_RIGHT))-int(Input.is_joy_button_pressed(active_device,JOY_BUTTON_DPAD_LEFT))
+	direction.y+=int(Input.is_joy_button_pressed(active_device,JOY_BUTTON_DPAD_DOWN))-int(Input.is_joy_button_pressed(active_device,JOY_BUTTON_DPAD_UP))
 	if direction.length()<.45:menu_direction=Vector2.ZERO;repeat_time=0
 	else:
 		direction=Vector2(signf(direction.x),0) if absf(direction.x)>absf(direction.y) else Vector2(0,signf(direction.y))
@@ -54,9 +83,10 @@ func _process(dt:float) -> void:
 			repeat_time=.32 if direction!=menu_direction else .12;menu_direction=direction
 	if game.ui.panel_kind=="map" and is_instance_valid(game.ui.map_view):
 		var map:Control=game.ui.map_view
-		var movement:=Input.get_vector("r_pan_left","r_pan_right","r_pan_up","r_pan_down")
+		var movement:=Vector2(Input.get_joy_axis(active_device,JOY_AXIS_RIGHT_X),Input.get_joy_axis(active_device,JOY_AXIS_RIGHT_Y))
+		movement=movement.normalized()*clampf((movement.length()-.45)/.55,0,1)
 		if movement.length()>.05:map.pan-=movement*dt*650;map.clamp_pan();map.queue_redraw()
-		var zoom_axis:=Input.get_axis("r_heal","r_reload")
+		var zoom_axis:=trigger_strength(JOY_AXIS_TRIGGER_RIGHT)-trigger_strength(JOY_AXIS_TRIGGER_LEFT)
 		if absf(zoom_axis)>.05:map.set_zoom(map.zoom*exp(zoom_axis*dt))
 
 func suppress_held_actions() -> void:
@@ -69,13 +99,18 @@ func pressed(action:String) -> bool:return not blocked_actions.has(action) and I
 func axis(negative:String,positive:String) -> float:
 	return (0.0 if blocked_actions.has(positive) else Input.get_action_strength(positive))-(0.0 if blocked_actions.has(negative) else Input.get_action_strength(negative))
 
+func trigger_strength(code:int) -> float:return clampf((Input.get_joy_axis(active_device,code)-.45)/.55,0,1)
+
 func connection_changed(device:int,connected:bool) -> void:
 	if connected:
-		game.ui.toast("手柄已连接 · A 跳跃 / X 普攻 / Y 技能 / B 冲刺",5)
-	elif device==active_device and gamepad:
-		suppress_held_actions();active_device=-1;gamepad=false
-		if not game.ui.panel_open:game.ui.open_pause()
-		game.ui.toast("手柄已断开，已暂停。可用键盘继续，或重新连接后按 A 返回。",6)
+		register_device(device,Input.get_joy_name(device),Input.get_joy_info(device),true)
+	else:
+		var was_active:=device==active_device and gamepad
+		xbox_devices.erase(device);refresh_mode()
+		if was_active:
+			suppress_held_actions()
+			if not game.ui.panel_open:game.ui.open_pause()
+			game.ui.toast("当前手柄已断开，已暂停。另一只 Xbox 手柄仍可用，按 A 继续。" if gamepad else "Xbox 手柄已断开，已暂停并切回 PC 按键。重新连接后将自动切换。",6)
 
 func prompt(value:String) -> String:
 	if not gamepad:return value

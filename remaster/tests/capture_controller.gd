@@ -12,6 +12,7 @@ func capture(id:String) -> void:
 func run() -> void:
 	var state:Node=root.get_node("Reforged");state.persistence_enabled=false;state.new_game();state.story.intro_seen=true
 	game=load("res://remaster/main.tscn").instantiate();root.add_child(game);current_scene=game;await frames(8)
+	game.controls.register_device(0,"Xbox Wireless Controller",{})
 	var event:=InputEventJoypadButton.new();event.device=0;event.button_index=JOY_BUTTON_DPAD_DOWN;event.pressed=true;Input.parse_input_event(event)
 	await frames(2);event.pressed=false;Input.parse_input_event(event)
 	await capture("title")

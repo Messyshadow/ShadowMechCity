@@ -70,3 +70,9 @@ mono_crash.*.json
 !/remaster/qa/controller_visual*.log
 !/remaster/qa/controller_*.png
 !/remaster/qa/published_0_5_1*
+
+!/remaster/qa/RELEASE_0_5_2.md
+!/remaster/qa/device_test_*.log
+!/remaster/qa/device_visual*.log
+!/remaster/qa/device_*.png
+!/remaster/qa/published_0_5_2*

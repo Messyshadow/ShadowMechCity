@@ -24,6 +24,7 @@ func run() -> void:
 	state=root.get_node("Reforged");state.persistence_enabled=false;state.new_game();state.story.intro_seen=true
 	game=load("res://remaster/main.tscn").instantiate();root.add_child(game);current_scene=game;await frames(8)
 	print("CONNECTED JOYPADS: ",Input.get_connected_joypads())
+	game.controls.register_device(0,"Xbox Wireless Controller",{})
 	var event_count:=InputMap.action_get_events("r_jump").size();game.register_input()
 	check(InputMap.action_get_events("r_jump").size()==event_count,"registration is idempotent")
 	for action in Controls.BUTTONS:
@@ -87,7 +88,7 @@ func run() -> void:
 	check(game.ui.panel_kind=="pause" and not game.controls.gamepad,"active controller disconnect pauses gameplay")
 	var key:=InputEventKey.new();key.physical_keycode=KEY_ESCAPE;key.pressed=true;Input.parse_input_event(key);await frames(3)
 	key.pressed=false;Input.parse_input_event(key);await frames(3);check(not game.ui.panel_open,"keyboard can resume after disconnect")
-	game.controls.gamepad=true
+	game.controls.register_device(0,"Xbox Wireless Controller",{})
 	check(game.controls.prompt("E 交互 / J 普攻 / K 技能 / HEK'S SALVAGE")=="RB 交互 / X 普攻 / Y 技能 / HEK'S SALVAGE","prompt substitution preserves English words")
 	await frames(3)
 	var signs:Array=game.world.find_children("*","Label3D",true,false)
@@ -96,5 +97,5 @@ func run() -> void:
 	state.story.intro_seen=false;game.ui.open_title();await frames(3);await tap(JOY_BUTTON_B)
 	check(game.ui.panel_kind=="story","title B follows the same guarded continue flow")
 	await tap(JOY_BUTTON_B);check(game.ui.panel_kind=="title","story B returns to title")
-	game.controls.gamepad=false;check(game.controls.prompt("E 交互")=="E 交互","keyboard prompts restore")
+	game.controls.connection_changed(0,false);check(game.controls.prompt("E 交互")=="E 交互","keyboard prompts restore")
 	game.queue_free();await frames(4);print("CONTROLLER TESTS: ",checks," checks; ",failures.size()," failures");quit(1 if failures.size()>0 else 0)
