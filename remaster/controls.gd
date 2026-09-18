@@ -12,6 +12,10 @@ var menu_direction := Vector2.ZERO
 var repeat_time := 0.0
 
 static func register_actions() -> void:
+	for action in ["r_evolve","r_summon"]:
+		if not InputMap.has_action(action):InputMap.add_action(action)
+		var key:=InputEventKey.new();key.physical_keycode=KEY_Z if action=="r_evolve" else KEY_V
+		if not InputMap.action_has_event(action,key):InputMap.action_add_event(action,key)
 	if not InputMap.has_action("r_bomb"):InputMap.add_action("r_bomb")
 	var bomb_key:=InputEventKey.new();bomb_key.physical_keycode=KEY_F
 	if not InputMap.action_has_event("r_bomb",bomb_key):InputMap.action_add_event("r_bomb",bomb_key)
@@ -93,6 +97,8 @@ func _process(dt:float) -> void:
 		if absf(zoom_axis)>.05:map.set_zoom(map.zoom*exp(zoom_axis*dt))
 
 func suppress_held_actions() -> void:
+	for action in ["r_evolve","r_summon"]:
+		if Input.is_action_pressed(action):blocked_actions[action]=true
 	if Input.is_action_pressed("r_bomb"):blocked_actions["r_bomb"]=true
 	for action in KEYS:
 		if Input.is_action_pressed(action):blocked_actions[action]=true
@@ -100,6 +106,11 @@ func suppress_held_actions() -> void:
 
 func bomb_requested() -> bool:
 	return just_pressed("r_bomb") or (gamepad and pressed("r_down") and just_pressed("r_skill"))
+
+func evolve_requested() -> bool:
+	return just_pressed("r_evolve") or (gamepad and pressed("r_up") and not pressed("r_down") and just_pressed("r_skill"))
+func summon_requested() -> bool:
+	return just_pressed("r_summon") or (gamepad and pressed("r_up") and just_pressed("r_companion"))
 
 func just_pressed(action:String) -> bool:return not blocked_actions.has(action) and Input.is_action_just_pressed(action)
 func pressed(action:String) -> bool:return not blocked_actions.has(action) and Input.is_action_pressed(action)
@@ -121,7 +132,7 @@ func connection_changed(device:int,connected:bool) -> void:
 
 func prompt(value:String) -> String:
 	if gamepad:
-		for pair in [["F","↓ + Y"],["W","左摇杆↑"]]:
+		for pair in [["F","↓ + Y"],["Z","↑ + Y"],["V","↑ + L3"],["W","左摇杆↑"]]:
 			var bomb_match:=RegEx.new();bomb_match.compile("(?<![A-Za-z0-9])"+pair[0]+"(?![A-Za-z0-9])")
 			# Existing combined W/S prompts are converted by the shared token map below.
 			if pair[0]=="W":value=value.replace("W / S","左摇杆↑↓").replace("W S","左摇杆↑↓").replace("↑ W","左摇杆↑")

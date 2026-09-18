@@ -20,7 +20,7 @@ func strike(special:=false) -> void:
 func run() -> void:
 	state=root.get_node("Reforged");state.persistence_enabled=false;state.new_game()
 	game=load("res://remaster/main.tscn").instantiate();root.add_child(game);current_scene=game;game.ui.close();await frames(10)
-	check(state.WEAPONS.size()==7 and state.SKILLS.size()==33,"seven families and 33 actual skill nodes")
+	check(state.WEAPONS.size()==7 and state.SKILLS.size()==39,"seven families and 39 actual skill nodes including evolution")
 	for id in ["dual_1","dual_2","dual_3","dual_4","air_dual","spear_1","spear_2","spear_3","air_spear","crossbow_shoot"]:
 		check(game.player.anim.has_animation(id),"Blender clip imported: "+id)
 	state.points=20

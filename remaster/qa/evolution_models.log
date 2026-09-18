@@ -1,0 +1,38 @@
+Blender 4.2.9 LTS (hash a10f621e649a built 2025-04-15 03:32:43)
+Info: Total files 0 | Changed 0 | Failed 0
+BlenderMCP: cannot start server in background mode (blender -b) - commands would never execute
+BlenderMCP: run Blender with a GUI, or use a virtual display: xvfb-run -a blender
+BlenderMCP addon registered
+Info: Saved "evolution_shadow.blend"
+INFO Draco mesh compression is available, use library at D:\Blender\blender-4.2.9-windows-x64\4.2\python\lib\site-packages\extern_draco.dll
+03:21:15 | INFO: Starting glTF 2.0 export
+03:21:15 | INFO: Extracting primitive: Cube.001
+03:21:15 | INFO: Primitives created: 2
+03:21:15 | INFO: Finished glTF 2.0 export in 0.010065555572509766 s
+
+BUILT evolution_shadow
+Info: Saved "evolution_mechanical.blend"
+03:21:15 | INFO: Starting glTF 2.0 export
+03:21:15 | INFO: Extracting primitive: Cube.017
+03:21:15 | INFO: Primitives created: 4
+03:21:15 | INFO: Finished glTF 2.0 export in 0.01542353630065918 s
+
+BUILT evolution_mechanical
+Info: Saved "summon_shadow.blend"
+03:21:15 | INFO: Starting glTF 2.0 export
+03:21:15 | INFO: Extracting primitive: Sphere.001
+03:21:15 | INFO: Primitives created: 3
+03:21:15 | INFO: Finished glTF 2.0 export in 0.011410713195800781 s
+
+BUILT summon_shadow
+Info: Saved "summon_mechanical.blend"
+03:21:15 | INFO: Starting glTF 2.0 export
+03:21:15 | INFO: Extracting primitive: Sphere.002
+03:21:15 | INFO: Primitives created: 4
+03:21:15 | INFO: Finished glTF 2.0 export in 0.01471853256225586 s
+
+BUILT summon_mechanical
+BlenderMCP server stopped
+BlenderMCP addon unregistered
+
+Blender quit

@@ -33,6 +33,9 @@ var preview_offhand: Node3D
 var skill_page := "战斗"
 var skill_family := 0
 var skill_selection := ""
+var evolution_branch := "shadow"
+var evolution_label:Label
+var evolution_back:Panel
 var settings_return := "pause"
 var tutorial_label: Label
 var tutorial_back: Panel
@@ -72,6 +75,8 @@ func _ready() -> void:
 	tutorial_label=text(tutorial_back,"",Vector2(12,9),16,GOLD);tutorial_label.size=Vector2(316,83);tutorial_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	squad_back=plate(hud,Rect2(24,312,318,109),Color(.027,.043,.062,.84));squad_back.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	squad_label=text(squad_back,"",Vector2(10,8),14,Color(.66,.9,.86))
+	evolution_back=plate(hud,Rect2(938,173,315,89),Color(.027,.043,.062,.87));evolution_back.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	evolution_label=text(evolution_back,"",Vector2(10,6),14,Color(.83,.72,1))
 	toast_label=text(root,"",Vector2(175,610),18,GOLD);toast_label.size=Vector2(930,36);toast_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	boss_title=text(hud,"",Vector2(360,535),17,GOLD);boss_title.size=Vector2(560,26);boss_title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	boss_health=bar(hud,Rect2(360,562,560,7),Color(.95,.34,.16))
@@ -132,6 +137,9 @@ func _process(dt: float) -> void:
 	if is_instance_valid(preview_weapon) and preview_family=="spear":preview_weapon.global_rotation=Vector3(0,0,-PI/2+.15)
 	if is_instance_valid(game.companions):
 		squad_label.text=game.controls.prompt(game.companions.hud_text());squad_back.size.y=35+Reforged.squad.loadout.size()*21 if Reforged.squad.deployed else 35
+	if is_instance_valid(game.evolution):
+		evolution_back.visible=Reforged.skills.has("shadow_form") or Reforged.skills.has("mechanical_form")
+		evolution_label.text=game.controls.prompt(game.evolution.hud_text())
 	health.max_value=Reforged.max_health();health.value=Reforged.hp
 	hp_label.text="猎魂者  %d / %d"%[ceili(Reforged.hp),int(Reforged.max_health())]
 	stats.text="Lv.%02d    ◈ %d    技能点 %d    药剂 %d"%[Reforged.level,Reforged.coins,Reforged.points,Reforged.potions]

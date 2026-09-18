@@ -3,6 +3,7 @@ const World = preload("res://remaster/world_data.gd")
 const SaveIO = preload("res://remaster/save_io.gd")
 const SquadData = preload("res://remaster/squad_data.gd")
 const ExplorationData = preload("res://remaster/exploration_data.gd")
+const EvolutionData = preload("res://remaster/evolution_data.gd")
 ## The remaster has its own save schema; the classic save is never overwritten.
 signal changed
 const SAVE := "user://remaster_v1.json"
@@ -44,6 +45,12 @@ const SKILLS := {
 	"core_shell": ["核心护层", "最大生命 +20", "mechanical", "", 1],
 	"fast_loader": ["快速装填", "蒸汽炮装填时间从 0.9 秒缩短至 0.6 秒", "mechanical", "core_shell", 1],
 	"overclock": ["机械超频", "武器终阶技能冷却从 4 秒缩短至 3 秒", "mechanical", "fast_loader", 2],
+	"shadow_form": ["夜幕化身", "Z：暗影变身 10 秒，武器伤害 +25%、移动速度 +18%。冷却 30 秒。", "shadow", "shadow_guard", 2],
+	"shadow_summon": ["影侍投影", "V：召唤影侍 12 秒，自动近身斩击。冷却 22 秒。投影不可被攻击。", "shadow", "shadow_form", 2],
+	"shadow_mastery": ["长夜共鸣", "暗影变身延长至 14 秒，影侍持续 16 秒。", "shadow", "shadow_summon", 2],
+	"mechanical_form": ["炉心战甲", "Z：机械变身 10 秒，武器伤害 +20%、受到伤害 -30%、移速 -10%。冷却 30 秒。", "mechanical", "core_shell", 2],
+	"mechanical_summon": ["浮游炮台", "V：召唤能量炮台 12 秒，自动发射脉冲弹，不耗枪械弹药。冷却 22 秒。", "mechanical", "mechanical_form", 2],
+	"mechanical_mastery": ["永续驱动", "机械变身延长至 14 秒，炮台持续 16 秒。", "mechanical", "mechanical_summon", 2],
 }
 const DEFAULT_SETTINGS := {"master":.85,"music":.60,"effects":.85,"ambience":.65,"brightness":1.12,"fullscreen":false,"shake":.65,"tutorial":true}
 var settings: Dictionary = DEFAULT_SETTINGS.duplicate()
@@ -51,6 +58,7 @@ var settings_path := "user://remaster_settings.cfg"
 var story: Dictionary = {}
 var tutorial: Dictionary = {}
 var squad: Dictionary = SquadData.fresh()
+var evolution: Dictionary = EvolutionData.fresh()
 var persistence_enabled := true
 var save_blocked := false
 var save_notice := ""
@@ -92,6 +100,7 @@ func new_game() -> void:
 	visited.clear(); bosses.clear(); collected.clear(); merchant_gift = false
 	story.clear();tutorial.clear()
 	squad=SquadData.fresh()
+	evolution=EvolutionData.fresh()
 	checkpoint_room = "hub"; checkpoint = Vector3(4, .05, 0)
 	inventory.append(make_item("armor", 0))
 	inventory.append(make_item("boots", 0))
@@ -243,6 +252,7 @@ func save_game() -> bool:
 	if save_blocked:return false
 	var data := {"version":1,"coins":coins,"xp":xp,"level":level,"points":points,"weapon":weapon,"hp":hp,"ammo":ammo,"magazine":magazine,"potions":potions,"skills":skills,"inventory":inventory,"equipped":equipped,"buyback":buyback,"visited":visited,"bosses":bosses,"collected":collected,"merchant_gift":merchant_gift,"checkpoint_room":checkpoint_room,"checkpoint":[checkpoint.x,checkpoint.y,checkpoint.z],"serial":serial,"deaths":deaths,"mute":mute}
 	data["story"]=story;data["tutorial"]=tutorial;data["squad"]=squad
+	data["evolution"]=evolution
 	return SaveIO.write(save_path,data)
 
 func load_game() -> bool:
@@ -258,6 +268,7 @@ func load_game() -> bool:
 		set(key, maxi(0, int(data.get(key, get(key)))))
 	level = maxi(level,1); weapon = clampi(weapon,0,WEAPONS.size()-1); magazine = mini(magazine,8); ammo = mini(ammo,120)
 	squad=data.get("squad",SquadData.fresh())
+	evolution=EvolutionData.sanitize(data.get("evolution",{}))
 	for key in ["skills","equipped","visited","bosses","collected","story","tutorial"]:
 		set(key, data.get(key,{}))
 	for key in ["inventory","buyback"]:

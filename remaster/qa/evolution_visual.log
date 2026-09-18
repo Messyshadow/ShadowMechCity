@@ -1,0 +1,19 @@
+Godot Engine v4.7.rc.custom_build.df6235838 (2026-06-12 18:38:52 UTC) - https://godotengine.org
+Vulkan 1.4.329 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 5070 Laptop GPU
+
+EVOLUTION CAPTURE shadow_tree 0
+EVOLUTION CAPTURE shadow_summon_preview 0
+EVOLUTION CAPTURE shadow_form 0
+EVOLUTION CAPTURE shadow_summon_windup 0
+EVOLUTION CAPTURE shadow_summon_strike 0
+shadow form active=12.5166666666666 summon active=14.9166666666666 actions=1 enemy hp=9983.0
+EVOLUTION CAPTURE mechanical_tree 0
+EVOLUTION CAPTURE mechanical_summon_preview 0
+EVOLUTION CAPTURE mechanical_form 0
+EVOLUTION CAPTURE mechanical_summon_windup 0
+EVOLUTION CAPTURE mechanical_summon_strike 0
+mechanical form active=12.5166666666666 summon active=14.9166666666666 actions=2 enemy hp=9983.0
+EVOLUTION CAPTURE xbox_tree 0
+EVOLUTION CAPTURE xbox_guide 0
+EVOLUTION CAPTURE pc_guide 0
+EVOLUTION VISUAL failures=0

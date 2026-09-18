@@ -105,12 +105,14 @@ func _physics_process(dt: float) -> void:
 			game.burst(position+Vector3(facing,1,0),Color(1,.4,.05),6)
 			for enemy in game.enemies:
 				if is_instance_valid(enemy) and not enemy.dead and enemy.position.distance_to(position)<3 and (enemy.position.x-position.x)*facing>-.3:
-					if game.clear_sight(position+Vector3.UP,enemy.position+Vector3.UP):Reforged.recover_life(enemy.take_hit(Reforged.attack_damage()*.5,facing))
+					if game.clear_sight(position+Vector3.UP,enemy.position+Vector3.UP):Reforged.recover_life(enemy.take_hit(Reforged.attack_damage()*.5*game.evolution.damage_scale(),facing))
 	if hit_pause > 0:
 		hit_pause -= dt; return
 	var axis:float = game.controls.axis("r_left","r_right")
 	var vertical:float = game.controls.axis("r_down","r_up")
 	var bomb_input:bool=game.controls.bomb_requested()
+	var evolve_input:bool=game.controls.evolve_requested()
+	var summon_input:bool=game.controls.summon_requested()
 	if game.controls.just_pressed("r_jump"): jump_buffer = .13
 	else: jump_buffer = maxf(0,jump_buffer-dt)
 	if is_on_floor(): coyote = .12; jumping = 0
@@ -137,7 +139,7 @@ func _physics_process(dt: float) -> void:
 		if game.controls.just_pressed("r_jump"):
 			climbing = false; velocity = Vector3(facing*5,9,0); jumping=1; game.audio.play("jump")
 		return
-	if not bomb_input and absf(vertical) > .1 and attack_time <= 0 and game.try_climb(vertical): return
+	if not bomb_input and not evolve_input and not summon_input and absf(vertical) > .1 and attack_time <= 0 and game.try_climb(vertical): return
 	if reload_time > 0:
 		reload_time -= dt
 		if reload_time <= 0:
@@ -156,6 +158,7 @@ func _physics_process(dt: float) -> void:
 		game.trail(position+Vector3.UP,Color(.03,.65,.9))
 	else:
 		var movement_speed:=4.2*(1.35 if Reforged.ExplorationData.has_module(Reforged,"aqua") else 1.0) if water else 7.2*(1.12 if Reforged.skills.has("stride") else 1.0)
+		movement_speed*=game.evolution.speed_scale()
 		if wall_lock <= 0: velocity.x = move_toward(velocity.x,axis*movement_speed,dt*48)
 		velocity.y -= (13 if water else 25)*dt
 		if Reforged.ExplorationData.has_module(Reforged,"glide") or Reforged.ExplorationData.has_module(Reforged,"shadow_glider"):
@@ -177,7 +180,9 @@ func _physics_process(dt: float) -> void:
 	if game.controls.just_pressed("r_attack"):
 		if attack_time > 0: buffered_attack=true
 		else: begin_attack(false)
-	if bomb_input and attack_time<=0:game.exploration.throw_bomb()
+	if evolve_input:game.evolution.activate_form()
+	elif summon_input:game.evolution.activate_summon()
+	elif bomb_input and attack_time<=0:game.exploration.throw_bomb()
 	elif game.controls.just_pressed("r_skill") and attack_time<=0: begin_attack(true)
 	combo_window=maxf(0,combo_window-dt)
 	if attack_time>0:
@@ -240,7 +245,7 @@ func attack_clip() -> String:
 	return family+"_"+str(combo+1)
 
 func resolve_attack() -> void:
-	var damage := Reforged.attack_damage() * (1.5 if combo==2 else 1.0)
+	var damage:float = Reforged.attack_damage() * (1.5 if combo==2 else 1.0)*game.evolution.damage_scale()
 	if not is_on_floor() and Reforged.weapon in [0,3,4] and Reforged.skills.has(Reforged.WEAPONS[Reforged.weapon]+"_2"): damage*=1.4
 	if skill_attack: damage*=2.2
 	if Reforged.weapon in [2,6]:
@@ -279,9 +284,10 @@ func resolve_attack() -> void:
 
 func take_damage(amount: float, direction: float) -> void:
 	if invulnerable>0 or death_time>0 or game.ui.panel_open or game.transitioning: return
-	health-=maxf(1,amount-Reforged.stat("armor"))
+	health-=maxf(1,(amount-Reforged.stat("armor"))*game.evolution.incoming_scale())
 	invulnerable=1.1 if Reforged.skills.has("shadow_guard") else .85; velocity=Vector3(direction*5,4,0); wall_lock=.2
 	game.shake=.2; game.audio.play("hurt"); game.burst(position+Vector3.UP,Color(1,.15,.1),10)
 	if health<=0:
 		health=0; death_time=1.2; climbing=false; attack_time=0
+		game.evolution.clear_runtime()
 		game.toast("核心熄灭 · 正在返回最后激活的存档点")

@@ -83,3 +83,7 @@ mono_crash.*.json
 !/remaster/qa/published_0_6_0*
 !/remaster/qa/combat_audit*.log
 !/remaster/qa/combat_audit_*.png
+!/remaster/qa/RELEASE_0_7_0.md
+!/remaster/qa/evolution_*.log
+!/remaster/qa/evolution_*.png
+!/remaster/qa/published_0_7_0*

@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="暗影机械城 · 重铸余烬"
-config/version="0.6.0"
+config/version="0.7.0"
 config/description="3D 横版动作重制开发版：重铸余烬。八个区域、40 个房间、三大技能分页与七位核心守卫。"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="Godot/app_userdata/暗影机械城 - 横版动作Demo"

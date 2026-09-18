@@ -1,0 +1,6 @@
+Godot Engine v4.7.rc.custom_build.df6235838 (2026-06-12 18:38:52 UTC) - https://godotengine.org
+
+ERROR: Failed to read the root certificate store.
+   at: OS_Windows::get_system_ca_certificates (platform\windows\os_windows.cpp:2582)
+PHYSICAL JOYPADS: []
+DEVICE SWITCH TESTS: 30 checks; 0 failures

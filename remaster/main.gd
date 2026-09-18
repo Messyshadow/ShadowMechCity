@@ -9,6 +9,7 @@ const CompanionsScript = preload("res://remaster/companions.gd")
 const ControlsScript = preload("res://remaster/controls.gd")
 const LevelDesign = preload("res://remaster/level_design.gd")
 const ExplorationScript = preload("res://remaster/exploration.gd")
+const EvolutionScript = preload("res://remaster/evolution.gd")
 const REGION_COLORS := {"city":Color(.16,.73,.85),"mine":Color(1,.49,.17),"water":Color(.13,.86,.61),"factory":Color(1,.37,.10),"temple":Color(.83,.66,.32),"void":Color(.53,.36,1),"castle":Color(.46,.63,.88),"dawn":Color(.65,.91,.48)}
 const BOSS_MODELS := {"temple_sanctum":"guardian","mine_boss":"behemoth","water_boss":"crocodile","boss":"titan","void_throne":"dragon","castle_knights":"knight","castle_throne":"king"}
 var world: Node3D
@@ -18,6 +19,7 @@ var ui: CanvasLayer
 var companions:Node
 var controls:Node
 var exploration:Node
+var evolution:Node
 var audio: Node
 var room_id := "hub"
 var room: Dictionary = {}
@@ -60,10 +62,12 @@ func _ready() -> void:
 	companions=Node.new();companions.set_script(CompanionsScript);companions.game=self;add_child(companions)
 	add_child(controls)
 	exploration=Node.new();exploration.set_script(ExplorationScript);exploration.game=self;add_child(exploration)
+	evolution=Node.new();evolution.set_script(EvolutionScript);evolution.game=self;add_child(evolution)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--remaster-room="): room_override=arg.get_slice("=",1)
 		if arg.begins_with("--remaster-capture="): capture_path=arg.get_slice("=",1)
 		if arg.begins_with("--remaster-panel="): panel_override=arg.get_slice("=",1)
+		if arg.begins_with("--remaster-skill-page=") and arg.get_slice("=",1) in ["战斗","身法","进化"]:ui.skill_page=arg.get_slice("=",1)
 		if arg=="--remaster-test": Reforged.persistence_enabled=false
 	load_room(room_override if World.ROOMS.has(room_override) else Reforged.checkpoint_room, "", true)
 	if room_override.is_empty(): ui.open_title()
@@ -143,6 +147,7 @@ func label3(text: String, pos: Vector3, color := Color(.7,.9,1), size := 32) -> 
 
 func load_room(id: String, from := "", initial := false) -> void:
 	if not World.ROOMS.has(id): return
+	if is_instance_valid(evolution):evolution.clear_runtime()
 	if is_instance_valid(world):
 		remove_child(world);world.queue_free()
 	if is_instance_valid(player): remove_child(player);player.queue_free()

@@ -1,0 +1,12 @@
+Godot Engine v4.7.rc.custom_build.df6235838 (2026-06-12 18:38:52 UTC) - https://godotengine.org
+
+ERROR: Failed to read the root certificate store.
+   at: OS_Windows::get_system_ca_certificates (platform\windows\os_windows.cpp:2582)
+TEST BOSS temple_sanctum spawn=(3.0, 0.129167, 0.0)
+TEST BOSS mine_boss spawn=(3.0, 0.129167, 0.0)
+TEST BOSS water_boss spawn=(3.0, 0.139167, 0.0)
+TEST BOSS boss spawn=(3.0, 0.129167, 0.0)
+TEST BOSS void_throne spawn=(3.0, 0.129167, 0.0)
+TEST BOSS castle_knights spawn=(3.0, 0.129167, 0.0)
+TEST BOSS castle_throne spawn=(3.0, 0.129167, 0.0)
+REMASTER TESTS: 287 checks; 0 failures; 37 rooms
