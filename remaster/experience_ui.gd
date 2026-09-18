@@ -3,7 +3,7 @@ const World = preload("res://remaster/world_data.gd")
 
 static func paragraph(u: Node, parent: Control, value: String, rect: Rect2, size := 18, color := Color(.82,.88,.92)) -> Label:
 	var label:=Label.new();label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-	label.position=rect.position;label.size=rect.size;label.text=value
+	label.position=rect.position;label.size=rect.size;label.text=u.game.controls.prompt(value);label.set_meta("prompt_source",value)
 	label.add_theme_font_size_override("font_size",size);label.add_theme_color_override("font_color",color)
 	label.mouse_filter=Control.MOUSE_FILTER_IGNORE;label.set_meta("paragraph_width",rect.size.x)
 	parent.add_child(label);label.set_deferred("size",rect.size)
@@ -61,6 +61,8 @@ static func slider(u: Node, body: Control, key: String, title_text: String, pos:
 	var number:Label=u.text(body,"%d%%"%roundi(float(Reforged.settings[key])*100),pos+Vector2(width-62,0),17,u.GOLD)
 	var control:=HSlider.new();body.add_child(control);control.position=pos+Vector2(0,31);control.size=Vector2(width,25)
 	control.name="Setting_"+key;control.min_value=low;control.max_value=high;control.step=.01;control.value=float(Reforged.settings[key])
+	control.focus_entered.connect(func():control.modulate=u.GOLD)
+	control.focus_exited.connect(func():control.modulate=Color.WHITE)
 	control.value_changed.connect(func(value: float):
 		Reforged.set_setting(key,value);number.text="%d%%"%roundi(value*100);u.game.apply_visibility())
 	control.drag_ended.connect(func(_changed: bool):
@@ -131,7 +133,9 @@ static func story(u: Node) -> void:
 static func guide(u: Node) -> void:
 	var body:Control=u.shell("guide","操作与旅途指南","FIELD MANUAL  /  随时按 N 查看任务，按 M 查看地图")
 	paragraph(u,body,"移动与探索\n\nA / D 移动，空格跳跃与二段跳。\n贴墙时再按空格蹬墙；Shift 冲刺。\nW / S 沿楼梯、检修梯和升降机上下行。\n靠近入口或 NPC 按 E 交互。\n\n亮边平台可以站立；橙色预警即将攻击。\n等待攻击落空后的收招，再靠近反击。",Rect2(44,132,501,404),21)
-	paragraph(u,body,"战斗与成长\n\nJ 连击，Q 切换七种武器。\nT 查看技能树、装备武器，终阶技能使用 K。\n蒸汽炮与弓弩共享有限弹药，R 装填。\nI 装备和强化；M 地图；H 使用药剂。\nC 部署 / 回收伙伴，G 编成阵容。\n\n青色终端按 E 保存补给；死亡返回该点。\n商人赠护符，已售装备可以回购。",Rect2(621,132,501,404),21)
+	var combat_guide:=paragraph(u,body,"战斗与成长\n\nJ 连击，Q 切换七种武器。\nT 查看技能树、装备武器，终阶技能使用 K。\n蒸汽炮与弓弩共享有限弹药，R 装填。\nI 装备和强化；M 地图；H 使用药剂。\nC 部署 / 回收伙伴，G 编成阵容。\n\n青色终端按 E 保存补给；死亡返回该点。\n商人赠护符，已售装备可以回购。",Rect2(621,132,501,404),21)
+	combat_guide.set_meta("gamepad_source","战斗与成长\n\nX 普攻，Y 已学习的终阶技能。\nLB 切换武器；LT 治疗；RT 装填。\nL3 部署 / 回收伙伴，R3 调整阵容。\nView 打开背包，LB / RB 切换功能页。\nMenu 暂停；菜单中 A 确认、B 返回。\n\n青色终端按 RB 保存补给；死亡返回该点。\n商人赠护符，已售装备可以回购。")
+	if u.game.controls.gamepad:combat_guide.text=str(combat_guide.get_meta("gamepad_source"))
 	u.button(body,"重新显示情境教学",Rect2(46,558,300,43),func():Reforged.tutorial.clear();Reforged.set_setting("tutorial",true);u.close();u.toast("教学已重置，将根据实际操作逐步推进。"),true)
 
 static func companions(u:Node) -> void:

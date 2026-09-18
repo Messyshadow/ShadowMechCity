@@ -63,3 +63,10 @@ mono_crash.*.json
 /_hero_zoom.png
 /_s_*.png
 *.tmp
+
+!/remaster/qa/RELEASE_0_5_1.md
+!/remaster/qa/controller_tests.log
+!/remaster/qa/controller_test_*.log
+!/remaster/qa/controller_visual*.log
+!/remaster/qa/controller_*.png
+!/remaster/qa/published_0_5_1*

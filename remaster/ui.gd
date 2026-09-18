@@ -39,6 +39,11 @@ var tutorial_back: Panel
 var squad_label:Label
 var squad_back:Panel
 var companion_selection:="hound"
+var keyboard_hint:Label
+var menu_hint:Label
+var shown_gamepad := false
+var guide_return := "pause"
+const CONTROLLER_PAGES := ["inventory","skills","map","journal","companions"]
 const INK:=Color(.027,.043,.062,.97)
 const CYAN:=Color(.22,.83,.91)
 const GOLD:=Color(.97,.68,.28)
@@ -61,8 +66,8 @@ func _ready() -> void:
 	objective_label=text(hud,"",Vector2(874,63),15,TEXT);objective_label.size=Vector2(380,100);objective_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	hint=text(hud,"",Vector2(220,568),20,GOLD);hint.size=Vector2(840,36);hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	var keys:=plate(hud,Rect2(24,651,1232,47))
-	text(keys,"A D 移动    空格 二段跳 / 蹬墙    W S 梯井 / 升降机    J 连击    K 技能    Shift 冲刺    Q 换武器    R 装填    H 治疗",Vector2(16,5),15,TEXT)
-	text(keys,"E 交互       I 背包       T 技能       M 地图       N 任务       Esc 暂停       F11 全屏",Vector2(16,26),12,Color(.62,.73,.80))
+	keyboard_hint=text(keys,"",Vector2(16,5),15,TEXT)
+	menu_hint=text(keys,"",Vector2(16,26),12,Color(.62,.73,.80))
 	tutorial_back=plate(hud,Rect2(24,202,340,98),Color(.027,.043,.062,.85));tutorial_back.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	tutorial_label=text(tutorial_back,"",Vector2(12,9),16,GOLD);tutorial_label.size=Vector2(316,83);tutorial_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	squad_back=plate(hud,Rect2(24,312,318,109),Color(.027,.043,.062,.84));squad_back.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -84,13 +89,17 @@ func style(bg: Color, border: Color) -> StyleBoxFlat:
 	return s
 
 func text(parent: Node, value: String, pos: Vector2, font_size := 18, color := TEXT) -> Label:
-	var l:=Label.new();parent.add_child(l);l.text=value;l.position=pos;l.add_theme_font_size_override("font_size",font_size);l.add_theme_color_override("font_color",color);l.mouse_filter=Control.MOUSE_FILTER_IGNORE;return l
+	var l:=Label.new();parent.add_child(l);l.text=game.controls.prompt(value);l.position=pos;l.add_theme_font_size_override("font_size",font_size);l.add_theme_color_override("font_color",color);l.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	if not value.is_empty():l.set_meta("prompt_source",value)
+	return l
 
 func button(parent: Node, value: String, rect: Rect2, action: Callable, accent := false) -> Button:
 	var b:=Button.new();parent.add_child(b);b.text=value;b.position=rect.position;b.size=rect.size
+	b.set_meta("prompt_source",value);b.text=game.controls.prompt(value)
 	b.add_theme_font_size_override("font_size",16)
 	b.add_theme_stylebox_override("normal",style(Color(.07,.14,.18) if accent else Color(.045,.073,.095),CYAN if accent else Color(.2,.3,.36)))
-	b.add_theme_stylebox_override("hover",style(Color(.12,.22,.26),GOLD));b.add_theme_stylebox_override("focus",style(Color(.09,.17,.22),CYAN))
+	b.add_theme_stylebox_override("hover",style(Color(.12,.22,.26),GOLD))
+	var focus_style:=style(Color(.09,.17,.22),GOLD);focus_style.set_border_width_all(3);b.add_theme_stylebox_override("focus",focus_style)
 	b.add_theme_stylebox_override("pressed",style(Color(.12,.3,.35),CYAN));b.pressed.connect(action);return b
 
 func bar(parent: Node, rect: Rect2, color: Color) -> ProgressBar:
@@ -108,19 +117,31 @@ func icon(parent: Node, id: String, rect: Rect2) -> TextureRect:
 
 func _process(dt: float) -> void:
 	if not is_instance_valid(game.player):return
+	if shown_gamepad!=game.controls.gamepad:
+		shown_gamepad=game.controls.gamepad
+		for node in root.find_children("*","Control",true,false):
+			if node.has_meta("prompt_source"):node.text=game.controls.prompt(str(node.get_meta("prompt_source")))
+			if shown_gamepad and node.has_meta("gamepad_source"):node.text=str(node.get_meta("gamepad_source"))
+			if node.has_meta("controller_footer"):node.visible=shown_gamepad
+		if is_instance_valid(game.world):
+			for node in game.world.find_children("*","Label3D",true,false):
+				if node.has_meta("prompt_source"):node.text=game.controls.prompt(str(node.get_meta("prompt_source")))
+	keyboard_hint.text="左摇杆 / 方向键 移动与攀爬    A 跳跃    X 普攻    Y 技能    B 冲刺    LB 换武器    RB 交互" if game.controls.gamepad else "A D 移动    空格 二段跳 / 蹬墙    W S 梯井 / 升降机    J 连击    K 技能    Shift 冲刺    Q 换武器    R 装填    H 治疗"
+	menu_hint.text="LT 治疗    RT 装填    L3 伙伴部署 / 回收    R3 阵容    View 背包（LB / RB 切页面）    Menu 暂停" if game.controls.gamepad else "E 交互       I 背包       T 技能       M 地图       N 任务       Esc 暂停       F11 全屏"
 	if is_instance_valid(preview_weapon) and preview_family in ["cannon","crossbow"]:preview_weapon.global_rotation=Vector3(PI/2,0,0)
 	if is_instance_valid(preview_weapon) and preview_family=="spear":preview_weapon.global_rotation=Vector3(0,0,-PI/2+.15)
 	if is_instance_valid(game.companions):
-		squad_label.text=game.companions.hud_text();squad_back.size.y=35+Reforged.squad.loadout.size()*21 if Reforged.squad.deployed else 35
+		squad_label.text=game.controls.prompt(game.companions.hud_text());squad_back.size.y=35+Reforged.squad.loadout.size()*21 if Reforged.squad.deployed else 35
 	health.max_value=Reforged.max_health();health.value=Reforged.hp
 	hp_label.text="猎魂者  %d / %d"%[ceili(Reforged.hp),int(Reforged.max_health())]
 	stats.text="Lv.%02d    ◈ %d    技能点 %d    药剂 %d"%[Reforged.level,Reforged.coins,Reforged.points,Reforged.potions]
 	ammo.text=Reforged.WEAPON_NAMES[Reforged.weapon]+("    弹匣 %d / 8  ·  备弹 %d"%[Reforged.magazine,Reforged.ammo] if Reforged.weapon in [2,6] else "    J 连击 / 空中攻击")
 	if game.player.reload_time>0:ammo.text+="  装填中…"
+	ammo.text=game.controls.prompt(ammo.text)
 	var step:Array=Reforged.tutorial_step()
 	tutorial_label.visible=bool(Reforged.settings.tutorial) and not step.is_empty() and not panel_open
 	tutorial_back.visible=tutorial_label.visible
-	if not step.is_empty():tutorial_label.text="旅途提示\n"+str(step[1])
+	if not step.is_empty():tutorial_label.text=game.controls.prompt("旅途提示\n"+str(step[1]))
 	room_label.text=str(game.room.get("name",""))
 	objective_label.text="当前目标 / OBJECTIVE\n"+game.objective()
 	boss_health.visible=is_instance_valid(game.boss) and not game.boss.dead and not panel_open
@@ -164,7 +185,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if panel_kind=="title" and event is InputEventKey and event.pressed and event.physical_keycode==KEY_ENTER:continue_journey()
 
 func toast(value: String, seconds := 3.2) -> void:
-	toast_label.text=value;toast_time=seconds;root.move_child(toast_label,-1)
+	toast_label.text=game.controls.prompt(value);toast_time=seconds;root.move_child(toast_label,-1)
 
 func region_banner(value: String, theme: String) -> void:
 	banner.text=value+"\n— "+theme.to_upper()+" —";banner_time=3.5
@@ -175,6 +196,7 @@ func fade(black: bool) -> void:
 
 func close(replacing := false) -> void:
 	if Reforged.save_blocked and not replacing:open_save_recovery();return
+	if panel_open:game.controls.suppress_held_actions()
 	if panel:panel.queue_free();panel=null
 	panel_open=false;panel_kind="";hud.visible=true;skill_preview=null;preview_model=null;preview_weapon=null;map_view=null
 	preview_offhand=null;preview_family=""
@@ -183,6 +205,10 @@ func close(replacing := false) -> void:
 	Reforged.save_game()
 
 func shell(kind: String, title: String, subtitle: String) -> Control:
+	var old_kind:=panel_kind
+	var old_focus:=get_viewport().gui_get_focus_owner()
+	var old_text:String=str(old_focus.get_meta("prompt_source","")) if is_instance_valid(old_focus) else ""
+	var old_index:=controller_focusables().find(old_focus)
 	close(true);panel_open=true;panel_kind=kind;hud.visible=false
 	if is_instance_valid(game.world):game.world.process_mode=Node.PROCESS_MODE_DISABLED
 	if is_instance_valid(game.player):game.player.process_mode=Node.PROCESS_MODE_DISABLED
@@ -190,7 +216,15 @@ func shell(kind: String, title: String, subtitle: String) -> Control:
 	var shade:=ColorRect.new();panel.add_child(shade);shade.color=Color(.006,.016,.029,.8);shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var body:=plate(panel,Rect2(54,40,1172,640))
 	text(body,title,Vector2(28,20),30,TEXT);text(body,subtitle,Vector2(29,63),14,Color(.42,.61,.69))
-	button(body,"返回  Esc" if kind=="settings" else "关闭  Esc",Rect2(1020,22,123,38),return_from_settings if kind=="settings" else close)
+	button(body,"返回  Esc" if kind=="settings" else "关闭  Esc",Rect2(1020,22,123,38),return_from_settings if kind=="settings" else continue_journey if kind=="title" else close)
+	var footer:=text(panel,"",Vector2(54,686),14,TEXT)
+	footer.text="A 确认 · B 返回 · 左摇杆 / 方向键选择"
+	if kind=="settings":footer.text+=" · 左右调整设置滑块"
+	if kind=="title":footer.text="A 确认 · 左摇杆 / 方向键选择 · 游戏中按 Menu 暂停，View 打开背包"
+	if kind in CONTROLLER_PAGES:footer.text="A 确认 · B 返回 · 左摇杆 / 方向键选择 · LB / RB 切换背包、技能、地图、任务、伙伴"
+	if kind=="map":footer.text="右摇杆移动地图 · LT 缩小 / RT 放大 · X 定位 / Y 全图 · A 确认 / B 返回 · LB / RB 切页面"
+	footer.visible=game.controls.gamepad;footer.set_meta("controller_footer",true)
+	restore_controller_focus.call_deferred(panel,old_text if kind==old_kind else "",old_index if kind==old_kind else -1)
 	root.move_child(toast_label,-1)
 	return body
 
@@ -217,7 +251,8 @@ func return_from_settings() -> void:
 	if settings_return=="title":open_title()
 	else:open_pause()
 func open_story() -> void:Experience.story(self)
-func open_guide() -> void:Experience.guide(self)
+func open_guide() -> void:
+	guide_return=panel_kind;Experience.guide(self)
 func open_journal() -> void:Experience.journal(self)
 func open_npc() -> void:Experience.npc(self)
 func open_companions() -> void:Experience.companions(self)
@@ -246,6 +281,7 @@ func item_icon(it: Dictionary) -> String:
 
 func item_scroll(parent: Control, rect: Rect2) -> VBoxContainer:
 	var s:=ScrollContainer.new();parent.add_child(s);s.position=rect.position;s.size=rect.size;s.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	s.follow_focus=true
 	var list:=VBoxContainer.new();s.add_child(list);list.size_flags_horizontal=Control.SIZE_EXPAND_FILL;list.add_theme_constant_override("separation",8);return list
 
 func item_row(list: VBoxContainer, it: Dictionary, mode: String) -> void:
@@ -390,3 +426,61 @@ func show_ending() -> void:
 	text(body,"机械城，醒来了。",Vector2(80,153),48,GOLD)
 	text(body,"你切断了虚空君王的控制，七座炉心重新开始跳动。\n赫克的商铺会继续亮着灯，未探索的秘室仍等待着你。\n\n回收核心 %d / 7     探索房间 %d / %d\n等级 %d     倒下 %d 次"%[Reforged.bosses.size(),Reforged.visited.size(),World.ROOMS.size(),Reforged.level,Reforged.deaths],Vector2(85,247),22,TEXT)
 	button(body,"继续探索机械城",Rect2(85,473,290,51),close,true)
+
+func controller_focusables() -> Array[Control]:
+	var result:Array[Control]=[]
+	if not is_instance_valid(panel):return result
+	for node in panel.find_children("*","Control",true,false):
+		if (node is Button and not node.disabled) or node is HSlider:
+			if node.is_visible_in_tree():result.append(node)
+	return result
+
+func restore_controller_focus(expected:Control,old_text:String,index:int) -> void:
+	if not is_instance_valid(expected) or panel!=expected:return
+	var items:=controller_focusables()
+	if items.is_empty():return
+	for item in items:
+		if not old_text.is_empty() and str(item.get_meta("prompt_source",""))==old_text:item.grab_focus();return
+	var owner:=get_viewport().gui_get_focus_owner()
+	if owner in items and index<0:return
+	items[clampi(index if index>=0 else 1,0,items.size()-1)].grab_focus()
+
+func controller_move(direction:Vector2) -> void:
+	var items:=controller_focusables()
+	if items.is_empty():return
+	var focus:=get_viewport().gui_get_focus_owner()
+	if focus not in items:items[mini(1,items.size()-1)].grab_focus();return
+	if focus is HSlider and direction.x!=0:
+		focus.value+=direction.x*.05;return
+	var origin:Vector2=focus.get_global_rect().get_center()
+	var best:Control=null;var score:=INF
+	for item in items:
+		if item==focus:continue
+		var delta:Vector2=item.get_global_rect().get_center()-origin
+		var along:=delta.dot(direction)
+		if along<1:continue
+		var across:=absf(delta.cross(direction))
+		var cost:=along+across*4
+		if cost<score:best=item;score=cost
+	if best==null:
+		var offset:=1 if direction.x+direction.y>0 else -1
+		best=items[posmod(items.find(focus)+offset,items.size())]
+	best.grab_focus()
+
+func controller_button(code:int) -> void:
+	if code==JOY_BUTTON_B or code==JOY_BUTTON_START:
+		if panel_kind=="settings":return_from_settings()
+		elif panel_kind=="title":continue_journey()
+		elif panel_kind in ["story","save_recovery"]:open_title()
+		elif panel_kind=="guide":open_title() if guide_return=="title" else open_journal()
+		elif panel_kind!="title":close()
+		return
+	if code in [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER] and panel_kind in CONTROLLER_PAGES:
+		var offset:=1 if code==JOY_BUTTON_RIGHT_SHOULDER else -1
+		call("open_"+CONTROLLER_PAGES[posmod(CONTROLLER_PAGES.find(panel_kind)+offset,CONTROLLER_PAGES.size())]);return
+	if panel_kind=="map" and is_instance_valid(map_view):
+		if code==JOY_BUTTON_X:map_view.center_player();return
+		if code==JOY_BUTTON_Y:map_view.fit_all();return
+	if code==JOY_BUTTON_A:
+		var focus:=get_viewport().gui_get_focus_owner()
+		if focus is Button and focus in controller_focusables() and not focus.disabled:focus.pressed.emit()

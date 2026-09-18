@@ -108,9 +108,9 @@ func _physics_process(dt: float) -> void:
 					if game.clear_sight(position+Vector3.UP,enemy.position+Vector3.UP):Reforged.recover_life(enemy.take_hit(Reforged.attack_damage()*.5,facing))
 	if hit_pause > 0:
 		hit_pause -= dt; return
-	var axis := Input.get_axis("r_left","r_right")
-	var vertical := Input.get_axis("r_down","r_up")
-	if Input.is_action_just_pressed("r_jump"): jump_buffer = .13
+	var axis:float = game.controls.axis("r_left","r_right")
+	var vertical:float = game.controls.axis("r_down","r_up")
+	if game.controls.just_pressed("r_jump"): jump_buffer = .13
 	else: jump_buffer = maxf(0,jump_buffer-dt)
 	if is_on_floor(): coyote = .12; jumping = 0
 	else: coyote = maxf(0,coyote-dt)
@@ -133,7 +133,7 @@ func _physics_process(dt: float) -> void:
 				game.use_door(climb_door); return
 			climbing = false; position.x += .95; position.y += .1
 			if climb_kind=="stairs":position=game.safe_ground_spawn(climb_entry_x-signf(climb_exit_x-climb_entry_x)*1.55)
-		if Input.is_action_just_pressed("r_jump"):
+		if game.controls.just_pressed("r_jump"):
 			climbing = false; velocity = Vector3(facing*5,9,0); jumping=1; game.audio.play("jump")
 		return
 	if absf(vertical) > .1 and attack_time <= 0 and game.try_climb(vertical): return
@@ -142,13 +142,13 @@ func _physics_process(dt: float) -> void:
 		if reload_time <= 0:
 			var amount := mini(8-Reforged.magazine,Reforged.ammo)
 			Reforged.magazine += amount; Reforged.ammo -= amount
-	if Input.is_action_just_pressed("r_reload"): reload()
-	if Input.is_action_just_pressed("r_swap") and attack_time <= 0:
+	if game.controls.just_pressed("r_reload"): reload()
+	if game.controls.just_pressed("r_swap") and attack_time <= 0:
 		Reforged.weapon = (Reforged.weapon + 1)%Reforged.WEAPONS.size(); refresh_weapon()
-	if Input.is_action_just_pressed("r_heal") and Reforged.potions > 0 and health < Reforged.max_health():
+	if game.controls.just_pressed("r_heal") and Reforged.potions > 0 and health < Reforged.max_health():
 		Reforged.potions -= 1; health = minf(Reforged.max_health(),health+60)
 		game.audio.play("save",-5); game.burst(position+Vector3.UP,Color(.1,1,.6),12); Reforged.commit()
-	if Input.is_action_just_pressed("r_dash") and dash_cooldown <= 0:
+	if game.controls.just_pressed("r_dash") and dash_cooldown <= 0:
 		dash_time=.18; dash_cooldown=.45 if Reforged.skills.has("dash_flow") else .65; invulnerable=.36 if Reforged.skills.has("shadow_step") else .24; game.audio.play("dash")
 	if dash_time > 0:
 		dash_time -= dt; velocity=Vector3(facing*18,0,0); play_clip("dash")
@@ -157,7 +157,7 @@ func _physics_process(dt: float) -> void:
 		var movement_speed:=4.2*(1.35 if Reforged.skills.has("water_drive") else 1.0) if water else 7.2*(1.12 if Reforged.skills.has("stride") else 1.0)
 		if wall_lock <= 0: velocity.x = move_toward(velocity.x,axis*movement_speed,dt*48)
 		velocity.y -= (13 if water else 25)*dt
-		if Reforged.skills.has("glide") and velocity.y < -2.5 and Input.is_action_pressed("r_jump"):velocity.y=-2.5
+		if Reforged.skills.has("glide") and velocity.y < -2.5 and game.controls.pressed("r_jump"):velocity.y=-2.5
 		if axis != 0 and attack_time <= 0: facing=signf(axis)
 		if is_on_wall() and velocity.y < -2 and axis != 0: velocity.y=-2.0
 		if jump_buffer > 0 and (coyote > 0 or jumping < (3 if Reforged.skills.has("triple_jump") else 2) or is_on_wall()):
@@ -170,10 +170,10 @@ func _physics_process(dt: float) -> void:
 				jumping = 1 if coyote > 0 else jumping+1; game.audio.play("jump")
 			jump_buffer=0; coyote=0; play_clip("jump")
 		if Input.is_action_just_released("r_jump") and velocity.y>4: velocity.y *= .55
-	if Input.is_action_just_pressed("r_attack"):
+	if game.controls.just_pressed("r_attack"):
 		if attack_time > 0: buffered_attack=true
 		else: begin_attack(false)
-	if Input.is_action_just_pressed("r_skill") and attack_time<=0: begin_attack(true)
+	if game.controls.just_pressed("r_skill") and attack_time<=0: begin_attack(true)
 	combo_window=maxf(0,combo_window-dt)
 	if attack_time>0:
 		attack_time-=dt
@@ -216,7 +216,7 @@ func begin_attack(special: bool) -> void:
 		Reforged.magazine-=needed
 	skill_attack=special
 	airborne_attack=not is_on_floor()
-	uppercut=Reforged.weapon==3 and Input.is_action_pressed("r_up") and not special
+	uppercut=Reforged.weapon==3 and game.controls.pressed("r_up") and not special
 	if uppercut:velocity.y=9.0
 	if special: skill_cooldown=3.0 if Reforged.skills.has("overclock") else 4.0
 	if combo_window<=0: combo=0

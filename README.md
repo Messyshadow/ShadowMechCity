@@ -2,7 +2,7 @@
 
 默认入口已切换到 3D 横版重制版。双击 `play_game.bat` 启动；独立运行版位于 `build/Reforged/`。新增 Blender 模型源文件、音效、玩法与测试说明见 [remaster/README.md](remaster/README.md)。
 
-当前版本 **0.5.0 Windows 开发试玩版**：七武器家族、33 个技能节点、四种机器人和最多三台编队；补强存档恢复和伤害结算。663 项自动检查通过，详见 [0.5.0 QA](remaster/qa/RELEASE_0_5_0.md)。完整重制仍在进行，原有步骤与新要求统一记录在 [重制对照表](docs/REMASTER_ROADMAP.md)。
+当前版本 **0.5.1 Windows 开发试玩版**：Xbox 操作与菜单导航、七武器家族、33 个技能节点、四种机器人和最多三台编队；补强存档恢复和伤害结算。722 项自动检查通过，详见 [0.5.1 QA](remaster/qa/RELEASE_0_5_1.md)。完整重制仍在进行，原有步骤与新要求统一记录在 [重制对照表](docs/REMASTER_ROADMAP.md)。
 
 原 2D 版本保留，使用 `play_classic.bat` 运行。以下为原版说明。
 

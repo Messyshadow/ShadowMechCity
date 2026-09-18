@@ -32,7 +32,7 @@ func _physics_process(dt:float) -> void:
 			if status.rebuild<=0:
 				status.hp=Data.PROFILES[id].hp
 				if units.has(id) and is_instance_valid(units[id]):units[id].reassemble()
-	if Input.is_action_just_pressed("r_companion"):toggle()
+	if game.controls.just_pressed("r_companion"):toggle()
 
 func power_scale() -> float:return .72 if units.size()>=3 else .86 if units.size()==2 else 1.0
 

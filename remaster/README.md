@@ -1,6 +1,6 @@
 # 暗影机械城 · 重铸余烬
 
-当前开发试玩版 **0.5.0**：七武器家族、33 个技能节点、四种量子伙伴与最多三台编队，补强存档恢复和伤害结算。详见 [发布验收记录](qa/RELEASE_0_5_0.md) 和 [原设计与新需求对照表](../docs/REMASTER_ROADMAP.md)。完整重制仍在进行。
+当前开发试玩版 **0.5.1**：Xbox 操作与菜单导航、七武器家族、33 个技能节点、四种量子伙伴与最多三台编队，补强存档恢复和伤害结算。详见 [发布验收记录](qa/RELEASE_0_5_1.md) 和 [原设计与新需求对照表](../docs/REMASTER_ROADMAP.md)。完整重制仍在进行。
 
 这是一套可运行的 **Godot 4.7 / 3D 横版平台动作重制版**。场景、角色、敌人、武器、建筑模块均为 Blender 建模并导出的 GLB；实际使用 CharacterBody3D、骨骼动画、3D 碰撞、灯光和粒子，角色活动限制在横版平面。
 
@@ -8,8 +8,8 @@
 
 - 工程根目录双击 `play_game.bat`，或打开 `project.godot` 按 F5。
 - 独立版本：`build/Reforged/ShadowMechCityReforged.exe`，需要同目录的 `.pck`。
-- 最新本机包：`build/Reforged/ShadowMechCityReforged.exe`，版本 **0.5.0**。
-- 本机发布目录：`E:\Godot\release\暗影机械城重制版`；发布包：`E:\Godot\release\暗影机械城重制版-0.5.0.zip`。
+- 最新本机包：`build/Reforged/ShadowMechCityReforged.exe`，版本 **0.5.1**。
+- 本机发布目录：`E:\Godot\release\暗影机械城重制版`；发布包：`E:\Godot\release\暗影机械城重制版-0.5.1.zip`。
 - 原 2D 版本代码和资源保留，双击 `play_classic.bat` 可运行。
 - 重制版使用独立文件 `remaster_v1.json`，不改写原版 `save.json`。保存位置沿用原项目的用户数据目录。
 
@@ -35,6 +35,10 @@
 | NPC 委托 | 巡线员莉娅「让灯再次亮起」：前往温室、清理守卫、重启灯塔、返回交付；80 金币 / 2 技能点，仅可领取一次，进度保存 |
 | 设置与教学 | F11 全屏、独立分项音量、静音、亮度、镜头震动、教学开关；设置单独保存；序章、操作指南、情境提示、N 任务记录 |
 | 声音 | 20 段原创合成音效；新增七区域与 Boss 共 8 段立体声循环配乐 |
+
+## Xbox 手柄
+
+A 跳跃、X 普攻、Y 武器技能、B 冲刺；左摇杆 / 方向键移动攀爬。View 打开背包，LB / RB 切换背包、技能、地图、任务与伙伴；Menu 暂停。更多肩键、扳机、地图操作见 [玩家指南](PLAYER_GUIDE.md)。已验证模拟输入与实际画面，实体 USB / 蓝牙、长时间手感尚待测试；重绑与震动未实现。
 
 ## 通道修正
 
@@ -67,6 +71,7 @@
 - `assets/models/*.glb`：运行时模型。无需安装 Blender 即可玩导出版。
 - `source/build_audio.py`：Python 标准库生成原创音效。
 - `state.gd`：独立存档、交易、回购、成长和装备。
+- `controls.gd`：Xbox / 键盘动作注册、设备提示切换、菜单输入隔离和断开暂停。
 - `save_io.gd`：完整快照验证、有效备份和损坏文件保留；`companions.gd` / `companion.gd` / `squad_data.gd`：伙伴编队、行为与持久化数据。
 - `main.gd`：3D 世界、双向通道、任务线路；`world_data.gd` 独立复制原房间图后扩展，保留 2D 原版的 37 房间。
 - `actor.gd` / `enemy.gd`：玩家与敌人动作、战斗、Boss AI。
@@ -93,7 +98,7 @@ $env:APPDATA = Join-Path $PWD '.godot-user'
 & 'E:\SourceCode\Games\engine\big_engine\godot\bin\godot.windows.editor.x86_64.console.exe' --headless --path . --fixed-fps 60 --script remaster/tests/test_experience.gd -- --remaster-test
 ```
 
-0.5.0 游戏检查共 **663 项通过**（287 项世界/系统 + 18 项实际战斗 + 88 项动作/关卡 + 155 项体验 + 38 项存档/伤害 + 77 项新武器/伙伴）。新检查入口为 `tests/test_preview.gd` 与 `tests/test_arsenal.gd`，沿用上方命令方式。实机截图另行验证；历史发布记录保留在 `qa/`。
+0.5.1 游戏检查共 **722 项通过**（287 项世界/系统 + 18 项实际战斗 + 88 项动作/关卡 + 155 项体验 + 38 项存档/伤害 + 77 项新武器/伙伴 + 59 项手柄）。新检查入口为 `tests/test_controller.gd`、`tests/test_preview.gd` 与 `tests/test_arsenal.gd`，沿用上方命令方式。实机截图另行验证；历史发布记录保留在 `qa/`。
 
 导出 `Windows Desktop Remaster` 后，运行 `python remaster/source/package_release.py` 更新启动说明、操作说明、版本说明、SHA-256 清单及版本 ZIP，并逐项校验压缩内容。生成文件留在 `build/`，不加入源码 Git。
 

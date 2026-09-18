@@ -35,6 +35,10 @@ func set_zoom(value: float, anchor := Vector2(-1,-1)) -> void:
 	var before:Vector2=(anchor-pan)/zoom
 	zoom=clampf(value,.32,1.7);pan=anchor-before*zoom;queue_redraw()
 
+func clamp_pan() -> void:
+	pan.x=clampf(pan.x,minf(20,size.x-2672*zoom-20),20)
+	pan.y=clampf(pan.y,minf(55,size.y-800*zoom-15),55)
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index==MOUSE_BUTTON_WHEEL_UP and event.pressed:set_zoom(zoom*1.13,event.position);accept_event()

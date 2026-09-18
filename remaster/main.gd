@@ -6,6 +6,7 @@ const ProjectileScript = preload("res://remaster/projectile.gd")
 const AudioScript = preload("res://remaster/audio.gd")
 const UIScript = preload("res://remaster/ui.gd")
 const CompanionsScript = preload("res://remaster/companions.gd")
+const ControlsScript = preload("res://remaster/controls.gd")
 const LevelDesign = preload("res://remaster/level_design.gd")
 const REGION_COLORS := {"city":Color(.16,.73,.85),"mine":Color(1,.49,.17),"water":Color(.13,.86,.61),"factory":Color(1,.37,.10),"temple":Color(.83,.66,.32),"void":Color(.53,.36,1),"castle":Color(.46,.63,.88),"dawn":Color(.65,.91,.48)}
 const BOSS_MODELS := {"temple_sanctum":"guardian","mine_boss":"behemoth","water_boss":"crocodile","boss":"titan","void_throne":"dragon","castle_knights":"knight","castle_throne":"king"}
@@ -14,6 +15,7 @@ var player: CharacterBody3D
 var camera: Camera3D
 var ui: CanvasLayer
 var companions:Node
+var controls:Node
 var audio: Node
 var room_id := "hub"
 var room: Dictionary = {}
@@ -49,10 +51,12 @@ var beacon_label: Label3D
 
 func _ready() -> void:
 	register_input()
+	controls=Node.new();controls.set_script(ControlsScript);controls.game=self
 	audio=Node.new(); audio.set_script(AudioScript); add_child(audio)
 	setup_environment()
 	ui=CanvasLayer.new(); ui.set_script(UIScript); ui.game=self; add_child(ui)
 	companions=Node.new();companions.set_script(CompanionsScript);companions.game=self;add_child(companions)
+	add_child(controls)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--remaster-room="): room_override=arg.get_slice("=",1)
 		if arg.begins_with("--remaster-capture="): capture_path=arg.get_slice("=",1)
@@ -66,14 +70,7 @@ func _ready() -> void:
 	if not capture_path.is_empty():capture_timer=4.0;player.invulnerable=10
 
 func register_input() -> void:
-	var keys := {"r_left":[KEY_A,KEY_LEFT],"r_right":[KEY_D,KEY_RIGHT],"r_up":[KEY_W,KEY_UP],"r_down":[KEY_S,KEY_DOWN],"r_jump":[KEY_SPACE],"r_attack":[KEY_J],"r_skill":[KEY_K],"r_dash":[KEY_SHIFT,KEY_L],"r_swap":[KEY_Q],"r_reload":[KEY_R],"r_heal":[KEY_H],"r_interact":[KEY_E],"r_map":[KEY_M],"r_inventory":[KEY_I,KEY_U],"r_skills":[KEY_T],"r_pause":[KEY_ESCAPE]}
-	keys["r_journal"]=[KEY_N]
-	keys["r_companion"]=[KEY_C];keys["r_roster"]=[KEY_G]
-	for id in keys:
-		if InputMap.has_action(id): continue
-		InputMap.add_action(id)
-		for code in keys[id]:
-			var e:=InputEventKey.new();e.physical_keycode=code;InputMap.action_add_event(id,e)
+	ControlsScript.register_actions()
 
 func setup_environment() -> void:
 	get_viewport().msaa_3d=Viewport.MSAA_4X
@@ -138,6 +135,7 @@ func deck(x: float, y: float, width: float, depth := 2.8) -> void:
 func label3(text: String, pos: Vector3, color := Color(.7,.9,1), size := 32) -> Label3D:
 	var l:=Label3D.new();world.add_child(l);l.text=text;l.position=pos;l.font_size=size;l.pixel_size=.008
 	l.modulate=color;l.outline_size=5;l.no_depth_test=false;l.billboard=BaseMaterial3D.BILLBOARD_ENABLED
+	if not text.is_empty():l.set_meta("prompt_source",text);l.text=controls.prompt(text)
 	return l
 
 func load_room(id: String, from := "", initial := false) -> void:
@@ -383,7 +381,7 @@ func spawn_enemy(kind: String, pos: Vector3, is_boss := false) -> Node3D:
 func _physics_process(dt: float) -> void:
 	if not is_instance_valid(player) or ui.panel_open or transitioning:return
 	for pair in [["r_left","move"],["r_right","move"],["r_jump","jump"],["r_dash","dash"],["r_attack","attack"]]:
-		if Input.is_action_just_pressed(pair[0]) and not Reforged.tutorial.get(pair[1],false):Reforged.tutorial[pair[1]]=true;Reforged.save_game()
+		if controls.just_pressed(pair[0]) and not Reforged.tutorial.get(pair[1],false):Reforged.tutorial[pair[1]]=true;Reforged.save_game()
 	time+=dt;transition_cooldown=maxf(0,transition_cooldown-dt)
 	for strike in strikes.duplicate():
 		strike.remaining-=dt
@@ -426,12 +424,12 @@ func _physics_process(dt: float) -> void:
 		audio.play("splash");burst(player.position,Color(.1,.65,.7),16);player.water=in_water
 	var hint:=""
 	if room_id=="hub" and player.position.distance_to(npc_position)<1.65:
-		ui.hint.text="E  与莉娅交谈 · 晨曦温室委托"
-		if Input.is_action_just_pressed("r_interact"):ui.open_npc()
+		ui.hint.text=controls.prompt("E  与莉娅交谈 · 晨曦温室委托")
+		if controls.just_pressed("r_interact"):ui.open_npc()
 		return
 	if room_id=="dawn_beacon" and player.position.distance_to(beacon_position)<1.8:
-		ui.hint.text="E  重启引航灯"
-		if Input.is_action_just_pressed("r_interact"):activate_beacon()
+		ui.hint.text=controls.prompt("E  重启引航灯")
+		if controls.just_pressed("r_interact"):activate_beacon()
 		return
 	var nearest_door:Dictionary={}
 	var interaction_distance:=player.position.distance_to(save_position)
@@ -443,17 +441,17 @@ func _physics_process(dt: float) -> void:
 			nearest_door=d;interaction_distance=distance
 	if not nearest_door.is_empty():
 		hint="E  前往 "+str(World.ROOMS[str(nearest_door.to)].name)
-		if Input.is_action_just_pressed("r_interact"):use_door(nearest_door)
+		if controls.just_pressed("r_interact"):use_door(nearest_door)
 	elif player.position.distance_to(save_position)<1.8:
 		hint="E  同步存档 · 恢复生命、药剂和弹药"
-		if Input.is_action_just_pressed("r_interact"):
+		if controls.just_pressed("r_interact"):
 			Reforged.rest(room_id,save_position+Vector3(.85,.08,0));audio.play("save");toast("存档已同步 · 死亡后将返回这里")
 	elif room_id=="hub" and player.position.distance_to(merchant_position)<2:
 		hint="E  与赫克交易 · 装备回收 / 回购"
-		if Input.is_action_just_pressed("r_interact"):
+		if controls.just_pressed("r_interact"):
 			var gift:=Reforged.first_trade();ui.open_shop()
 			if gift:toast("赫克：带上余烬护符，打赢了就能吸回一点血。已赠送并装备。",6)
-	ui.hint.text=hint
+	ui.hint.text=controls.prompt(hint)
 
 func _process(dt: float) -> void:
 	if not is_instance_valid(player):return
