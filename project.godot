@@ -10,15 +10,19 @@ config_version=5
 
 [application]
 
-config/name="暗影机械城 - 横版动作Demo"
-config/description="Godot 4.7 横版动作平台跳跃竖直切片"
-run/main_scene="res://title.tscn"
+config/name="暗影机械城 · 重铸余烬"
+config/version="0.1.0"
+config/description="3D 横版动作重制版：重铸余烬。七大区域、37 个房间、七位核心守卫。"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Godot/app_userdata/暗影机械城 - 横版动作Demo"
+run/main_scene="res://remaster/main.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 config/icon="res://icon.svg"
 
 [autoload]
 
 Game="*res://scripts/game.gd"
+Reforged="*res://remaster/state.gd"
 
 [display]
 

@@ -1,3 +1,11 @@
+# 3D 重制版：重铸余烬
+
+默认入口已切换到 3D 横版重制版。双击 `play_game.bat` 启动；独立运行版位于 `build/Reforged/`。新增 Blender 模型源文件、音效、玩法与测试说明见 [remaster/README.md](remaster/README.md)。
+
+原 2D 版本保留，使用 `play_classic.bat` 运行。以下为原版说明。
+
+---
+
 # 暗影机械城 · Shadow Mech City
 
 > 2D 横版 **银河恶魔城（Metroidvania）动作游戏** — 暗黑机械 / 赛博蒸汽朋克风。
